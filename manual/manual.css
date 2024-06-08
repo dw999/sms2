@@ -1,0 +1,31 @@
+  <!-- 
+  a:link        {text-decoration: none; color:blue;}
+  a:active      {text-decoration: none; color:limegreen;}
+  visited       {text-decoration: none; color:limegreen;}
+  a:hover       {color: red; text-decoration: none; background:greenyellow;}
+  BODY          {background-color:#F5ECCE; font-family:arial; color:dimgray}
+  input         {font: 12pt Arial;}
+  select        {font: 12pt Arial; color:dimgray; background-color: gainsboro;}
+  textarea      {font: 12pt Arial; color:dimgray; background-color: gainsboro;}
+  .heading      {font: 35pt Arial;}
+  .company      {font: 32pt Arial;}
+  .content      {font: 32pt Arial;} 
+  .footer       {font: 12pt Arial;} 
+  .title1	{color:#08088A; font-size: 12pt;}
+  .title2       {color:deepskyblue; font-size: 12pt;}
+  .table        {font-size: 32pt}
+  .textbox      {color:dimgray; background-color: gainsboro;}
+  .t_title      {background-color: powderblue; color: dimgray; font-size: 12pt; }
+  .t_title2     {background-color: #A4A5C4; color: #FFFFFF; font-size: 12pt;}
+  .t_text       {color: dimgray; font-size: 12pt}
+  .t_content    {background-color: azure; color: dimgray; font-size: 12pt;}
+  .t_content2   {background-color: #AAAAAA; color: #000000; font-size: 12pt;}
+  .menu_title1  {color: dimgray;}
+  .menu_title2  {color: dimgray;}
+  .menu_text    {color: #555555;}
+  .menu_link    {color: #555555;font-size: 12pt;}
+  .t_err	{background-color: #AA9D9A; color: #000000;}
+  .readonly     {color:#000000; background-color: #CCCCCC;}
+  .row_alert    {background-color: #FEF536; color: #000000;}
+  .row_error    {background-color: #D43037; color: #000000;}
+  -->

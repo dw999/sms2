@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>SMS User Guide - How to login</title>  
+  <link rel="stylesheet" type="text/css" href="manual.css" media="screen" />
+</head>
+
+<body>
+  <table class=table cellspacing=1 cellpadding=1>
+  <tr>
+    <td>
+      <table width=100% class=table cellspacing=0 cellpadding=0>
+      <tr>
+        <td width=30% align=left valign=center><a href="user_join_flow.html" title="How to bring in users?"><img src="left-arrow-green.png" height=80px></a></td>
+        <td align=center valign=center><a href="user_guide.html" title="Home"><img src="home.png" height=90px"></a></td>
+        <td width=30% align=right valign=center><a href="main_menu.html" title="Main menu"><img src="right-arrow-green.png" height=80px></a></td>
+      </tr>      
+      </table>  
+    </td>
+  </tr>
+
+  <tr><td><hr></td></tr>
+        
+  <tr>
+    <td class=heading><b>1.4 How to login in</b></td>
+  </tr>  
+
+  <tr>
+    <td class=content>
+      The user login flow is shown on Figure 1.4.1:
+    </td>
+  </tr>
+     
+  <tr><td>&nbsp;</td></tr>
+  
+  <tr>
+    <td align=center><a href="login_flow.png"><img src="login_flow.png" width=870></a><br>Figure 1.4.1</td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td class=content>
+      The figure 1.4.1 seems a little bit complicated. Simply to say:<br>
+      <br>
+      If connection mode is 0 or 3, users login from the decoy site with happy password, they will be switched to the first page of the decoy site. A email
+      with messaging site access link will be sent to users (similar on figure 1.4.2), users use this access link to go to the messaging site directly.
+      Please note that each access link is for one time usage, and it will be timeout after 10 minutes even it is not used.
+    </td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+  
+  <tr>
+    <td align=center><a href="login_link_email.jpg"><img src="login_link_email.jpg" width=600></a><br>Figure 1.4.2</td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+  
+  <tr>
+    <td class=content>
+      If connection mode is 1 or 2, users login from the decoy site with happy password, they will be switched to the first page of messaging site directly.<br>
+      <br>      
+      For connection mode 0 or 3, if user login from the decoy site with unhappy password, he/she will still be switched to the first page of the decoy
+      site, but messaging site access email will not be sent to him/her anymore. For connection mode 1 or 2, user will be switched to the first page
+      of the decoy site, not the messaging site.<br>
+      <br>
+      The login process of different connection modes are summarized on Table 1.4.3:
+    </td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+    
+  <tr>
+    <td class=content align=center>
+      <table width=100% class=table cellspacing=0 cellpadding=1 border=1>
+      <tr style="background-color:lightblue">
+        <td align=center width=10%><b>Mode</b></td>
+        <td align=center width=45%><b>Login with happy password</b></td>
+        <td align=center width=45%><b>Login with unhappy password</b></td>
+      </tr>
+
+      <tr>
+        <td align=center valign=top>0</td>
+        <td valign=top>User is switched to decoy site, an email with a one time used access link is sent to user, user click on the access link to go to the messaging site.</td>
+        <td valign=top>User is switched to decoy site, no email will be sent to user.</td>
+      </tr>      
+      
+      <tr>
+        <td align=center valign=top>1</td>
+        <td valign=top>User is switched to messaging site directly.</td>
+        <td valign=top>User is switched to decoy site.</td>
+      </tr>      
+      
+      <tr>
+        <td align=center valign=top>2</td>
+        <td valign=top>User is switched to messaging site directly.</td>
+        <td valign=top>User is switched to decoy site.</td>
+      </tr>      
+      
+      <tr>
+        <td align=center valign=top>3</td>
+        <td valign=top>User is switched to decoy site, an email with a one time used access link is sent to user, user click on the access link to go to the messaging site.</td>
+        <td valign=top>User is switched to decoy site, no email will be sent to user.</td>
+      </tr>            
+      
+      <tr style="background-color:lightblue">
+        <td colspan=3 align=center>Table 1.4.3</td>
+      </tr>
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+  
+  <tr>
+    <td class=content>
+      <b>Notes:</b>
+      <table class=table cellspacing=1 cellpadding=1>
+      <tr>
+        <td width=20px valign=top>1.</td>
+        <td>Once an user has marked 'unhappy', he/she can't go to messaging site anymore, even he/she login by using happy password again.</td>
+      </tr>
+      <tr>
+        <td width=20px valign=top>2.</td>
+        <td>
+          At the first time an user login with unhappy password, he/she will be kicked out from all message groups he/she belongs to, and all
+          system administrators and related group members will be informed via email (connection mode 0, 2 or 3) or group message (connection mode 1).
+        </td>
+      </tr>
+      <tr>
+        <td width=20px valign=top>3.</td>
+        <td>
+          Once an user has marked 'unhappy', his/her account status should not be changed. i.e. 'Unhappy' user account should not be used again. Otherwise,
+          alert will not be triggered if he/she is 'unhappy' again. 
+        </td>
+      </tr>
+      <tr>
+        <td width=20px valign=top>4.</td>
+        <td>
+          If an 'unhappy' user is sole group administrator of one or some messsage groups, then a randomly selected system administrator will be added to
+          that message group or those message groups as group administrator.
+        </td>
+      </tr>            
+      </table>  
+    </td>  
+  </tr>
+  
+  <tr><td><hr></td></tr>
+  
+  <tr>
+    <td>
+      <table width=100% class=table cellspacing=0 cellpadding=0>
+      <tr>
+        <td width=30% align=left valign=center><a href="user_join_flow.html" title="How to bring in users?"><img src="left-arrow-green.png" height=80px></a></td>
+        <td align=center valign=center><a href="user_guide.html" title="Home"><img src="home.png" height=90px"></a></td>
+        <td width=30% align=right valign=center><a href="main_menu.html" title="Main menu"><img src="right-arrow-green.png" height=80px></a></td>
+      </tr>      
+      </table>  
+    </td>
+  </tr>
+  </table>
+</body>
+</html>

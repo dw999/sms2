@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>SMS Server Installation</title>  
+  <link rel="stylesheet" type="text/css" href="manual.css" media="screen" />
+</head>
+
+<body>
+  <table width=100% class=table cellspacing=1 cellpadding=1>
+  <tr>
+    <td colspan=2 class=heading><b><u>SMS Server Installation Guide</u></b></td>
+  </tr>
+
+  <tr>
+    <td width=10>1.</td>
+    <td><b>Prepare SMS server installation package</b></td>
+  </tr>
+   
+  <tr>
+    <td></td>
+    <td>
+      <table width=100% class=table cellspacing=1 cellpadding=1>
+      <tr>
+        <td valign=top> - </td>
+        <td>
+          Download SMS server installation package from GitHub either:<br>
+          <table width=100% class=table cellspacing=1 cellpadding=1>
+          <tr>
+            <td valign=top nowrap>(1) </td>
+            <td>Use Git to clone the project on your computer by issue command on a terminal: <b>git clone https://github.com/dw999/sms2.git</b></td>
+          </tr>          
+          <tr><td colspan=2>&nbsp;</td></tr>          
+          <tr>
+            <td valign=top nowrap>(2) </td>
+            <td>Download a zipped archive named sms2_master.zip from https://github.com/dw999/sms2, and then decompress it with command: <b>unzip sms2_master.zip</b></td>
+          </tr>          
+          </table>  
+        </td>
+      </tr>
+      <tr><td colspan=2>&nbsp;</td></tr>      
+      <tr>
+        <td valign=top> - </td>
+        <td>Make sure the main installation shell script is executable: <b><font color='darkblue'>chmod +x install_sms.sh</font></b></td>
+      </tr>      
+      </table>  
+    </td>
+  </tr>
+   
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td width=10>2.</td>
+    <td><b>Prerequisites of SMS server installation</b></td>
+  </tr>
+ 
+  <tr>
+    <td></td>
+    <td>
+      <table width=100% class=table cellspacing=1 cellpadding=1>
+      <tr>
+        <td valign=top> - </td>
+        <td>You are root or root equivalent user, i.e. To install SMS server, you must be a super user.</td>
+      </tr>
+      <tr>
+        <td valign=top> - </td>
+        <td>Network connection of your prepared Linux server is well configured and fast enough (> 3Mb/s).</td>
+      </tr>
+      <tr>
+        <td valign=top> - </td>
+        <td>You have registered a domain name for your messaging site, and it has already been pointed to your server's public IP address.</td>
+      </tr>
+      <tr>
+        <td valign=top> - </td>
+        <td>You have an email address for the SMS administrator. (Note: 1. It should not link to your true identity, 2. It is optional.)</td>
+      </tr>
+      <tr>
+        <td valign=top> - </td>
+        <td>You have at least one more email account for SMS routine operations. (Note: It is optional).</td>
+      </tr>      
+      </table>
+      <br>
+      <table width=100% class=table cellspacing=1 cellpadding=1>
+      <tr>
+        <td colspan=2><b>Note:</b></td>
+      </tr>  
+      <tr>
+        <td valign=top>1. </td>
+        <td>This guide is based on Rocky Linux 8 environment, but it could also be applied to other supported platforms.</td>
+      </tr>
+      <tr>
+        <td valign=top>2. </td>
+        <td>If you don't have any email account, the only connection mode you can used is "1". Details please refer to the SMS user guide.</td>
+      </tr>
+      </table>
+    </td>
+  </tr>
+      
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td width=10>3.</td>
+    <td><b>Install SMS server</b></td>
+  </tr>
+
+  <tr>
+    <td></td>
+    <td>
+      If all prerequisites of SMS server installation are fulfilled, you may now install SMS server.<br>
+      <br>
+      Login Linux server as super user, open a terminal window, and go to the directory where decompressed SMS server installation
+      packages located, then execute installation script:<br>
+      <br>
+      # <font color='darkblue'><b>./install_sms.sh</b></font><br>
+      <br>
+      If SELinux isn't disabled and/or SNAP hasn't been installed, SMS installation script will handle them for you automatically, and
+      you may see Figure 1(a) and/or Figure 1(b). However, you need to restart your server each time and rerun the installation script
+      again.<br>
+      <br>
+      If everything is okay, screen like Figure 1(c) will be seen. 
+    </td>
+  </tr>
+
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="sys_auto_adjust_1.png"><img src='sys_auto_adjust_1.png' width=870></a><br>Figure 1(a): Disable SELinux    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="sys_auto_adjust_2.png"><img src='sys_auto_adjust_2.png' width=870></a><br>Figure 1(b): Install SNAP    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="start_install.png"><img src='start_install.png' width=870></a><br>Figure 1(c): Start Installation Process    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td></td>
+    <td>
+      Installation process is divided into 9 steps, they are:<br>
+      <table width=100% class=table cellspacing=1 cellpadding=1>
+      <tr>
+        <td valign=top nowrap>Step 1: </td>
+        <td>Install required utilities and packages</td>
+      </tr>
+      <tr>
+        <td valign=top nowrap>Step 2: </td>
+        <td>Prepare database server and create databases</td>
+      </tr>
+      <tr>
+        <td valign=top nowrap>Step 3: </td>
+        <td>Prepare RabbitMQ message broker and create accounts.</td>
+      </tr>
+      <tr>
+        <td valign=top nowrap>Step 4: </td>
+        <td>Prepare SMS server directories, programs and required libraries.</td>
+      </tr>
+      <tr>
+        <td valign=top nowrap>Step 5: </td>
+        <td>Input essential data to SMS server</td>
+      </tr>
+      <tr>
+        <td valign=top nowrap>Step 6: </td>
+        <td>Configure Nginx as reverse proxy server and install SSL certificate to the site</td>
+      </tr>
+      <tr>
+        <td valign=top nowrap>Step 7: </td>
+        <td>Prepare and install SMS application server automatic starting script</td>
+      </tr>
+      <tr>
+        <td valign=top nowrap>Step 8: </td>
+        <td>Configure Linux system settings</td>
+      </tr>
+      <tr>
+        <td valign=top nowrap>Step 9: </td>
+        <td>Build audio file converter FFmpeg (optional)</td>
+      </tr>
+      </table>
+      <br>
+      After you press the enter key, step 1 will proceed, and screen like Figure 2 will be seem.
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="step_1_install_req_apps.png"><img src='step_1_install_req_apps.png' width=870></a><br>Figure 2    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+    
+  <tr>
+    <td></td>
+    <td>
+      Step 2 is going to prepare (it means configuration) MariaDB database server and create required databases used by 
+      SMS server.<br>
+      <br>
+      When you prepare the MariaDB database server, you need to create password for the database server administrator,
+      and accept default configuration settings to harden database server's security (Figure 3).<br>
+      <br>
+      After MariaDB database server has been configured, A screen prompt you to create SMS required databases will be shown,
+      you need to press enter to proceed to create databases, and you will be asked to input database server administrator password
+      you just created.
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="step_2_config_db_server.png"><img src='step_2_config_db_server.png' width=870></a><br>Figure 3
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      Step 3 will configure the RabbitMQ server automatically, no user intervention is needed. When it is finished, a message
+      will be shown like Figure 4, you may need to take a note and press enter to go to next step.
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="step_3_config_rabbitmq_server.png"><img src='step_3_config_rabbitmq_server.png' width=870></a><br>Figure 4
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      Step 4 is going to create SMS server directories, install required javascript and node.js libraries, copy SMS programs to
+      it. This step is started automatically like Figure 5 shown.  
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="step_4_install_req_libraries.png"><img src='step_4_install_req_libraries.png' width=870></a><br>Figure 5
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td></td>
+    <td>
+      As node.js libraries are installing, security warning messages may be shown (Figure 6). Don't panic, just write down the
+      follow up instruction and press enter to go to next step.  
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="step_4_node_lib_warning.png"><img src='step_4_node_lib_warning.png' width=870></a><br>Figure 6
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      Step 5 is very important, depends on your configuration, you need to give the system nine to ten essential data for 
+      your SMS server. They are SMS connection mode, DNS name of the messaging site, email address of the SMS server administrator, 
+      worker email address for SMS operations, the worker email account login username and it's password, SMTP server name 
+      of the worker email, port number of the SMTP server, first internal IP address which SMS server will listen on, and an 
+      optional second internal IP address which SMS server will listen on (if you have only one internal IP address, then you don't
+      need to input anything to this field and just let it blank). Any incorrect input data will let SMS server malfunction.<br>
+      <br>
+      Please note that you MUST put '<b>https://</b>' in front of your DNS name of the messaging site, and '<b>:8443</b>'
+      behind it, just as Figure 7 shown.<br>
+      <br>
+      After you input all these data, you require to verify and confirm them. If all input data are correct, press
+      'Y' and then enter to save them. Otherwise, press 'N' to input them again.
+    </td>
+  </tr>
+
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="step_5_input_sms_data.png"><img src='step_5_input_sms_data.png' width=870></a><br>Figure 7
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+    
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td></td>
+    <td>
+      Step 6 will generate SSL certificates in accordance with DNS name of your messaging site you input in step 5. In this step, 
+      you will be asked to input your email address (just use the same email for the default SMS administrator), and three questions. 
+      Figure 9 provides you an example. Beginning of this step, screen like Figure 8 will be shown, you need to press the enter key to
+      proceed.<br>
+      <br>
+      <b>Note:</b><br>
+      This step may fail occasionally, but don't worry, you can rerun this process later after installation by running the below 
+      command to subscribe SSL certificates again:<br>
+      <br>
+      # <font color='darkblue'><b>certbot --nginx</b></font><br>
+      <br>
+      SSL certificates are used to provide the secrecy of your online communication, which is the most important part of the SMS
+      server. Therefore, you must ensure your SSL certificates installation successful before using SMS server. You could check
+      how secure of your web site by using testing site <font color='darkblue'>https://www.ssllabs.com</font>:<br>
+      <br>
+      The general format is https://www.ssllabs.com/ssltest/analyze.html?d={your_web_site_dns_name}<br>
+      <br>
+      e.g.) https://www.ssllabs.com/ssltest/analyze.html?d=argogo.mywire.org<br>
+      <br>
+      It will give security ratings for your site (similar to Figure 10). If grade of overall rating is below A, that means something
+      is wrong of your site, please fix all the issues before using SMS server for your messaging operation.
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="step_6_config_nginx_ssl_cert.png"><img src='step_6_config_nginx_ssl_cert.png' width=870></a><br>Figure 8
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="step_6_generate_ssl_cert.png"><img src='step_6_generate_ssl_cert.png' width=870></a><br>Figure 9
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="web_site_rating.png"><img src='web_site_rating.png' width=870></a><br>Figure 10
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      Step 7 will configure and install SMS server automatic starting service, and step 8 will amend some Linux server settings 
+      for SMS server. They will run automatically and no user intervention is required. After step 7 and step 8 are done, you will 
+      be prompted to install an audio converter FFmpeg (Figure 11). It is optional, but you will get much better user experiment 
+      to have it. I highly recommend you to install it by input "Y" on the prompt and press enter key. Then screen like Figure 
+      12 will be displayed. Otherwise, you may give "N" and press the enter key to skip it.<br>
+      <br>  
+      FFmpeg installation is a time consuming process. Depends on your server's capability, it may take a long time to complete. So, 
+      please be patient and wait for it to finish. If it is completed successfully, it will go to the final stage automatically. 
+      Otherwise, error message will be displayed, and you need to press the enter key to go to final stage.
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="step_7_8_9_config_sms_app_sever.png"><img src='step_7_8_9_config_sms_app_sever.png' width=870></a><br>Figure 11
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="step_9_build_ffmpeg.png"><img src='step_9_build_ffmpeg.png' width=870></a><br>Figure 12
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      Finally, SMS server installation is completed successfully, it will show you the built-in administrator account details for you
+      like Figure 13 shown. Please write it down, and then press the enter key to let the installation program reboot your Rocky 
+      Linux server.
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="final_step_reboot.png"><img src='final_step_reboot.png' width=870></a><br>Figure 13
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+    
+  <tr><td colspan=2>&nbsp;</td></tr>
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td></td>
+    <td>
+      <b><u>Supplementary</u></b><br>
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      If SSL certificates generation is failure in step 6, you may do it again as Figure 14 shown.  
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="apply_ssl_cert.png"><img src='apply_ssl_cert.png' width=870></a><br>Figure 14
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <b>Remark:</b><br>
+      I have installed and configured a software firewall for you during SMS server installation, which open ports 22, 80, 443 and 8443 to let users
+      connect to your SMS server. However, you may have another firewall between your SMS server and the internet. For example, a home WiFi router
+      often has a built-in firewall to prevent all incoming connection by default, so that you must configure port forwarding to let outside users
+      connect the SMS server behind your router. For port forwarding configuration, please consult your router manual. If any required port is
+      blocked, SMS server will not function normally, and SSL certificate generation process will be failure.
+    </td>
+  </tr>
+
+  <tr><td colspan=2>&nbsp;</td></tr>  
+  </table>
+</body>
+</html>

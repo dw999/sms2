@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>Prepare Rocky Linux 8 for SMS Server Installation</title>
+  <link rel="stylesheet" type="text/css" href="manual.css" media="screen" />
+</head>
+
+<body>
+  <table width=100% class=table cellspacing=1 cellpadding=1>
+  <tr>
+    <td colspan=2 class=heading><b><u>Prepare Rocky Linux 8 for SMS Server Installation</u></b></td>
+  </tr>
+  
+  <tr>
+    <td width=10>1.</td>
+    <td><b>Minimum Resources Required</b></td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table width=100% class=table cellspacing=1 cellpadding=1>
+      <tr>
+        <td valign=top> - </td>
+        <td>Intel i5 2.5Ghz CPU (2 vCPU or more)</td>
+      </tr>
+      <tr>
+        <td valign=top> - </td>
+        <td>2GB RAM</td>
+      </tr>
+      <tr>
+        <td valign=top> - </td>
+        <td>100GB free space (for 50 active users)</td>
+      </tr>
+      <tr>
+        <td valign=top> - </td>
+        <td>3Mb/s internet connection (fixed or dynamic IP address)</td>
+      </tr>      
+      </table>  
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td width=10>2.</td>
+    <td><b>Preparation Steps</b></td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>Boot up the system with Rocky Linux 8 installation media, select option "Install Rocky Linux 8" and press enter.</td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="install_rocky8.png"><img src="install_rocky8.png" width=870></a><br>Figure 1    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      After select your desired language, setup page "INSTALLATION SUMMARY" will be displayed. You should configure your
+      server here by selecting system time zone, input network connection parameters, define hard disk partitions, input
+      root password, create a new super user, etc. 
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="installation_summary.png"><img src="installation_summary.png" width=870></a><br>Figure 2    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td></td>
+    <td>
+      Configure network settings, select "NETWORK & HOST NAME". Then click "Configure..." button, and then 
+      select "IPv4 Settings" and click "Add" button. Input network settings of your server, and turn on the network
+      connection after save your network settings.<br>
+      <br>
+      <table width=100% class=table cellspacing=1 cellpadding=1>
+      <tr>
+        <td colspan=2><b>Notes:</b></td>
+      </tr>  
+      
+      <tr>
+        <td width=40 valign=top>1.</td>
+        <td>
+          Ususally, your server is behind a router or firewall appliance, so input the local IP address of your server on the field "Address". 
+          You may need to consult your system administrator to get those data.
+        </td> 
+      </tr>
+      
+      <tr>
+        <td with=40 valign=top>2.</td>
+        <td>You must input at least one DNS server on the field "DNS servers". If you have two or more DNS servers, separate them with comma.</td>
+      </tr>
+      </table>  
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="manual_input_ip_address.png"><img src="manual_input_ip_address.png" width=870></a><br>Figure 3    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      Configure your server's time zone, and turn on network time auto-adjustment. <b>Note:</b> SMS is a
+      single time zone application, and time zone is very important for it's operation. For example,
+      if you want to provide SMS service for users in Hong Kong, you must set your server to Hong Kong
+      time zone, even it is not located in Hong Kong physically.
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="time_zone_setup.png"><img src="time_zone_setup.png" width=870></a><br>Figure 4    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      Select the installation destination and configure your partitions manually by selecting option "Custom" on
+      section "Storage Configuration" as Figure 5 shown, then follow the way on Figure 6, Figure 7 and Figure 8 to
+      create storage partitions. Although you may let Rocky Linux 8 configure disk partitions for you automatically, 
+      it will assign half disk space to "home" partition, which SMS will not use it. i.e. About half of disk space 
+      is wasted.
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="manual_config_disk.png"><img src="manual_config_disk.png" width=870></a><br>Figure 5    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="configure_partition_type.png"><img src="configure_partition_type.png" width=870></a><br>Figure 6    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="configure_disk_partition.png"><img src="configure_disk_partition.png" width=870></a><br>Figure 7    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="confirm_partition_settings.png"><img src="confirm_partition_settings.png" width=870></a><br>Figure 8    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      Select "Root Password" to input your desired password for root as Figure 9 shown. After you assign password to root, a new
+      option "User Creation" will appear on the "INSTALLATION SUMMARY" window like Figure 10. Click on this newly shown option to
+      create a new user as Figure 11 shown.
+    </td>
+  </tr>
+    
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="setup_root_password.png"><img src="setup_root_password.png" width=870></a><br>Figure 9    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="new_user_creation_option.png"><img src="new_user_creation_option.png" width=870></a><br>Figure 10    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+  
+  <tr>
+    <td></td>
+    <td>
+      <table class=table>
+      <tr>
+        <td align=center>
+          <a href="create_another_user.png"><img src="create_another_user.png" width=870></a><br>Figure 11    
+        </td>
+      </tr>  
+      </table>
+    </td>
+  </tr>
+
+  <tr><td colspan=2>&nbsp;</td></tr>  
+  
+  <tr>
+    <td></td>
+    <td>      
+      Now, button "Begin Installation" on Figure 2 should be activated and you could click on it to install Rocky Linux 8. 
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>
+
+  <tr>
+    <td></td>
+    <td>
+      After Rocky Linux 8 installation is completed, you should reboot the system, and then two things must be done immediately to
+      harden the system security: (1) disable root login via ssh, (2) patch the system to the most updated level.<br>
+      <br>
+      For (1), modify the ssh configuration file "/etc/ssh/sshd_config", and uncomment the line "PermitRootLogin yes"
+      and change it to "PermitRootLogin no". Then, save the change and restart the sshd service:<br>
+      <br>
+      <b>systemctl restart sshd.service</b><br>
+      <br>
+      For (2), issue the below command on a terminal:<br>
+      <br>
+      <b>dnf update</b><br>
+      <br>
+      Now, the system is well prepared for SMS installation. Reboot the system again to ensure all most updated patches loaded.
+    </td>
+  </tr>
+  
+  <tr><td colspan=2>&nbsp;</td></tr>  
+  </table>
+</body>
+</html>

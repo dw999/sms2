@@ -1,0 +1,32 @@
+/var/log/syslog
+{
+	rotate 7
+	daily
+	missingok
+	notifempty
+	delaycompress
+	compress
+	postrotate
+		invoke-rc.d rsyslog rotate > /dev/null
+	endscript
+}
+
+#/var/log/alternatives.log
+#/var/log/boot.log
+/var/log/dmesg
+#/var/log/dpkg.log
+/var/log/kern.log
+/var/log/auth.log
+{
+	rotate 7
+	daily
+	missingok
+	notifempty
+	compress
+	delaycompress
+	sharedscripts
+	postrotate
+		#invoke-rc.d rsyslog rotate > /dev/null
+    /usr/lib/rsyslog/rsyslog-rotate
+	endscript
+}

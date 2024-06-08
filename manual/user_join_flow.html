@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>SMS User Guide - How to bring in users</title>  
+  <link rel="stylesheet" type="text/css" href="manual.css" media="screen" />
+</head>
+
+<body>
+  <table class=table cellspacing=1 cellpadding=1>
+  <tr>
+    <td>
+      <table width=100% class=table cellspacing=0 cellpadding=0>
+      <tr>
+        <td width=30% align=left valign=center><a href="connection_modes.html" title="Four connection modes of SMS"><img src="left-arrow-green.png" height=80px></a></td>
+        <td align=center valign=center><a href="user_guide.html" title="Home"><img src="home.png" height=90px"></a></td>
+        <td width=30% align=right valign=center><a href="login_flow.html" title="How to login?"><img src="right-arrow-green.png" height=80px></a></td>
+      </tr>      
+      </table>  
+    </td>
+  </tr>
+
+  <tr><td><hr></td></tr>
+        
+  <tr>
+    <td class=heading><b>1.3 How to bring in users</b></td>
+  </tr>  
+    
+  <tr>
+    <td class=content>
+      There are 3 types of SMS users: common users, trusted users and system administrators.<br>
+      <br>
+      Common users can do every stuffs of messaging, such as create a message group, manage message groups belongs to them, send and receive messages, etc.<br>
+      <br>
+      Trusted users not only can do all the things common users do, but also they can bring in new SMS users.<br>
+      <br>
+      System administrators have full power on SMS system. Besides of messaging stuffs and bring in new users, they can perform more administrative tasks
+      such as promoting user, demoting user, lock/unlock user account, modifying system parameters, and even have right to destroy the entire system.<br>
+      <br>
+      Common user must be brought in by trusted user or system administrator. i.e. Every SMS user must go through a referrer to join in except the built in
+      system administrator 'smsadmin'. <b>Note:</b> Default happy password and unhappy password of 'smsadmin' are 'iamhappy' and 'iamunhappy' respectively.
+      Please change passwords of 'smsadmin' at first login. Otherwise, you will put your SMS server at risk.<br>
+      <br>
+      There are two ways to bring in new users: (1) let them join in or (2) you create their accounts manually. Method (1) is used for connection mode 0 and
+      connection mode 2, and method (2) is used for connection mode 1 and connection mode 3.<br>
+      <br>
+      If you select connection mode 0 or connection mode 2, when you type in the URL of your site, screen similar figure 1.3.1 will be seen. In there,
+      you will see a button 'Join Us'. However, this button will be hidden for connection mode 1 and 3, you need to create user manually and pass the
+      user account details to the user via another secure way.
+    </td>
+  </tr>
+    
+  <tr><td>&nbsp;</td></tr>
+  
+  <tr>
+    <td align=center valign=top class=content>
+      <a href="decoy_site_login_page.png"><img src="decoy_site_login_page.png" width=600></a><br>Figure 1.3.1 
+    </td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+  
+  <tr>
+    <td class=content>
+      Click on this button, screen like figure 1.3.2 will be displayed. In there, you need to input your name, your email, your referrer's email and
+      an optional short message to show your words to your referrer, and click the button 'Register'. Then screen like figure 1.3.3 will be shown to inform
+      you that your registration is processing. 
+    </td>  
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+  
+  <tr>
+    <td align=center valign=top class=content>
+      <a href="request_to_join_1.jpg"><img src="request_to_join_1.jpg" width=600></a><br>Figure 1.3.2 
+    </td>
+  </tr>
+
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td align=center valign=top class=content>
+      <a href="request_to_join_2.jpg"><img src="request_to_join_2.jpg" width=600></a><br>Figure 1.3.3 
+    </td>
+  </tr>
+
+  <tr><td>&nbsp;</td></tr>
+  
+  <tr>
+    <td class=content>
+      Your registration request will be sent to your referrer by email, and your referrer will decide to accept or reject your registration request.
+      If you are accepted, an email will be sent to you, and contains a hyperlink. Clicking on this hyperlink, you will be directed to a web page
+      like figure 1.3.4 (figure 1.3.5 is the lower part of the same page) to create your user account.<br>
+      <br>
+      You need to input your desired username, alias, happy password and unhappy password. You may accept the system suggested username or give your
+      desired username. As remarks shown on figure 1.3.5, happy password is used to login to the system under normal circumstances. However, if you
+      are in danger and you are forced to login to the SMS, you should use unhappy password. For details of SMS login, please refer to section 1.4
+      How to login.<br>
+      <br>
+      <b>Note:</b><br>
+      Referrer has 3 days to decide whether accept of reject applicant's registration request, and accepted applicant has 4 days to create his/her
+      user account. i.e. the cycle of registration and user account creation processes must be finished within 7 days. After that, pending registration
+      records will be discarded.
+    </td>
+  </tr>  
+  
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td align=center valign=top class=content>
+      <a href="create_account_1.jpg"><img src="create_account_1.jpg" width=600></a><br>Figure 1.3.4 
+    </td>
+  </tr>
+
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td align=center valign=top class=content>
+      <a href="create_account_2.jpg"><img src="create_account_2.jpg" width=600></a><br>Figure 1.3.5 
+    </td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td class=content>
+      If you select connection mode 1 or connection mode 3, an additional administrative option 'Create User' will be shown on SMS main menu (figure 1.3.6).
+      Trusted users and SMS administrators could use this function to create new SMS user account.
+    </td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td align=center valign=top class=content>
+      <a href="manual_create_user_1.jpg"><img src="manual_create_user_1.jpg" width=600></a><br>Figure 1.3.6 
+    </td>
+  </tr>
+
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td class=content>
+      As you manually create SMS user account, screen like figure 1.3.7 will be seen. You need to provide user's name, login username, alias,
+      email address (optional), happy password and unhappy password to create a new user account.<br>
+      <br>
+      <b>Note:</b><br>
+      Although email address is optional, you should input it if you know it. Since connection mode of your SMS server may be changed to 0 or 3
+      later, any SMS user without email address in his/her profile cannot login to the SMS system.
+    </td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td align=center valign=top class=content>
+      <a href="manual_create_user_2.jpg"><img src="manual_create_user_2.jpg" width=600></a><br>Figure 1.3.7 
+    </td>
+  </tr>
+
+  <tr><td><hr></td></tr>
+  
+  <tr>
+    <td>
+      <table width=100% class=table cellspacing=0 cellpadding=0>
+      <tr>
+        <td width=30% align=left valign=center><a href="connection_modes.html" title="Four connection modes of SMS"><img src="left-arrow-green.png" height=80px></a></td>
+        <td align=center valign=center><a href="user_guide.html" title="Home"><img src="home.png" height=90px"></a></td>
+        <td width=30% align=right valign=center><a href="login_flow.html" title="How to login?"><img src="right-arrow-green.png" height=80px></a></td>
+      </tr>      
+      </table>  
+    </td>
+  </tr>  
+  </table>
+</body>
+</html>
+  

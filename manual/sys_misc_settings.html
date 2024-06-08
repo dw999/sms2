@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>SMS User Guide - Misc. system settings</title>  
+  <link rel="stylesheet" type="text/css" href="manual.css" media="screen" />
+</head>
+
+<body>
+  <table class=table cellspacing=1 cellpadding=1>
+  <tr>
+    <td>
+      <table width=100% class=table cellspacing=0 cellpadding=0>
+      <tr>
+        <td width=30% align=left valign=center><a href="sys_filetypes.html" title="System settings - File types"><img src="left-arrow-green.png" height=80px></a></td>
+        <td align=center valign=center><a href="user_guide.html" title="Home"><img src="home.png" height=90px"></a></td>
+        <td width=30% align=right valign=center><a href="sys_telegram_bot.html" title="System settings - Telegram bot"><img src="right-arrow-green.png" height=80px></a></td>
+      </tr>      
+      </table>  
+    </td>
+  </tr>
+
+  <tr><td><hr></td></tr>
+        
+  <tr>
+    <td class=heading><b>4.5.5 Misc. system settings</b></td>
+  </tr>  
+
+  <tr>
+    <td class=content>
+      There are six configurable miscellaneous system settings. Details are as below:<br> 
+      <br>
+      <table width=100% cellpadding=1 cellspacing=1 border=1 class=table>
+      <tr style="background-color:lightblue">
+        <td align=center><b>Key</b></td>
+        <td align=center><b>Description</td>
+      </tr>
+      
+      <tr>
+        <td valign=top nowrap>audio_converter</td>
+        <td>
+          Audio file converter used to convert audio input files to OGG audio file format. Default value is: <b>/usr/bin/ffmpeg -i '{input file}' '{output file}'</b><br>
+          Please note that the system will replace {input file} with the name of the audio file which will be converted, and {output file} with the file name of resultant
+          output file automatically. 
+        </td>
+      </tr>
+
+      <tr>
+        <td valign=top nowrap>decoy_company_name</td>
+        <td>
+          Company name shown on login and 'join us' pages.  
+        </td>
+      </tr>
+      
+      <tr>
+        <td valign=top nowrap>msg_block_size</td>
+        <td>
+          Number of messages loaded initially and every time user click on 'Read More' button to load previous message. Default value is 30.  
+        </td>
+      </tr>
+      
+      <tr>
+        <td valign=top nowrap>session_period</td>
+        <td>
+          The period of web sesssion remain alive even an user doesn't do anything. Default value is '02:00:00' (2 hours). Note: it is time format of MariaDB.  
+        </td>
+      </tr>
+      
+      <tr>
+        <td valign=top nowrap>connection_mode</td>
+        <td>
+          The way to handle login and user creation process. Possible values are 0, 1, 2, and 3. Default value is 0. Please see section "1.2 Four connection
+          modes of SMS" for more details. 
+        </td>
+      </tr>
+
+      <tr>
+        <td valign=top nowrap>old_msg_delete_days</td>
+        <td>
+          Delete old messages in given days ago, default value is 14 days.  
+        </td>
+      </tr>
+      </table>
+      <br>
+      To maintain miscellaneous system settings, select item 'System Settings' on main menu (figure 2.1.3), then click on the button 'Misc. System Settings' (figure 4.5.1.1),
+      screen like figure 4.5.5.1 will be displayed to show you the list of current miscellaneous system settings.
+    </td>
+  </tr>
+
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td align=center><a href="setup_sys_settings_1.png"><img src="setup_sys_settings_1.png" width=600></a><br>Figure 4.5.5.1</td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td class=content>
+      To modify a miscellaneous system setting, click on it's key or value on the list, then screen like figure 4.5.5.2 will be displayed. Details of selected
+      miscellaneous system setting will be shown, just modify it's value, and clicking the 'Save' button will update the selected miscellaneous system setting.
+    </td>
+  </tr> 
+
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td align=center><a href="setup_sys_settings_2.jpg"><img src="setup_sys_settings_2.jpg" width=600></a><br>Figure 4.5.5.2</td>
+  </tr>
+    
+  <tr><td><hr></td></tr>
+
+  <tr>
+    <td>
+      <table width=100% class=table cellspacing=0 cellpadding=0>
+      <tr>
+        <td width=30% align=left valign=center><a href="sys_filetypes.html" title="System settings - File types"><img src="left-arrow-green.png" height=80px></a></td>
+        <td align=center valign=center><a href="user_guide.html" title="Home"><img src="home.png" height=90px"></a></td>
+        <td width=30% align=right valign=center><a href="sys_telegram_bot.html" title="System settings - Telegram bot"><img src="right-arrow-green.png" height=80px></a></td>
+      </tr>      
+      </table>  
+    </td>
+  </tr>
+  </table>
+</body>
+</html>

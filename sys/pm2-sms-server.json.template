@@ -1,0 +1,37 @@
+{
+  "apps": [
+    {
+      "name": "sms-server-01",
+      "script": "/www/sms2/smsserver.js",
+      "cwd" : "/www/sms2/", 
+      "args" : "ip={local_ip_01}",
+      "node_args": "--max-old-space-size=2048"
+    }, 
+    {sms-server-02-instance}
+    {
+      "name": "delete-expired-session",
+      "script": "/www/sms2/delete_expired_session.js",
+      "cwd" : "/www/sms2/"
+    },
+    {
+      "name": "delete-old-message",
+      "script": "/www/sms2/delete_old_message.js",
+      "cwd" : "/www/sms2/"
+    },
+    {
+      "name": "delete-private-message",
+      "script": "/www/sms2/delete_private_message.js",
+      "cwd" : "/www/sms2/"
+    },
+    {
+      "name": "new-message-inform",
+      "script": "/www/sms2/new_message_inform.js",
+      "cwd" : "/www/sms2/"
+    },
+    {
+      "name": "event-reminder",
+      "script": "/www/sms2/event_reminder.js",
+      "cwd" : "/www/sms2/"
+    }    
+  ]
+}

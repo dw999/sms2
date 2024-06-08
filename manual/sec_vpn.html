@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>SMS User Guide - Secure connection - VPN / Tor network</title>  
+  <link rel="stylesheet" type="text/css" href="manual.css" media="screen" />
+</head>
+
+<body>
+  <table class=table cellspacing=1 cellpadding=1>
+  <tr>
+    <td>
+      <table width=100% class=table cellspacing=0 cellpadding=0>
+      <tr>
+        <td width=30% align=left valign=center><a href="sys_destroy_system.html" title="Destroy system"><img src="left-arrow-green.png" height=80px></a></td>
+        <td align=center valign=center><a href="user_guide.html" title="Home"><img src="home.png" height=90px"></a></td>
+        <td width=30% align=right valign=center><a href="sec_web_browser.html" title="Secure your web browser"><img src="right-arrow-green.png" height=80px></a></td>
+      </tr>      
+      </table>  
+    </td>
+  </tr>
+
+  <tr><td><hr></td></tr>
+        
+  <tr>
+    <td class=heading><b>5.1 Secure connection - VPN / Tor network</b></td>
+  </tr>  
+
+  <tr>
+    <td class=content>
+      SMS provides a secure communication channel for users. However, between the users and the SMS server, there are four components that users should take
+      great care to hide their trace from their trackers. They are secure connection, secure web browser, secure device, and secure email account. This
+      section is about how to make a secure connection from your device to the SMS server.<br>
+      <br>
+      As you may have already known that all the communication between the users and the SMS server is via SSL (i.e. https protocol), a quite secure way
+      to use strong encryption method to protect your sent messages content, which avoid anyone to intercept your secret. Then why we still need an additional
+      secure connection? The reason is that your counter parts are not script kiddies, but a gang of state supported and well equipped professional hackers.
+      Even your ISP will help them to monitor your cyber activities if government authority requests for it. So, they may not get your messages content easily, 
+      but they can certainly get your SMS sites DNS name and IP address easily if you don't take further steps to hide them. Once they know your SMS site, they
+      can track all connected IP addresses to your SMS site. If SMS users don't connect to the SMS server with secure connections, their IP addresses and then
+      their identities can be uncovered by government agents. Therefore, secure connection serves two purposes, hide your SMS site and true identity of SMS 
+      users, or at least protect SMS users even your enemies know your SMS site.<br> 
+      <br>
+      There are three ways to build a secure connection. They are virtual private network (VPN), Tor browser (Tor network), and public available WiFi
+      hotspots. In general, public available WiFi hotspots are considered insecure, then why should they be used? Because 'secure' in here also means
+      anonymity.<br>
+      <br>
+      <b><u>Virtual Private Network (VPN)</u></b><br>
+      VPN could hide your true IP address as you connect to your SMS server, but you must remember that VPN is <b>NOT</b> designed for anonymity. Your VPN
+      provider knows your true IP address (and hence your true identity), and all your cyber activities if he wants to monitor you. Therefore, how to choose
+      your VPN provider is very important for your safety. The basic principles are:<br>
+      <br>
+      <table class=table width=100% cellspacing=1 cellpedding=1>
+      <tr>
+        <td class=content width=10px valign=top>1.</td>
+        <td class=content>
+          If you need to hide yourself from your local government, don't subscribe those VPN providers that your local government's jurisdiction can be 
+          applied to them.
+        </td>
+      </tr>
+
+      <tr><td class=content colspan=2>&nbsp;</td></tr>
+
+      <tr>
+        <td class=content width=10px valign=top>2.</td>
+        <td class=content>
+          If it is possible, use free VPN services. Although freely available VPN services have many disadvantages, they could provide one more layer of
+          anonymity for you. They don't have your payment record, and payment record can be used to identify a person. However, you should remember, free
+          VPN providers still know your true IP address, and your cyber activities. So, rule number 1 must be considered as select your free VPN provider(s).
+        </td>
+      </tr>      
+      </table>
+      <br>
+      For free VPN service, I recommend <a href="https://www.vpngate.net" target=_blank>VPN Gate</a>. It is developed and run by University of Tsukuba, Japan. 
+      Please note that part of VPN servers provided by VPN Gate come from volunteers, and some of them are located into the territory of dictatorial regimes like 
+      China and Russia, you should avoid those VPN servers. Table 5.1.1 shows you the brief steps to install and use VPN Gate service on varied platforms. <br>
+      <br>
+      <table class=table width=100% cellspacing=1 cellpedding=1 border=1>
+      <tr class=content style="background-color:lightblue">
+        <td align=center><b>Platform</b></td>
+        <td align=center><b>Installation & Usage</b></td>
+      </tr>
+      
+      <tr>
+        <td align=center>Microsoft Windows</td>
+        <td>
+          <table class=table width=100% cellspacing=1 cellpedding=1>
+          <tr>
+            <td valign=top>1. </td>
+            <td>
+              Go to <a href="https://www.vpngate.net/en/download.aspx" target=_blank>VPN Gate client download page</a> and click on the link 'Download SoftEther VPN Client +
+              VPN Gate Client Plugin' to download a compressed file to your computer. Decompress it and install the VPN Gate client.
+            </td>
+          </tr>
+          
+          <tr valign=top>
+            <td>2. </td>
+            <td>
+              Select an icon 'SoftEther VPN Client Manager' on your desktop, launch it and and double click option 'VPN Gate Public VPN Relay Servers'. Available 
+              public VPN relay searvers will be listed on another pop-up window.
+            </td>
+          </tr>
+          
+          <tr>
+            <td valign=top>3. </td>
+            <td>
+              Select any one VPN server from the list, click on the button 'Connect to the VPN Server' or just double click it will trigger the connection, another 
+              pop-up window will appear for you to select connection protocol (TCP or UDP), then click the 'OK' button to build a VPN link for your computer. If 
+              everything is OK, a new item 'VPN Gate Connection' with status 'Connected' will be shown on the SoftEther VPN Client Manager.
+            </td>
+          </tr>  
+          </table>
+        </td>
+      </tr>
+      
+      <tr>
+        <td align=center>Android</td>
+        <td>
+          <table class=table width=100% cellspacing=1 cellpedding=1>
+          <tr>
+            <td valign=top>1. </td>
+            <td>
+              Install app 'OpenVPN Connect - OpenVPN App' from Google Play. <b>Note:</b> You must make sure the installed app is developed by openvpn.net by checking
+              app supporting website. Any other apps with similar name may function differently or even have adware or spyware embedded.
+            </td>
+          </tr>  
+          
+          <tr>
+            <td valign=top>2. </td>
+            <td>
+              Access <a href="https://www.vpngate.net/" target=_blank>VPN Gate</a> with web browser. From the web page, you will find a list of available VPN servers. Click 
+              on the link 'OpenVPN Config file' of any VPN server you desired. Then another web page 'Download the OpenVPN Configuration File (.ovpn file)' 
+              will be shown. You should find two to four '.opvn' file download links, one set for DDNS hostname and the other set for including IP address. 
+              Select any one '.opvn' file you wanted to download by clicking on it's link. A '.ovpn' file will then be saved to your Android device (usually 
+              on 'Downloads'). 
+            </td>            
+          </tr>          
+          
+          <tr>
+            <td valign=top>3. </td>
+            <td>
+              Open Andriod file location to find your saved '.ovpn' file, click on the saved file, then you will be asked to open it with app 'OpenVPN Connect',
+              click 'Just once' link to open it. Then you will be asked to import the '.opvn' profile, click 'OK' button to accept it. Now, a new VPN Gate VPN
+              server profile has been added to your OpenVPN Connect app. You may test it by clicking the 'CONNECT' button. If everything is fine, OpenVPN will 
+              show you the new VPN profile with status 'CONNECTED'. 
+            </td>
+          </tr>  
+          </table>  
+        </td>
+      </tr>
+      
+      <tr>
+        <td align=center>iOS (iPhone, iPad)</td>
+        <td>
+          <table class=table width=100% cellspacing=1 cellpedding=1>
+          <tr>
+            <td valign=top>1. </td>
+            <td>
+              Install app 'OpenVPN Connect - OpenVPN App' from App Store. <b>Note:</b> You must make sure the installed app is developed by 'OpenVPN Technologies'. 
+              Any other apps with similar name may function differently or even have adware or spyware embedded.
+            </td>
+          </tr>  
+          
+          <tr>
+            <td valign=top>2. </td>
+            <td>
+              Access <a href="https://www.vpngate.net/" target=_blank>VPN Gate</a> with web browser. From the web page, you will find a list of available VPN servers. Click 
+              on the link 'OpenVPN Config file' of any VPN server you desired. Then another web page 'Download the OpenVPN Configuration File (.ovpn file)' 
+              will be shown. You should find two to four '.opvn' file download links, one set for DDNS hostname and the other set for including IP address. 
+              Select any one '.opvn' file you wanted to download by clicking on it's link. A '.ovpn' file will then be downloaded to your iOS device. Depends
+              on what web browser you used, the downloaded '.opvn' file is usually to be put on the 'Downloads' folder of corresponding web browser.
+            </td>            
+          </tr>
+
+          <tr>
+            <td valign=top>3. </td>
+            <td>
+              Find your saved '.opvn' file, and then click on it. It will show you it is an OpenVPN profile, then click the 'share' symbol button on bottom left
+              corner. A list of apps will be shown for you, select OpenVPN, then click 'ADD' button on the page 'Import Profile'. Now, A new VPN Gate VPN server 
+              profile has been added to your OpenVPN Connect app. You may test it by clicking the 'CONNECT' button. If everything is fine, OpenVPN will show you 
+              the new VPN profile with status 'CONNECTED'.       
+            </td>
+          </tr>           
+          </table>  
+        </td>
+      </tr>
+      
+      <tr>
+        <td align=center>Ubuntu Linux</td>
+        <td>
+          <table class=table width=100% cellspacing=1 cellpedding=1>
+          <tr>
+            <td valign=top>1. </td>
+            <td>
+              Assume your desktop environment is GNOME and network is handled by GNOME network manager. You need to install software packages 'openvpn' and
+              'network-manager-openvpn-gnome' by following command:<br>
+              <br>
+              <b>apt-get install openvpn network-manager-openvpn-gnome</b><br>
+              <br>
+            </td>
+          </tr>
+
+          <tr>
+            <td valign=top>2. </td>
+            <td>
+              Access <a href="https://www.vpngate.net/" target=_blank>VPN Gate</a> with web browser. From the web page, you will find a list of available VPN servers. Click 
+              on the link 'OpenVPN Config file' of any VPN server you desired. Then another web page 'Download the OpenVPN Configuration File (.ovpn file)' 
+              will be shown. You should find two to four '.opvn' file download links, one set for DDNS hostname and the other set for including IP address. 
+              Select any one '.opvn' file you wanted to download by clicking on it's link. A '.ovpn' file will then be saved to your Linux machine (usually 
+              on folder 'Downloads' under your home directory).
+            </td>            
+          </tr> 
+          
+          <tr>
+            <td valign=top>3. </td>
+            <td>
+              Open 'Settings' of Ubuntu Linux, click 'Network' item on left hand side menu. Then corresponding page will be shown, on 'VPN' section, click the
+              '+' button, another popup window with title 'Add VPN' will be displayed.
+            </td>        
+          </tr>
+          
+          <tr>  
+            <td valign=top>4. </td>
+            <td>
+              Select option 'Import from file...', then get the downloaded '.ovpn' file from the file selection window, and click the 'Open' button. Then, all
+              details of the VPN profile will be shown on the 'Add VPN' window. Now, click the 'Add' button to accept it. A newly added VPN profile entry will
+              be shown on the VPN section. You may test it by clicking the toggle switch besides it. 
+            </td>    
+          </tr>          
+          </table>            
+        </td>      
+      </tr>
+      
+      <tr style="background-color:lightblue">
+        <td colspan=2 align=center>Table 5.1.1</td>
+      </tr>
+      </table>
+      <br>
+      <b>Important Note:</b><br>
+      To check your VPN status and details, launch a web browser, and go to web site <a href="https://ipleak.net/" target=_blank>https://ipleak.net</a>. If DNS service
+      shown on this web page is still from your original ISP, please wait a while and check again. Don't do anything until DNS service of your device is picked up
+      by the VPN provider. Otherwise, your internet activities could still be traced by your ISP.  
+    </td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+  
+  <tr>
+    <td class=content>
+      <b><u>Tor Browser (Tor Network)</u></b><br>
+      Tor browser is designed for user anonymity. When you use Tor browser to go to the internet, it will go through three arbitrary selected nodes of Tor network
+      around the world, and connection between all nodes are strongly encrypted. Because of it's nature, speed of Tor browser could be very slow. Tor project officially
+      support five platofrms. They are MS Windows, MacOS X, Linux, OpenBSD and Android. Tor browser installation on MS Windows, Linux and macOS are quite straightforward, 
+      just decompress the download archive and run it. Table 5.1.2 summarize some tips for Tor Browser installation and usage you should know about.<br>
+      <br>
+      Unfortunately, FireFox (except on iOS) and hence Tor browser are not supported by SMS 2.x due to technical issues. Therefore, if you want to use Tor like web
+      browser to protect yourself, only few options on desktop or laptop computers are available. For example, you may use Brave web browser's private window with 
+      Tor feature on MS Windows, Linux or macOS. <i><b>Note:</b> Brave web browser for Android and iOS has no this feature.</i><br>
+      <br>  
+      
+      <table class=table width=100% cellspacing=1 cellpedding=1 border=1>
+      <tr class=content style="background-color:lightblue">
+        <td align=center width=20px><b>#</b></td>
+        <td align=center><b>Tips</b></td>
+      </tr>
+      
+      <tr>
+        <td align=center valign=top>1.</td>
+        <td>
+          For security reason, you cannot run Tor browser in super user mode in Linux. 
+        </td>
+      </tr>
+            
+      <tr>
+        <td align=center valign=top>2.</td>
+        <td>
+          Although Tor project has no officially supported Tor browser on iOS (iPhone and iPad), an application called 'Onion Browser' (developed by Mike Tigas) can
+          use Tor network to protect your web surfing activities. However, you must bear in mind that Onion Browser can't fully protect your IP address from leaking
+          outside Tor network, especially on multimedia handling.
+        </td>
+      </tr>
+      
+      <tr style="background-color:lightblue">
+        <td colspan=2 align=center>Table 5.1.2</td>
+      </tr>
+      </table>
+      <br>
+      Besides web surfing, if you want to use Tor network to protect all your internet activities, you may turn to use Whonix. Whonix is two VirtualBox virtual
+      machines built on Debian Linux. One is called 'gateway', another one is called 'workstation'. 'Gateway' has two network interfaces, one of the network
+      interfaces is used to connect to the Tor network, another network interface is used locally for 'workstation'. All internet connection from the 'workstation'
+      must go through the 'gateway'. Therefore, all internet activities on the 'workstation' is protected by the Tor network. Since Whonix must be run on VirtualBox,
+      so that it is for desktop or laptop computers only, and it supports MS Windows, Linux, macOS (except Apple silicon mac) and Qubes.<br>
+      <br>
+      To download Whonix, go to it's <a href="https://www.whonix.org/wiki/Download" target=_blank>download page</a>. For more details of Whonix, you may consult
+      <a href="https://www.whonix.org/wiki/Documentation" target=_blank>Whonix WiKi page</a>.
+    </td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+  
+  <tr>
+    <td class=content>
+      <b><u>Public WiFi Hotspot</u></b><br>
+      Public available WiFi hotspots are usually insecure places (see <a href="https://thevpn.guru/public-wifi-hotspot-threat-privacy" target=_blank>this article</a> 
+      for details). However, if you take all the precautions, you could still keep yourself anonymity and safe.<br>
+      <br>
+      Although public WiFi hotspot can't expose your true identity directly, your trackers still have many ways to correlate indirect data to identify you.
+      For example, coffee cafes usually provide public WiFi access, and those places also commonly have CCTV monitoring. Your face on CCTV timeline, and internet
+      activities log on the public WiFi router, could let secret police narrow down who is the right person they target. Therefore, the following tips are for you 
+      as using public WiFi hotspots: <br>
+      <br>
+      <table class=table width=100% cellspacing=1 cellpedding=1>
+      <tr>
+        <td class=content width=10px valign=top>1.</td>
+        <td class=content>
+          Don't hang on same public WiFi hotspot frequently or regularly.  
+        </td>
+      </tr>
+
+      <tr><td class=content colspan=2>&nbsp;</td></tr>
+      
+      <tr>
+        <td class=content width=10px valign=top>2.</td>
+        <td class=content>
+          To cover your face, a cap / sunglasses / surgical mask is helpful. Don't dress too outstanding, and don't wear attractive or easily identified accessories. 
+          You must keep yourself low profile.   
+        </td>
+      </tr>
+
+      <tr><td class=content colspan=2>&nbsp;</td></tr>
+      
+      <tr>
+        <td class=content width=10px valign=top>3.</td>
+        <td class=content>
+          If it is possible, use VPN or Tor network to protect your internet connection as you are using public WiFi hotspot.   
+        </td>
+      </tr>
+
+      <tr><td class=content colspan=2>&nbsp;</td></tr>
+
+      <tr>
+        <td class=content width=10px valign=top>4.</td>
+        <td class=content>
+          Activate firewall and disable all sharing on your device. For mobile devices, also disable bluetooth, NFC and all other remote connection ways
+          except your WiFi card. 
+        </td>
+      </tr>      
+      </table>
+    </td>
+  </tr>  
+               
+  <tr><td><hr></td></tr>
+
+  <tr>
+    <td>
+      <table width=100% class=table cellspacing=0 cellpadding=0>
+      <tr>
+        <td width=30% align=left valign=center><a href="sys_destroy_system.html" title="Destroy system"><img src="left-arrow-green.png" height=80px></a></td>
+        <td align=center valign=center><a href="user_guide.html" title="Home"><img src="home.png" height=90px"></a></td>
+        <td width=30% align=right valign=center><a href="sec_web_browser.html" title="Secure your web browser"><img src="right-arrow-green.png" height=80px></a></td>
+      </tr>      
+      </table>  
+    </td>
+  </tr>
+  </table>
+</body>
+</html>

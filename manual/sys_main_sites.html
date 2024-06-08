@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>SMS User Guide - Main sites</title>  
+  <link rel="stylesheet" type="text/css" href="manual.css" media="screen" />
+</head>
+
+<body>
+  <table class=table cellspacing=1 cellpadding=1>
+  <tr>
+    <td>
+      <table width=100% class=table cellspacing=0 cellpadding=0>
+      <tr>
+        <td width=30% align=left valign=center><a href="sys_lock_user.html" title="Lock/Unlock user"><img src="left-arrow-green.png" height=80px></a></td>
+        <td align=center valign=center><a href="user_guide.html" title="Home"><img src="home.png" height=90px"></a></td>
+        <td width=30% align=right valign=center><a href="sys_email_senders.html" title="System settings - Email senders"><img src="right-arrow-green.png" height=80px></a></td>
+      </tr>      
+      </table>  
+    </td>
+  </tr>
+
+  <tr><td><hr></td></tr>
+        
+  <tr>
+    <td class=heading><b>4.5.1 Main sites</b></td>
+  </tr>  
+
+  <tr>
+    <td class=content>
+      If you are system administrator, you have right to maintain system settings.<br>
+      <br>
+      To maintain system settings, select item 'System Settings' on main menu (figure 2.1.3), then screen like figure 4.5.1.1 will be seen, which let you
+      choose which system settings you would like to maintain. To amend main sites of SMS, click on the button 'Main Sites', then screen like figure 4.5.1.2
+      will be displayed.<br>
+      <br>
+      Start from SMS 2.0, decoy site and messaging site are pointed to same DNS name. You could still seperate them into two different DNS names, but it is
+      not recommended. On figure 4.5.1.2, the first input field is for login (decoy) site DNS name, and the second input field is for the protected messaging 
+      site DNS name. If you want to change anyone of them, just input the most updated DNS name to appropriated field, and press the 'Save' button to update 
+      them. These DNS names are also related to the web server virtual hosts settings and then the SSL certificates. Therefore, if you change anyone of them, 
+      you need to amend web server settings accordingly, and then apply new SSL certificate(s) for amended virtual host(s). 
+      <br>
+      <br>
+      <b>Remarks:</b><br>
+      <table width=100%>
+        <tr>
+          <td valign="top">1. </td>
+          <td>SMS 2.x web server configuration file is on "/etc/nginx/conf.d/sms-server.conf".</td>
+        </tr>
+        <tr>
+          <td valign="top">2. </td>
+          <td>To apply a new SSL certificate, run "certbot --nginx" on super user mode.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td align=center><a href="setup_sys_settings.jpg"><img src="setup_sys_settings.jpg" width=600></a><br>Figure 4.5.1.1</td>
+  </tr>
+  
+  <tr><td>&nbsp;</td></tr>
+
+  <tr>
+    <td align=center><a href="setup_main_sites.jpg"><img src="setup_main_sites.jpg" width=600></a><br>Figure 4.5.1.2</td>
+  </tr>
+    
+  <tr><td><hr></td></tr>
+
+  <tr>
+    <td>
+      <table width=100% class=table cellspacing=0 cellpadding=0>
+      <tr>
+        <td width=30% align=left valign=center><a href="sys_lock_user.html" title="Lock/Unlock user"><img src="left-arrow-green.png" height=80px></a></td>
+        <td align=center valign=center><a href="user_guide.html" title="Home"><img src="home.png" height=90px"></a></td>
+        <td width=30% align=right valign=center><a href="sys_email_senders.html" title="System settings - Email senders"><img src="right-arrow-green.png" height=80px></a></td>
+      </tr>      
+      </table>  
+    </td>
+  </tr>
+  </table>
+</body>
+</html>
