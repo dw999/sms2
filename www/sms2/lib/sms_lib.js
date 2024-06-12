@@ -44,6 +44,8 @@
 // V2.0.12       2024-03-21      DW              Use a post quantum computing era cryptographic method 'Crystals Kyber' to protect the 
 //                                               login process.
 // V1.0.13       2024-04-16      DW              Use 'Crystals Kyber' method to protect processes "request to join" and "user creation".
+// V1.0.14       2024-06-13      DW              Swiping right in a message group will go to previous page, i.e. return to the message 
+//                                               group(s) landing page.
 //#################################################################################################################################
 
 "use strict";
@@ -4857,6 +4859,15 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
           myWebSocket = connectWebServer();
         });
         
+        //-- Swipe right in a message group will go to previous page, i.e. the message group(s) landing page. --//
+        $(function() {
+          $('#dosms').on("swiperight", swiperightHandler);
+          
+          function swiperightHandler(event) {
+            goHome();
+          }
+        });
+                
         //-- Store initial values on local storage of the web browser --//
         if (is_iOS) {
           //-- iOS behavior is different from other platforms, so that it needs to put cross pages data to cookie as work-around. --//
@@ -6009,7 +6020,7 @@ async function _printMessagesDoSMSpage(conn, group_id, group_name, group_type, g
     }
     
     html = `
-    <div data-role="page">
+    <div id="dosms" data-role="page">
       ${panel}
       
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
