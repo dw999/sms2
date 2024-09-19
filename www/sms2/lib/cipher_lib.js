@@ -48,45 +48,22 @@
 // V1.0.11       2024-06-07      DW              Rewrite function 'getKyberClientModule' to replace Crystals Kyber library used on
 //                                               front-end from 'dajiaji/crystals-kyber-js' to 'Dashlane/pqc.js', so that it can be
 //                                               hold on SMS server. 
+//
+// V1.0.12       2024-09-17      DW              1. Cryptographic method Crystals Kyber has been finalised, and used NPM library 
+//                                                  'dajiaji/crystals-kyber-js' has been updated and renamed as 'dajiaji/mlkem'. 
+//                                                  SMS programs and installation scripts are changed accordingly.
+//                                               2. Clean up this module to remove no longer used coding. 
 //#################################################################################################################################
 
 "use strict";
 const decoder = require('arraybuffer-encoding');
 const hashwasm = require('hash-wasm'); 
 const bcrypt = require('bcrypt');
-//const crypto = require('crypto');
 const crypto = require('node:crypto');
-const { Kyber1024 } = require("crystals-kyber-js");
+const { MlKem1024 } = require("mlkem");
 const util = require('util');
-//const CryptoJS = require("crypto-js");
-//const execSync = require('node:child_process').execSync;
 const dbs = require('../lib/db_lib.js');
 const wev = require('../lib/webenv_lib.js');
-//const algorithm = 'aes-256-cbc';
-//const key = crypto.randomBytes(32);
-//const iv = crypto.randomBytes(16);
-
-
-/*
-exports.encrypt = function(text) {
-  let cipher = crypto.createCipheriv(algorithm, Buffer.from(key), iv);
-  let encrypted = cipher.update(text);
-  encrypted = Buffer.concat([encrypted, cipher.final()]);
-
-  return {iv: iv.toString('hex'), encryptedData: encrypted.toString('hex')};
-}
-
-
-exports.decrypt = function(encrypted_text_obj) {	
-	let iv = Buffer.from(encrypted_text_obj.iv, 'hex');
-	let encryptedText = Buffer.from(encrypted_text_obj.encryptedData, 'hex');
-  let decipher = crypto.createDecipheriv(algorithm, Buffer.from(key), iv);
-  let decrypted = decipher.update(encryptedText);
-  decrypted = Buffer.concat([decrypted, decipher.final()]);
-
-  return decrypted.toString();
-}
-*/ 
 
 
 function _generateTrueRandomStr(option, max_len) {
@@ -166,41 +143,6 @@ exports.generateTrueRandomStr = function(option, max_len) {
 	
 	return result;
 }
-
-
-/*
- * 2024-02-11 DW: These two functions are phased out, and replaced by native Node.js library. 
-exports.encrypt_str = function(text, key) {
-  var result = {ok: false, encrypted: ''}; 
-  
-  try {
-    //-- Since here use password (i.e. key), it default uses AES-256 for encryption. --// 
-    var encrypted = CryptoJS.AES.encrypt(text, key).toString();
-    result = {ok: true, encrypted: encrypted};
-  }
-  catch(e) {
-    console.log(e.message);
-  }
-  
-  return result;
-}
-
-
-exports.decrypt_str = function(encrypted, key) {
-  var result = {ok: false, decrypted: ''};
-  
-  try {
-    var bytes  = CryptoJS.AES.decrypt(encrypted, key);
-    var decrypted = bytes.toString(CryptoJS.enc.Utf8);
-    result = {ok: true, decrypted: decrypted};     
-  }
-  catch(e) {
-    console.log(e.message);
-  }
-  
-  return result;
-}
-*/ 
 
 
 exports.encryptPassword = function(password) {
@@ -1272,9 +1214,6 @@ async function _aesEncrypt(algorithm, passphase, text) {
 	let result = {};
 	
 	try {
-		//const iv = new Uint8Array(16);
-		//crypto.getRandomValues(iv);
-    
     const iv = await _getIv(passphase, text);
 		
 		const key = await _importSymmeticKeyByPassword(passphase, algorithm, false, ["encrypt", "decrypt"]);
@@ -1569,9 +1508,9 @@ async function _generateKyberKeyPair() {
   let result = {pkey: '', skey: ''};
   
   try {
-    let kyber = new Kyber1024();
-    // pkey is public keym skey is secret key //
-    let [pkey, skey] = await kyber.generateKeyPair();
+    let kem = new MlKem1024();
+    // pkey is public key, and skey is secret key. //
+    let [pkey, skey] = await kem.generateKeyPair(); 
     
     result = {pkey: pkey, skey: skey};
   }
@@ -1616,11 +1555,11 @@ exports.generateKyberKeyPairBase64 = async function() {
 
 
 exports.kyberDecap = async function(ct, skey) {
-  let kyber, shared_key;
+  let kem, shared_key;
   
   try {
-    kyber = new Kyber1024();
-    shared_key = await kyber.decap(ct, skey);
+    kem = new MlKem1024();
+    shared_key = await kem.decap(ct, skey);
   }
   catch(e) {
     throw e;
@@ -1630,14 +1569,13 @@ exports.kyberDecap = async function(ct, skey) {
 }
 
 
-/*
 exports.getKyberClientModule = function() {
   let js;
   
   try {
     js = `
     <script type="module">
-      import { Kyber1024 } from "https://esm.sh/crystals-kyber-js";
+      import { MlKem1024 } from "https://esm.sh/mlkem";
 
       function base64Encode(u8) {
         return btoa(String.fromCharCode.apply(null, u8))
@@ -1651,8 +1589,8 @@ exports.getKyberClientModule = function() {
         try {
           const pkey = base64Decode(pkey_b64);
 
-          const sender = new Kyber1024();
-          const [ct, skey] = await sender.encap(pkey);
+          const kem = new MlKem1024();
+          const [ct, skey] = await kem.encap(pkey);
               
           const ct_b64 = base64Encode(ct);
           const skey_b64 = base64Encode(skey);              
@@ -1673,9 +1611,12 @@ exports.getKyberClientModule = function() {
   
   return js;
 }
-*/
 
 
+/* 
+ * 2024-09-18 DW: Since backend Crystals-Kyber (ML-KEM) library has been updated, this front-end library 
+ * can't be used anymore.
+ *  
 exports.getKyberClientModule = function() {
   let js;
   
@@ -1719,3 +1660,4 @@ exports.getKyberClientModule = function() {
   
   return js;
 }
+*/

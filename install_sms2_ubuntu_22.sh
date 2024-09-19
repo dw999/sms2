@@ -34,6 +34,7 @@
 # V1.0.08     2024-03-24      DW              Add NPM package 'crystals-kyber-js'.
 # V1.0.09     2024-04-13      DW              Make a daily task to enable all stable feature flags for 
 #                                             RabbitMQ broker.
+# V1.0.10     2024-09-18      DW              Replace NPM package 'crystals-kyber-js' by 'mlkem'.
 #=========================================================================================================
 
 setterm -blank 0
@@ -443,7 +444,7 @@ echo "Install required Node.js libraries"
 dir=`pwd`
 cd /www/sms2
 npm init -y >> /tmp/install.log
-npm install -S qs@^6.5.3 >> /tmp/install.log
+npm install -S qs >> /tmp/install.log
 npm install -S amqplib >> /tmp/install.log
 npm install -S arraybuffer-encoding >> /tmp/install.log
 npm install -S hash-wasm >> /tmp/install.log
@@ -451,13 +452,14 @@ npm install -S bcrypt >> /tmp/install.log
 npm install -S body-parser >> /tmp/install.log
 npm install -S cookie >> /tmp/install.log
 npm install -S cookie-parser >> /tmp/install.log
-npm install -S crystals-kyber-js >> /tmp/install.log
+#npm install -S crystals-kyber-js >> /tmp/install.log
 #npm install -S crypto-js >> /tmp/install.log
 npm install -S express >> /tmp/install.log
 npm install -S express-fileupload >> /tmp/install.log
 npm install -S image-thumbnail >> /tmp/install.log
 #npm install -S jsencrypt >> /tmp/install.log
 npm install -S mariadb >> /tmp/install.log
+npm install -S mlkem >> /tmp/install.log
 npm install -S node-device-detector >> /tmp/install.log
 npm install -S node-forge >> /tmp/install.log
 npm install -S nodemailer >> /tmp/install.log
@@ -478,13 +480,13 @@ npm install -S ws >> /tmp/install.log
 #cp -Rf /www/sms2/node_modules/jsencrypt/* /www/sms2/js/jsencrypt
 cd $dir  
 echo ""
-echo "If you see vulnerabilities warning messages, don't panic. Please run the following command on directory"
-echo "/www/sms2 after SMS 2.0 installation, and follow it's instructions: "
-echo ""
-echo "npm audit fix"
-echo ""
-read -p "If you understand, press Enter to go to next step..."
-echo ""
+#echo "If you see vulnerabilities warning messages, don't panic. Please run the following command on directory"
+#echo "/www/sms2 after SMS 2.0 installation, and follow it's instructions: "
+#echo ""
+#echo "npm audit fix"
+#echo ""
+#read -p "If you understand, press Enter to go to next step..."
+#echo ""
 
 echo ""
 echo "=================================================================================="
