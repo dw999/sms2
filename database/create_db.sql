@@ -324,6 +324,10 @@ CREATE OR REPLACE TABLE sms_version
   build_time datetime
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+LOCK TABLES `sms_version` WRITE;
+INSERT INTO `sms_version` VALUES ("2.0.14", "2.0", "14", "20240919", "2024-09-19 23:59:59");
+UNLOCK TABLES;
+
 --=========================================================================================================================================================--
 
 
