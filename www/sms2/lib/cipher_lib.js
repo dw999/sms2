@@ -53,6 +53,11 @@
 //                                                  'dajiaji/crystals-kyber-js' has been updated and renamed as 'dajiaji/mlkem'. 
 //                                                  SMS programs and installation scripts are changed accordingly.
 //                                               2. Clean up this module to remove no longer used coding. 
+//
+// V1.0.13       2024-10-10      DW              Add function 'makeHash', which is used to create hash of user password. Since node
+//                                               library 'bcrypt' depends on many unsupported libraries and at least one has serious
+//                                               technical issue. Therefore, functions depend on 'bcrypt' will be phased out gradually,
+//                                               and replaced by functions using library 'hash-wasm'. 'makeHash' is one of them.
 //#################################################################################################################################
 
 "use strict";
@@ -369,6 +374,31 @@ exports.pemFromKey = async function(keyType, key) {
   }  
   
   return pem;
+} 
+
+
+exports.makeHash = async function(password) {
+  let result = "";
+  
+  try {
+    const salt = new Uint8Array(16);
+    window.crypto.getRandomValues(salt);
+  
+    const result = await hashwasm.argon2id({
+      password: password,
+      salt,                  // salt is a buffer containing random bytes
+      parallelism: 1,
+      iterations: 256,
+      memorySize: 512,       // use 512KB memory
+      hashLength: 32,        // output size = 32 bytes
+      outputType: 'encoded', // return standard encoded string containing parameters needed to verify the key
+    });    
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return hash;
 } 
 
 
