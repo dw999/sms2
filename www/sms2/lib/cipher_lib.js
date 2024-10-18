@@ -58,6 +58,8 @@
 //                                               library 'bcrypt' depends on many unsupported libraries and at least one has serious
 //                                               technical issue. Therefore, functions depend on 'bcrypt' will be phased out gradually,
 //                                               and replaced by functions using library 'hash-wasm'. 'makeHash' is one of them.
+//
+// V1.0.14       2024-10-18      DW              Fix bugs on function 'makeHash'.  
 //#################################################################################################################################
 
 "use strict";
@@ -382,9 +384,9 @@ exports.makeHash = async function(password) {
   
   try {
     const salt = new Uint8Array(16);
-    window.crypto.getRandomValues(salt);
+    crypto.getRandomValues(salt);
   
-    const result = await hashwasm.argon2id({
+    result = await hashwasm.argon2id({
       password: password,
       salt,                  // salt is a buffer containing random bytes
       parallelism: 1,
@@ -398,7 +400,7 @@ exports.makeHash = async function(password) {
     throw e;
   }
   
-  return hash;
+  return result;
 } 
 
 
