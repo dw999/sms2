@@ -36,6 +36,9 @@
 -- V1.0.08       2024-01-19      DW              Amend schema of table 'message' to add a new field 'iv'.
 -- V1.0.09       2024-03-20      DW              Add new table 'kyber_keypair' to store generated Crystals
 --                                               Kyber key pairs. 
+-- V1.0.10       2024-10-22      DW              Update happy password and unhappy password hash strings for
+--                                               user 'smsadmin' on table 'user_list', since the library used 
+--                                               for user password encryption and verification is changed.
 --
 -- Remark: It is part of SMS installation program.
 -----------------------------------------------------------------------------------------------------
@@ -76,7 +79,7 @@ CREATE INDEX idx_usr_role_status ON user_list(user_role, status);
 
 LOCK TABLES `user_list` WRITE;
 ALTER TABLE `user_list` DISABLE KEYS;
-INSERT INTO `user_list` VALUES (1,'smsadmin','SA','','$2b$10$A7Py9hOG5Of.5CVyaqIIjezOhQzT4x8BXXCdKz6vRPcNfNxGQkxPC','$2b$10$4s5RIAv4AbLWxRB.c8Q9GOVjARYbCC20CSc0eBWExlkFOrWvk0V6W',0,2,'your_email_address','',0,current_date(),'A',0,null,1);
+INSERT INTO `user_list` VALUES (1,'smsadmin','SA','','$argon2id$v=19$m=512,t=256,p=1$j1LImLNIVbQBKTw/rvYxpg$ESlT/C0vTuLK7fNpgl70wmycNZ4NF+XROgEYDkdYcQ4','$argon2id$v=19$m=512,t=256,p=1$JX7EABK+eZI1DpIRcUi1SA$5sPeVhCSJkSU4vTF4J9k+ztD/3/SHdg66Z4YUOaVTVM',0,2,'your_email_address','',0,current_date(),'A',0,null,1);
 ALTER TABLE `user_list` ENABLE KEYS;
 UNLOCK TABLES;
 
@@ -325,7 +328,7 @@ CREATE OR REPLACE TABLE sms_version
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 LOCK TABLES `sms_version` WRITE;
-INSERT INTO `sms_version` VALUES ("2.0.14", "2.0", "14", "20240919", "2024-09-19 23:59:59");
+INSERT INTO `sms_version` VALUES ("2.0.15", "2.0", "15", "20241022", "2024-10-22 23:59:59");
 UNLOCK TABLES;
 
 --=========================================================================================================================================================--

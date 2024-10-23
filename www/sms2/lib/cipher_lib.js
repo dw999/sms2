@@ -60,12 +60,15 @@
 //                                               and replaced by functions using library 'hash-wasm'. 'makeHash' is one of them.
 //
 // V1.0.14       2024-10-18      DW              Fix bugs on function 'makeHash'.  
+//
+// V1.0.15       2024-10-22      DW              Rewrite functions 'encryptPassword' and 'isPasswordMatch' by using 3rd party library
+//                                               'hash-wasm' and phase out library 'bcrypt'.
 //#################################################################################################################################
 
 "use strict";
 const decoder = require('arraybuffer-encoding');
 const hashwasm = require('hash-wasm'); 
-const bcrypt = require('bcrypt');
+//const bcrypt = require('bcrypt');
 const crypto = require('node:crypto');
 const { MlKem1024 } = require("mlkem");
 const util = require('util');
@@ -152,6 +155,7 @@ exports.generateTrueRandomStr = function(option, max_len) {
 }
 
 
+/*
 exports.encryptPassword = function(password) {
   var salt, hash;
   
@@ -169,6 +173,49 @@ exports.encryptPassword = function(password) {
 
 exports.isPasswordMatch = function(password, passwd_hash) {
 	return bcrypt.compareSync(password, passwd_hash);
+}
+*/ 
+
+
+exports.encryptPassword = async function(password) {
+  let result = "";
+  
+  try {
+    const salt = new Uint8Array(16);
+    crypto.getRandomValues(salt);
+  
+    result = await hashwasm.argon2id({
+      password: password,
+      salt,                  // salt is a buffer containing random bytes
+      parallelism: 1,
+      iterations: 256,
+      memorySize: 512,       // use 512KB memory
+      hashLength: 32,        // output size = 32 bytes
+      outputType: 'encoded', // return standard encoded string containing parameters needed to verify the key
+    });    
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;
+} 
+
+
+exports.isPasswordMatch = async function(password, hash) {
+  let result;
+  
+  try {
+    result = await hashwasm.argon2Verify({
+      password: password,
+      hash: hash
+    });
+  }
+  catch(e) {
+    throw e;
+  }  
+  
+  return result;
 }
 
 
@@ -377,55 +424,6 @@ exports.pemFromKey = async function(keyType, key) {
   
   return pem;
 } 
-
-
-exports.makeHash = async function(password) {
-  let result = "";
-  
-  try {
-    const salt = new Uint8Array(16);
-    crypto.getRandomValues(salt);
-  
-    result = await hashwasm.argon2id({
-      password: password,
-      salt,                  // salt is a buffer containing random bytes
-      parallelism: 1,
-      iterations: 256,
-      memorySize: 512,       // use 512KB memory
-      hashLength: 32,        // output size = 32 bytes
-      outputType: 'encoded', // return standard encoded string containing parameters needed to verify the key
-    });    
-  }
-  catch(e) {
-    throw e;
-  }
-  
-  return result;
-} 
-
-
-exports.verifyHash = async function(password, hash) {
-  let result;
-  
-  try {
-    const isValid = await hashwasm.argon2Verify({
-      password: password,
-      hash: hash
-    });
-    
-    if (isValid) {
-      result = 1;
-    }
-    else {
-      result = 0;
-    }    
-  }
-  catch(e) {
-    throw e;
-  }  
-  
-  return result;
-}
 
 
 exports.rsaEncrypt = async function(algorithm, publicKey, plaintext) {

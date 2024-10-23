@@ -1720,7 +1720,7 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
       //-- Get system defined connection mode --//
       connection_mode = parseInt(await wev.getSysSettingValue(connh, 'connection_mode'), 10);
       
-      if (cipher.isPasswordMatch(password, happy_passwd)) {
+      if (await cipher.isPasswordMatch(password, happy_passwd)) {
         switch (status) {
           case 'A':
             // Normal user //
@@ -1824,7 +1824,7 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
             result = {ok: login_status, msg: message, url: redirect_url};
         }
       }
-      else if (cipher.isPasswordMatch(password, unhappy_passwd)) {
+      else if (await cipher.isPasswordMatch(password, unhappy_passwd)) {
         if (await _isFirstUnhappyLogin(connh, user_id)) {
           await _markUserStatusAsUnhappy(connh, user_id);
           if (connection_mode == 1) {

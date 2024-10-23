@@ -22,6 +22,7 @@
 #                                             RabbitMQ broker.
 # V1.0.07     2024-04-21      DW              Use Node.js 20.x on SMS 2.0 installation.
 # V1.0.08     2024-09-18      DW              Replace NPM package 'crystals-kyber-js' by 'mlkem'.
+# V1.0.09     2024-10-22      DW              Remove NPM package bcrypt.
 #=========================================================================================================
 
 setterm -blank 0
@@ -392,7 +393,7 @@ npm install -S qs@^6.5.3 >> /tmp/install.log
 npm install -S amqplib >> /tmp/install.log
 npm install -S arraybuffer-encoding >> /tmp/install.log
 npm install -S hash-wasm >> /tmp/install.log
-npm install -S bcrypt >> /tmp/install.log
+#npm install -S bcrypt >> /tmp/install.log
 npm install -S body-parser >> /tmp/install.log
 npm install -S cookie >> /tmp/install.log
 npm install -S cookie-parser >> /tmp/install.log

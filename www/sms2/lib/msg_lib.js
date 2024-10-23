@@ -3321,7 +3321,7 @@ async function _equalUnhappyPassword(conn, user_id, happy_passwd) {
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
     if (data.length > 0) {
-      result = cipher.isPasswordMatch(happy_passwd, data[0].unhappy_passwd);
+      result = await cipher.isPasswordMatch(happy_passwd, data[0].unhappy_passwd);
     }
     else {
       throw new Error('Unable to get unhappy password to verify with the new happy password.');
@@ -3346,7 +3346,7 @@ exports.updateUserHappyPassword = async function(msg_pool, user_id, happy_passwd
       result = {ok: false, msg: 'Happy password must not be equal to unhappy password!'};      
     }
     else {
-      encrypt_happy_passwd = cipher.encryptPassword(happy_passwd);
+      encrypt_happy_passwd = await cipher.encryptPassword(happy_passwd);
       
       sql = `UPDATE user_list ` + 
             `  SET happy_passwd = ? ` + 
@@ -3379,7 +3379,7 @@ async function _equalHappyPassword(conn, user_id, unhappy_passwd) {
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
     if (data.length > 0) {
-      result = cipher.isPasswordMatch(unhappy_passwd, data[0].happy_passwd);
+      result = await cipher.isPasswordMatch(unhappy_passwd, data[0].happy_passwd);
     }
     else {
       throw new Error('Unable to get happy password to verify with the new unhappy password.');
@@ -3404,7 +3404,7 @@ exports.updateUserUnhappyPassword = async function(msg_pool, user_id, unhappy_pa
       result = {ok: false, msg: 'Unhappy password must not be equal to happy password!'};      
     }
     else {    
-      encrypt_unhappy_passwd = cipher.encryptPassword(unhappy_passwd);
+      encrypt_unhappy_passwd = await cipher.encryptPassword(unhappy_passwd);
       
       sql = `UPDATE user_list ` + 
             `  SET unhappy_passwd = ? ` + 
@@ -4006,8 +4006,8 @@ async function _createUserAccount(conn, user_id, name, user, alias, email, happy
       result = {ok: false, msg: 'Alias ' + alias + ' is invalid'};
     }
     else {        
-      crypted_happy_passwd = cipher.encryptPassword(happy_passwd); 
-      crypted_unhappy_passwd = cipher.encryptPassword(unhappy_passwd);
+      crypted_happy_passwd = await cipher.encryptPassword(happy_passwd); 
+      crypted_unhappy_passwd = await cipher.encryptPassword(unhappy_passwd);
       
       sql = `INSERT INTO user_list ` +
             `(user_name, user_alias, name, happy_passwd, unhappy_passwd, login_failed_cnt, user_role, email, refer_by, join_date, status, cracked, inform_new_msg) ` +
