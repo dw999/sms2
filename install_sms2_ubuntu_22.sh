@@ -35,7 +35,8 @@
 # V1.0.09     2024-04-13      DW              Make a daily task to enable all stable feature flags for 
 #                                             RabbitMQ broker.
 # V1.0.10     2024-09-18      DW              Replace NPM package 'crystals-kyber-js' by 'mlkem'.
-# V1.0.11     2024-10-22      DW              Remove NPM package bcrypt.
+# V1.0.11     2024-10-22      DW              Remove NPM package 'bcrypt'.
+# V1.0.12     2024-10-25      DW              Remove NPM package 'cookie';
 #=========================================================================================================
 
 setterm -blank 0
@@ -451,7 +452,7 @@ npm install -S arraybuffer-encoding >> /tmp/install.log
 npm install -S hash-wasm >> /tmp/install.log
 #npm install -S bcrypt >> /tmp/install.log
 npm install -S body-parser >> /tmp/install.log
-npm install -S cookie >> /tmp/install.log
+#npm install -S cookie >> /tmp/install.log
 npm install -S cookie-parser >> /tmp/install.log
 #npm install -S crystals-kyber-js >> /tmp/install.log
 #npm install -S crypto-js >> /tmp/install.log
