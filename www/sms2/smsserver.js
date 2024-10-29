@@ -74,7 +74,7 @@
 "use strict";
 const express = require('express');
 const ws = require('ws');
-const cookie = require('cookie');
+const cookie = require('cookie');      // Important note: 'cookie' is required for websocket upgrade checking process, don't remove it.              
 const cookieParser = require('cookie-parser')
 const bodyParser = require('body-parser');
 const fileUpload = require('express-fileupload');
