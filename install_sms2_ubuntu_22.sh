@@ -38,6 +38,7 @@
 # V1.0.11     2024-10-22      DW              Remove NPM package 'bcrypt'.
 # V1.0.12     2024-10-25      DW              Remove NPM package 'cookie';
 # V1.0.13     2024-10-29      DW              Revoke change on V1.0.12, i.e. NPM package 'cookie' is required.
+# V1.0.14     2024-10-31      DW              Amend messages for FFmpeg manual installation. 
 #=========================================================================================================
 
 setterm -blank 0
@@ -717,9 +718,7 @@ then
     cd $dir   
     echo "Audio converter installation is failure. Don't panic, SMS 2.0 can function normally without this"
     echo "audio converter. For error details, please refer to file /tmp/install.log, and you may install it"
-    echo "manually by the following command afterward: "
-    echo ""
-    echo "apt-get install ffmpeg"
+    echo "manually by using the shell script 'build_ffmpeg.sh' on directory 'ffmpeg' of the installation package."
     echo ""
     read -p "Press Enter to continue..."     
   else
