@@ -46,6 +46,8 @@
 // V1.0.13       2024-04-16      DW              Use 'Crystals Kyber' method to protect processes "request to join" and "user creation".
 // V1.0.14       2024-06-13      DW              Swiping right in a message group will go to previous page, i.e. return to the message 
 //                                               group(s) landing page.
+// V1.0.15       2024-11-10      DW              Fix a bug on function 'sendFile' by loading session AES key as it is called and clear
+//                                               the session key after used. 
 //#################################################################################################################################
 
 "use strict";
@@ -4793,8 +4795,8 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
               break;
               
             case 'force_logout':
-               logoutSMS();
-               break;
+              logoutSMS();
+              break;
               
             default:
               //-- do nothing --//   
@@ -5219,14 +5221,16 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
           
           var file_name = allTrim($('#ul_file').val());   
           if (file_name != "") {
+            aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+          
             var ul_file = $('#ul_file').prop('files')[0];
             //-- Encode uploaded file name to handle Chinese characters --// 
             ul_file.name = unescape(encodeURIComponent(ul_file.name));       
             //-- Encrypt 'caption' and 'op_msg' before send the data set to the server, even 'caption' --//
             //-- is blank in this case.                                                                --//  
             var algorithm = "AES-GCM";                   
-            op_msg = (typeof(op_msg) == "string")? op_msg : '';              
-            var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, '');
+            op_msg = (typeof(op_msg) == "string")? op_msg : '';     
+            var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, '');   // Caption is always blank in this case
             var caption_iv = enc_caption_obj.iv;
             var enc_caption = enc_caption_obj.encrypted;
             var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
@@ -5291,7 +5295,10 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
                 $('#btn_send_file').removeAttr("disabled");
                 $('#btn_send_file').attr('src', '/images/send.png');
               }                    
-            });      
+            }); 
+            
+            // Clear aes_key from RAM after used //
+            aes_key = '';                 
           }
           else {
             alert("Please select a file before click the send button");
