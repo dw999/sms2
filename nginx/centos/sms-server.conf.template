@@ -137,9 +137,10 @@ server {
     return 405;
   }
 
-  if ($http_user_agent ~* LWP::Simple|wget|curl|Go-http-client|python-urllib|GensysInspect) {
-    return 403;
-  }
+  if ($http_user_agent ~* LWP::Simple|wget|curl|Go-http-client|python-urllib|GensysInspect|Custom-AsyncHttpClient|python-requests|zgrab) {
+    #return 403;
+    return 444;
+  }  
 
   location / {
     proxy_http_version 1.1;
@@ -179,56 +180,64 @@ server {
   }
 
   location ^~ /package.json {
-    return 404;
+    return 444;
   }
 
   location ^~ /package-lock.json {
-    return 404;
+    return 444;
   }
 
   location ^~ /node_modules {
-    deny all;
+    #deny all;
+    return 444;
   }
 
   location ^~ /etc {
-    deny all;
+    #deny all;
+    return 444;
   }
 
   location ^~ /lib {
-    deny all;
+    #deny all;
+    return 444;
   }
 
   location ^~ /smsserver.js {
-    return 404;
+    return 444;
   }
   
   location ^~ /delete_expired_session.js {
-    return 404;
+    return 444;
   }
 
   location ^~ /delete_private_message.js {
-    return 404;
+    return 444;
   }
 
   location ^~ /delete_old_message.js {
-    return 404;
+    return 444;
   }
 
   location ^~ /new_message_inform.js {
-    return 404;
+    return 444;
   }
 
   location ^~ /event_reminder.js {
-    return 404;
+    return 444;
   }  
   
   location ^~ /pm2-sms-server.json {
-    return 404;
+    return 444;
   }
   
+  location ~* \.(log|ini|sh|conf|env)$ {
+    return 444;
+  }  
+    
   location /itnews/data {
     if ($http_cookie !~ "MSG_USER") {
-      return 403;
+      #return 403;
+      return 444;
     }
   }  
 }
