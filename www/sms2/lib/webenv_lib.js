@@ -26,6 +26,7 @@
 // V1.0.03       2024-03-05      DW              Add function "disableEmbedJavascript" which is used to disable embedded javascript
 //                                               coding and highlight it with red colour.
 // V1.0.04       2024-03-20      DW              Add functions "base64Encode" and "base64Decode".
+// V1.0.05       2025-03-13      DW              Add function "minifyJS" which is used to compress JavaScript code block.
 //#################################################################################################################################
 
 "use strict";
@@ -33,6 +34,7 @@ const fs = require('fs');
 const path = require('node:path');
 const execSync = require('node:child_process').execSync;
 const imageThumbnail = require('image-thumbnail');
+const { minify } = require("terser");
 const dbs = require('../lib/db_lib.js');
 const telecom = require('../lib/telecom_lib.js');
 const cipher = require('../lib/cipher_lib.js');
@@ -1397,3 +1399,21 @@ exports.base64Decode = function(str) {
 }
 
 
+exports.minifyJS = async function(js) {
+  let options, buffer, result;
+  
+  try {
+    options = {
+      keep_fnames: true
+    };
+    
+    buffer = await minify(js, options);
+    result = buffer.code;     
+  }
+  catch(e) {
+    // The last resort //
+    result = js;
+  }
+  
+  return result;
+} 

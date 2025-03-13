@@ -48,6 +48,7 @@
 //                                               group(s) landing page.
 // V1.0.15       2024-11-10      DW              Fix a bug on function 'sendFile' by loading session AES key as it is called and clear
 //                                               the session key after used. 
+// V1.0.16       2025-03-13      DW              Amend function 'showLoginPage' by compress JavaScript code block.
 //#################################################################################################################################
 
 "use strict";
@@ -456,6 +457,117 @@ exports.showLoginPage = async function(msg_pool) {
     
     let kyber_module = cipher.getKyberClientModule();
     
+    // Compress JavaScript code block //
+    let js = `
+    var aes_algorithm = "AES-GCM";
+    var key = "";                 // AES-256 key generated at client side 
+    var algorithm_b64 = "${algorithm_b64}";    // The algorithm used by the RSA key pair generation
+    var algorithm;
+    var public_pem_b64 = "${public_pem_b64}";
+    var public_pem;
+    var public_key;               // The RSA public key imported from public_pem (from public_pem_b64) 
+    var pub_pem_signature_b64 = "${pub_pem_signature_b64}";			  
+    var pub_pem_signature;        // The sha256sum signature (encrypted) of the public key pem (i.e. public_pem)
+    var sign_algorithm_b64 = "${sign_algorithm_b64}";       // The algorithm used by the RSA public key signature verification 
+    var sign_algorithm;
+    var verify_key_pem_b64 = "${verify_key_pem_b64}";
+    var verify_key_pem;
+    var verify_key;               // The key used to verify the RSA public key signature
+    var cs_public_sha256sum;      // Client side generated SHA256SUM of the received public key pem (i.e. public_pem)                       
+    var is_valid = false;         // true: public key is valid, false otherwise.
+    var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
+  
+    $(document).ready(function() {
+      $('#username').focus();
+    });
+
+    async function prepareAESkey() {
+      try {
+        key = generateTrueRandomStr('A', ${_key_len});      // Defined on crypto-lib.js
+        
+        algorithm = convertBase64StrToObject(algorithm_b64);
+        public_pem = convertObjectToBase64Str(public_pem_b64);
+        public_key = await importKeyFromPem('public', public_pem, algorithm, true, ['encrypt']);    // Defined on crypto-lib.js
+                    
+        sign_algorithm = convertBase64StrToObject(sign_algorithm_b64);
+        verify_key_pem = convertObjectToBase64Str(verify_key_pem_b64);
+        verify_key = await importKeyFromPem('public', verify_key_pem, sign_algorithm, true, ['verify']);    // Defined on crypto-lib.js
+        
+        pub_pem_signature = base64StringToArrayBuffer(pub_pem_signature_b64);
+        cs_public_sha256sum = await digestData('SHA-256', public_pem_b64);                      // In base64 format
+        is_valid = await verifySignature(sign_algorithm, verify_key, pub_pem_signature, base64StringToArrayBuffer(cs_public_sha256sum));
+        
+        if (!is_valid) {
+          throw new Error("Warning: The received public key is invalid, login process cannot proceed! You may be under Man-In-The-Middle attack!");
+        }
+      }
+      catch(e) {
+        throw e;
+      }
+      
+      return key;				
+    }
+    
+    async function goLogin() {
+      try {
+        key = await prepareAESkey();				  
+  
+        let enc_user = await aesEncryptJSON(aes_algorithm, key, $('#username').val());
+        let enc_pass = await aesEncryptJSON(aes_algorithm, key, $('#password').val()); 
+        
+        let enc_key = await rsaEncrypt(algorithm, public_key, key);                       // Defined on crypto-lib.js
+        // Step 1: Convert encrypted key from ArrayBuffer to Uint8Array //
+        let enc_key_u8a = new Uint8Array(enc_key);
+        // Step 2: Stringify the Uint8Array to a JSON format string //
+        let enc_key_json = JSON.stringify(enc_key_u8a);
+        // Step 3: Use the secret key of the Kyber object to encrypt the RSA encrypted session key by AES-256 encryption. //
+        //         i.e. Use AES-256 with Kyber secret key as encryption key to encrypt the RSA encrypted session key once //
+        //         more.                                                                                                  //
+        let secret = await generateSharedCipherKey("${kyber_pkey_b64}");
+        let ct = secret.ct;
+        let skey = base64Decode(secret.sk);
+        
+        let enc_obj = await aesEncryptWithKeyJSON(aes_algorithm, skey, enc_key_json);
+        let keycode_iv = enc_obj.iv;
+        let keycode = enc_obj.encrypted;
+                              
+        // Store the generated AES key on browser local storage //
+        if (is_iOS) {
+          // iOS behavior is different from other platforms, so that it needs to put cross pages data to cookie as work-around. //
+          Cookies.set("aes_key", key, {expires: 1});              // Defined on js.cookie.min.js    
+        }
+        else {
+          setLocalStoredItem("aes_key", key);                     // Defined on common_lib.js
+        }
+        
+        // Clear the Kyber secret key and session AES key in RAM after used (for precaution only) //
+        skey = '';
+        secret.sk = null;
+        secret = {};
+        aes_key = '';
+        
+        $('#kyber_ct').val(ct);  
+        $('#keycode_iv').val(keycode_iv);                            
+        $('#keycode').val(keycode); 															
+        $('#cs_public_sha256sum').val(cs_public_sha256sum);	      // Send back to server for verification
+        $('#aes_algorithm').val(aes_algorithm);
+        $('#e_user').val(enc_user.encrypted);
+        $('#iv_user').val(enc_user.iv);
+        $('#e_pass').val(enc_pass.encrypted);
+        $('#iv_pass').val(enc_pass.iv);
+        $('#username').val('');
+        $('#password').val('');																																																														 																	
+        $('#oper_mode').val('S');
+        $('#frmLogin').submit();
+      }
+      catch(e) {
+        console.log(e);				  							  
+        alert(e);
+      } 
+    }`; 
+    
+    js = await wev.minifyJS(js);
+    
     //-- Note: "data-ajax='false'" is very important to let all jQuery mobile forms to work correctly --//
     html = `
     <!doctype html>
@@ -477,112 +589,7 @@ exports.showLoginPage = async function(msg_pool) {
       ${kyber_module}
                   
       <script>
-        var aes_algorithm = "AES-GCM";
-        var key = "";                 // AES-256 key generated at client side 
-        var algorithm_b64 = "${algorithm_b64}";    // The algorithm used by the RSA key pair generation
-        var algorithm;
-        var public_pem_b64 = "${public_pem_b64}";
-        var public_pem;
-        var public_key;               // The RSA public key imported from public_pem (from public_pem_b64) 
-        var pub_pem_signature_b64 = "${pub_pem_signature_b64}";			  
-        var pub_pem_signature;        // The sha256sum signature (encrypted) of the public key pem (i.e. public_pem)
-        var sign_algorithm_b64 = "${sign_algorithm_b64}";       // The algorithm used by the RSA public key signature verification 
-        var sign_algorithm;
-        var verify_key_pem_b64 = "${verify_key_pem_b64}";
-        var verify_key_pem;
-        var verify_key;               // The key used to verify the RSA public key signature
-        var cs_public_sha256sum;      // Client side generated SHA256SUM of the received public key pem (i.e. public_pem)                       
-        var is_valid = false;         // true: public key is valid, false otherwise.
-        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
-      
-        $(document).ready(function() {
-          $('#username').focus();
-        });
-
-        async function prepareAESkey() {
-          try {
-            key = generateTrueRandomStr('A', ${_key_len});      // Defined on crypto-lib.js
-            
-            algorithm = convertBase64StrToObject(algorithm_b64);
-            public_pem = convertObjectToBase64Str(public_pem_b64);
-            public_key = await importKeyFromPem('public', public_pem, algorithm, true, ['encrypt']);    // Defined on crypto-lib.js
-                        
-            sign_algorithm = convertBase64StrToObject(sign_algorithm_b64);
-            verify_key_pem = convertObjectToBase64Str(verify_key_pem_b64);
-            verify_key = await importKeyFromPem('public', verify_key_pem, sign_algorithm, true, ['verify']);    // Defined on crypto-lib.js
-            
-            pub_pem_signature = base64StringToArrayBuffer(pub_pem_signature_b64);
-            cs_public_sha256sum = await digestData('SHA-256', public_pem_b64);                      // In base64 format
-            is_valid = await verifySignature(sign_algorithm, verify_key, pub_pem_signature, base64StringToArrayBuffer(cs_public_sha256sum));
-            
-            if (!is_valid) {
-              throw new Error("Warning: The received public key is invalid, login process cannot proceed! You may be under Man-In-The-Middle attack!");
-            }
-          }
-          catch(e) {
-            throw e;
-          }
-          
-          return key;				
-        }
-        
-        async function goLogin() {
-          try {
-            key = await prepareAESkey();				  
-      
-            let enc_user = await aesEncryptJSON(aes_algorithm, key, $('#username').val());
-            let enc_pass = await aesEncryptJSON(aes_algorithm, key, $('#password').val()); 
-            
-            let enc_key = await rsaEncrypt(algorithm, public_key, key);                       // Defined on crypto-lib.js
-            // Step 1: Convert encrypted key from ArrayBuffer to Uint8Array //
-            let enc_key_u8a = new Uint8Array(enc_key);
-            // Step 2: Stringify the Uint8Array to a JSON format string //
-            let enc_key_json = JSON.stringify(enc_key_u8a);
-            // Step 3: Use the secret key of the Kyber object to encrypt the RSA encrypted session key by AES-256 encryption. //
-            //         i.e. Use AES-256 with Kyber secret key as encryption key to encrypt the RSA encrypted session key once //
-            //         more.                                                                                                  //
-            let secret = await generateSharedCipherKey("${kyber_pkey_b64}");
-            let ct = secret.ct;
-            let skey = base64Decode(secret.sk);
-            
-            let enc_obj = await aesEncryptWithKeyJSON(aes_algorithm, skey, enc_key_json);
-            let keycode_iv = enc_obj.iv;
-            let keycode = enc_obj.encrypted;
-                                  
-            // Store the generated AES key on browser local storage //
-            if (is_iOS) {
-              // iOS behavior is different from other platforms, so that it needs to put cross pages data to cookie as work-around. //
-              Cookies.set("aes_key", key, {expires: 1});              // Defined on js.cookie.min.js    
-            }
-            else {
-              setLocalStoredItem("aes_key", key);                     // Defined on common_lib.js
-            }
-            
-            // Clear the Kyber secret key and session AES key in RAM after used (for precaution only) //
-            skey = '';
-            secret.sk = null;
-            secret = {};
-            aes_key = '';
-            
-            $('#kyber_ct').val(ct);  
-            $('#keycode_iv').val(keycode_iv);                            
-            $('#keycode').val(keycode); 															
-            $('#cs_public_sha256sum').val(cs_public_sha256sum);	      // Send back to server for verification
-            $('#aes_algorithm').val(aes_algorithm);
-            $('#e_user').val(enc_user.encrypted);
-            $('#iv_user').val(enc_user.iv);
-            $('#e_pass').val(enc_pass.encrypted);
-            $('#iv_pass').val(enc_pass.iv);
-            $('#username').val('');
-            $('#password').val('');																																																														 																	
-            $('#oper_mode').val('S');
-            $('#frmLogin').submit();
-          }
-          catch(e) {
-            console.log(e);				  							  
-            alert(e);
-          } 
-        }
+        ${js}
       </script>
     </head>
 
