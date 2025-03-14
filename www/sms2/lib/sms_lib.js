@@ -7560,6 +7560,137 @@ async function _printJoinUsJavascriptSection(conn) {
     let kyber_pkey_b64 = kyber_obj.pkey;  
 		
     let kyber_module = cipher.getKyberClientModule();
+    
+    let js = `
+    var key = "";                 // AES-256 key generated at client side
+    var key_id = "${key_id}"; 
+    var kyber_id = "${kyber_id}";
+    var algorithm_b64 = "${algorithm_b64}";    // The algorithm used by the RSA key pair generation
+    var algorithm;                             // The algorithm used by the RSA in required object format
+    var public_pem_b64 = "${public_pem_b64}";
+    var public_pem;
+    var public_key;               // The RSA public key imported from public_pem (from public_pem_b64) 
+    var pub_pem_signature_b64 = "${pub_pem_signature_b64}";			  
+    var pub_pem_signature;        // The sha256sum signature (encrypted) of the public key pem (i.e. public_pem)
+    var sign_algorithm_b64 = "${sign_algorithm_b64}";       // The algorithm used by the RSA public key signature verification 
+    var sign_algorithm;
+    var verify_key_pem_b64 = "${verify_key_pem_b64}";
+    var verify_key_pem;
+    var verify_key;               // The key used to verify the RSA public key signature
+    var cs_public_sha256sum;      // Client side generated SHA256SUM of the received public key pem (i.e. public_pem)                       
+    var is_valid = false;         // true: public key is valid, false otherwise.
+
+    async function prepareAESkey() {
+      try {
+        key = generateTrueRandomStr('A', ${_key_len});      // Defined on crypto-lib.js
+        
+        algorithm = convertBase64StrToObject(algorithm_b64);
+        public_pem = convertObjectToBase64Str(public_pem_b64);
+        public_key = await importKeyFromPem('public', public_pem, algorithm, true, ['encrypt']);    // Defined on crypto-lib.js
+                    
+        sign_algorithm = convertBase64StrToObject(sign_algorithm_b64);
+        verify_key_pem = convertObjectToBase64Str(verify_key_pem_b64);
+        verify_key = await importKeyFromPem('public', verify_key_pem, sign_algorithm, true, ['verify']);    // Defined on crypto-lib.js
+        
+        pub_pem_signature = base64StringToArrayBuffer(pub_pem_signature_b64);
+        cs_public_sha256sum = await digestData('SHA-256', public_pem_b64);                      // In base64 format
+        is_valid = await verifySignature(sign_algorithm, verify_key, pub_pem_signature, base64StringToArrayBuffer(cs_public_sha256sum));
+        
+        if (!is_valid) {
+          throw new Error("Warning: The received public key is invalid, request-to-join cannot proceed! You may be under Man-In-The-Middle attack!");
+        }
+      }
+      catch(e) {
+        throw e;
+      }
+      
+      return key;				
+    }
+  
+    async function goRegister() {
+      var this_name = allTrim(document.getElementById("name").value);
+      var this_email = allTrim(document.getElementById("email").value);
+      var this_refer = allTrim(document.getElementById("refer").value);
+      var this_remark = document.getElementById("remark").value
+      var aes_algorithm = "AES-GCM";          // algorithm used for AES-256 encryption 
+      var enc_obj;
+
+      try {
+        if (this_name == "") {
+          alert("Your name is compulsory.");
+          document.getElementById("name").focus();
+          return false;
+        }
+        
+        if (this_email == "") {
+          alert("Your email address is compulsory.");
+          document.getElementById("email").focus();
+          return false;
+        }
+        
+        if (this_refer == "") {
+          alert("Your referrer's email address is compulsory.");
+          document.getElementById("refer").focus();
+          return false;
+        }
+
+        key = await prepareAESkey();
+
+        //-- Encrypt data before send to the back-end server --//
+        $('#algorithm').val(aes_algorithm);
+        
+        enc_obj = await aesEncryptJSON(aes_algorithm, key, this_name);
+        $('#iv_name').val(enc_obj.iv);
+        $('#e_name').val(enc_obj.encrypted);
+        enc_obj = await aesEncryptJSON(aes_algorithm, key, this_email);
+        $('#iv_email').val(enc_obj.iv);
+        $('#e_email').val(enc_obj.encrypted);
+        enc_obj = await aesEncryptJSON(aes_algorithm, key, this_refer);
+        $('#iv_refer').val(enc_obj.iv);
+        $('#e_refer').val(enc_obj.encrypted);
+        enc_obj = await aesEncryptJSON(aes_algorithm, key, this_remark);
+        $('#iv_remark').val(enc_obj.iv);
+        $('#e_remark').val(enc_obj.encrypted);
+        $('#cs_public_sha256sum').val(cs_public_sha256sum);
+        //-- Use the RSA public key to encrypt the AES key --//
+        let enc_key = await rsaEncrypt(algorithm, public_key, key);                       // Defined on crypto-lib.js
+        // Step 1: Convert encrypted key from ArrayBuffer to Uint8Array //
+        let enc_key_u8a = new Uint8Array(enc_key);
+        // Step 2: Stringify the Uint8Array to a JSON format string //
+        let enc_key_json = JSON.stringify(enc_key_u8a);
+        // Step 3: Use the secret key of the Kyber object to encrypt the RSA encrypted session key by AES-256 encryption. //
+        //         i.e. Use AES-256 with Kyber secret key as encryption key to encrypt the RSA encrypted session key once //
+        //         more.                                                                                                  //
+        let secret = await generateSharedCipherKey("${kyber_pkey_b64}");
+        let ct = secret.ct;
+        let skey = base64Decode(secret.sk);
+          
+        enc_obj = await aesEncryptWithKeyJSON(aes_algorithm, skey, enc_key_json);
+        let keycode_iv = enc_obj.iv;
+        let keycode = enc_obj.encrypted;
+        $('#key_id').val(key_id);          
+        $('#key_iv').val(keycode_iv);
+        $('#key').val(keycode);
+        $('#kyber_id').val(kyber_id);          
+        $('#kyber_ct').val(ct);
+                
+        //-- Remove content from the clear text data --//
+        $('#name').val('');
+        $('#email').val('');
+        $('#refer').val('');
+        $('#remark').val('');
+        
+        document.getElementById("oper_mode").value = "S";
+        document.getElementById("frmRegister").action = "/request-to-join";
+        document.getElementById("frmRegister").submit();
+      }
+      catch(e) {
+        console.log(e);
+        alert("Error: " + e + ". Request-to-join process is aborted.");
+      }
+    }`;
+
+    js = await wev.minifyJS(js);
     		
     html = `
     <style>
@@ -7582,133 +7713,7 @@ async function _printJoinUsJavascriptSection(conn) {
     ${kyber_module} 
     
     <script>
-      var key = "";                 // AES-256 key generated at client side
-      var key_id = "${key_id}"; 
-      var kyber_id = "${kyber_id}";
-		  var algorithm_b64 = "${algorithm_b64}";    // The algorithm used by the RSA key pair generation
-		  var algorithm;                             // The algorithm used by the RSA in required object format
-		  var public_pem_b64 = "${public_pem_b64}";
-		  var public_pem;
-			var public_key;               // The RSA public key imported from public_pem (from public_pem_b64) 
-			var pub_pem_signature_b64 = "${pub_pem_signature_b64}";			  
-		  var pub_pem_signature;        // The sha256sum signature (encrypted) of the public key pem (i.e. public_pem)
-		  var sign_algorithm_b64 = "${sign_algorithm_b64}";       // The algorithm used by the RSA public key signature verification 
-		  var sign_algorithm;
-		  var verify_key_pem_b64 = "${verify_key_pem_b64}";
-		  var verify_key_pem;
-		  var verify_key;               // The key used to verify the RSA public key signature
-		  var cs_public_sha256sum;      // Client side generated SHA256SUM of the received public key pem (i.e. public_pem)                       
-		  var is_valid = false;         // true: public key is valid, false otherwise.
-
-			async function prepareAESkey() {
-			  try {
-				  key = generateTrueRandomStr('A', ${_key_len});      // Defined on crypto-lib.js
-				  
-				  algorithm = convertBase64StrToObject(algorithm_b64);
-				  public_pem = convertObjectToBase64Str(public_pem_b64);
-				  public_key = await importKeyFromPem('public', public_pem, algorithm, true, ['encrypt']);    // Defined on crypto-lib.js
-				  					  
-				  sign_algorithm = convertBase64StrToObject(sign_algorithm_b64);
-				  verify_key_pem = convertObjectToBase64Str(verify_key_pem_b64);
-				  verify_key = await importKeyFromPem('public', verify_key_pem, sign_algorithm, true, ['verify']);    // Defined on crypto-lib.js
-				  
-				  pub_pem_signature = base64StringToArrayBuffer(pub_pem_signature_b64);
-				  cs_public_sha256sum = await digestData('SHA-256', public_pem_b64);                      // In base64 format
-				  is_valid = await verifySignature(sign_algorithm, verify_key, pub_pem_signature, base64StringToArrayBuffer(cs_public_sha256sum));
-				  
-				  if (!is_valid) {
-				    throw new Error("Warning: The received public key is invalid, request-to-join cannot proceed! You may be under Man-In-The-Middle attack!");
-				  }
-			  }
-			  catch(e) {
-			    throw e;
-			  }
-			  
-			  return key;				
-		  }
-    
-      async function goRegister() {
-        var this_name = allTrim(document.getElementById("name").value);
-        var this_email = allTrim(document.getElementById("email").value);
-        var this_refer = allTrim(document.getElementById("refer").value);
-        var this_remark = document.getElementById("remark").value
-        var aes_algorithm = "AES-GCM";          // algorithm used for AES-256 encryption 
-        var enc_obj;
-
-        try {
-	        if (this_name == "") {
-	          alert("Your name is compulsory.");
-	          document.getElementById("name").focus();
-	          return false;
-	        }
-	        
-	        if (this_email == "") {
-	          alert("Your email address is compulsory.");
-	          document.getElementById("email").focus();
-	          return false;
-	        }
-	        
-	        if (this_refer == "") {
-	          alert("Your referrer's email address is compulsory.");
-	          document.getElementById("refer").focus();
-	          return false;
-	        }
-	
-	        key = await prepareAESkey();
-
-	        //-- Encrypt data before send to the back-end server --//
-	        $('#algorithm').val(aes_algorithm);
-	        
-	        enc_obj = await aesEncryptJSON(aes_algorithm, key, this_name);
-	        $('#iv_name').val(enc_obj.iv);
-	        $('#e_name').val(enc_obj.encrypted);
-	        enc_obj = await aesEncryptJSON(aes_algorithm, key, this_email);
-	        $('#iv_email').val(enc_obj.iv);
-	        $('#e_email').val(enc_obj.encrypted);
-	        enc_obj = await aesEncryptJSON(aes_algorithm, key, this_refer);
-	        $('#iv_refer').val(enc_obj.iv);
-	        $('#e_refer').val(enc_obj.encrypted);
-	        enc_obj = await aesEncryptJSON(aes_algorithm, key, this_remark);
-	        $('#iv_remark').val(enc_obj.iv);
-	        $('#e_remark').val(enc_obj.encrypted);
-	        $('#cs_public_sha256sum').val(cs_public_sha256sum);
-	        //-- Use the RSA public key to encrypt the AES key --//
-					let enc_key = await rsaEncrypt(algorithm, public_key, key);                       // Defined on crypto-lib.js
-					// Step 1: Convert encrypted key from ArrayBuffer to Uint8Array //
-					let enc_key_u8a = new Uint8Array(enc_key);
-					// Step 2: Stringify the Uint8Array to a JSON format string //
-					let enc_key_json = JSON.stringify(enc_key_u8a);
-          // Step 3: Use the secret key of the Kyber object to encrypt the RSA encrypted session key by AES-256 encryption. //
-          //         i.e. Use AES-256 with Kyber secret key as encryption key to encrypt the RSA encrypted session key once //
-          //         more.                                                                                                  //
-          let secret = await generateSharedCipherKey("${kyber_pkey_b64}");
-          let ct = secret.ct;
-          let skey = base64Decode(secret.sk);
-            
-          enc_obj = await aesEncryptWithKeyJSON(aes_algorithm, skey, enc_key_json);
-          let keycode_iv = enc_obj.iv;
-          let keycode = enc_obj.encrypted;
-          $('#key_id').val(key_id);          
-          $('#key_iv').val(keycode_iv);
-	        $('#key').val(keycode);
-          $('#kyber_id').val(kyber_id);          
-          $('#kyber_ct').val(ct);
-	      	        
-	        //-- Remove content from the clear text data --//
-	        $('#name').val('');
-	        $('#email').val('');
-	        $('#refer').val('');
-	        $('#remark').val('');
-	        
-	        document.getElementById("oper_mode").value = "S";
-	        document.getElementById("frmRegister").action = "/request-to-join";
-	        document.getElementById("frmRegister").submit();
-			  }
-			  catch(e) {
-			    console.log(e);
-			    alert("Error: " + e + ". Request-to-join process is aborted.");
-			  }
-      }
+      ${js}
     </script>    
     `;
   }

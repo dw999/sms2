@@ -432,7 +432,7 @@ app.post('/request-to-join', (req, res) => {
 			    //-- Decrypt data (begin) --//
 			    let data = {iv_name: iv_name, e_name: e_name, iv_email: iv_email, e_email: e_email, iv_refer: iv_refer, e_refer: e_refer, 
 						          iv_remark: iv_remark, e_remark: e_remark};
-			    
+			              
 			    let result = smslib.decryptRequestToJoinData(algorithm, aes_key, data);
 			    
 			    result.then((dec_obj) => {
@@ -440,7 +440,7 @@ app.post('/request-to-join', (req, res) => {
 						email = dec_obj.email;
 						refer = dec_obj.refer;
 						remark = dec_obj.remark;
-						
+						            
 			      let result = msglib.checkReferrer(msg_pool, refer);
 			      result.then((retval) => {
 			        if (retval.is_trusted) {
@@ -522,7 +522,7 @@ app.post('/request-to-join', (req, res) => {
 			        }
 			        else {
 			          //-- Just pretend the registration is OK --//
-			          let result = smslib.printRegistedOkPage(name);
+			          let result = smslib.printRegistedOkPage(msg_pool, name);
 			          result.then((html) => {
 			            res.send(html);
 			          }).catch((error) => {
@@ -8386,7 +8386,7 @@ app.post('/upload_files', (req, res) => {
   let ip_addr = req.ip;
   let decrypt_caption = '';
   let decrypt_op_msg = '';
-  
+    
   group_id = (typeof(group_id) == 'undefined' || group_id == null)? 0 : parseInt(group_id, 10);
   sender_id = (typeof(sender_id) == 'undefined' || sender_id == null)? 0 : parseInt(sender_id, 10);
   
@@ -8407,17 +8407,7 @@ app.post('/upload_files', (req, res) => {
 								let result = msglib.getSessionSecureKey(msg_pool, user_id, sess_code);
 								
 								result.then((aes_key) => {
-								  //-- Decrypt 'caption' and 'op_msg' here --//
-									//if (typeof(caption) != 'undefined') {
-								  //  decrypt_obj = cipher.decrypt_str(caption, aes_key);
-								  //  decrypt_caption = (decrypt_obj.ok)? decrypt_obj.decrypted : 'caption is lost due to decryption failure';
-								  //}
-								  
-								  //if (typeof(op_msg) != 'undefined') {  
-								  //  decrypt_obj = cipher.decrypt_str(op_msg, aes_key);
-								  //  decrypt_op_msg = (decrypt_obj.ok)? decrypt_obj.decrypted : 'op_msg is lost due to decryption failure';    
-								  //}
-							
+								  //-- Decrypt 'caption' and 'op_msg' here --//							
 							    let result = cipher.aesDecryptJSON(algorithm, aes_key, caption_iv, caption);
 							    result.then((dec_caption) => {
 										decrypt_caption = dec_caption;
