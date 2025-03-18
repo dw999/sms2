@@ -49,6 +49,8 @@
 // V1.0.15       2024-11-10      DW              Fix a bug on function 'sendFile' by loading session AES key as it is called and clear
 //                                               the session key after used. 
 // V1.0.16       2025-03-13      DW              Amend function 'showLoginPage' by compress JavaScript code block.
+// V1.0.17       2025-03-18      DW              Compress JavaScript code block on functions 'showMessagePage', 'showDoSMSpage' and
+//                                               'printRequestToJoinForm'. 
 //#################################################################################################################################
 
 "use strict";
@@ -2571,7 +2573,7 @@ async function getUserRole(conn, user_id) {
 
 
 exports.showMessagePage = async function(msg_pool, sess_code) {
-  var conn, user_id, user_role, wspath, private_group_marker, telegram_id_input, connect_mode, create_user_account, panel, html;
+  var conn, user_id, user_role, wspath, private_group_marker, telegram_id_input, connect_mode, create_user_account, panel, js, html;
   var msgrp = [];
     
   try {
@@ -2608,8 +2610,8 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
           <ul data-role="listview">
             <li data-role="list-divider" style="color:darkgreen;">Maintain Your Profile</li>
             <li><a href="/edit_alias?u_id=${user_id}" data-ajax="false">Alias</a></li>
-					  <li><a href="/edit_email?u_id=${user_id}" data-ajax="false">Email</a></li>` +
-            telegram_id_input + `
+					  <li><a href="/edit_email?u_id=${user_id}" data-ajax="false">Email</a></li>
+            ${telegram_id_input}
             <li><a href="/edit_happy_passwd?u_id=${user_id}" data-ajax="false">Happy Password</a></li>
 					  <li><a href="/edit_unhappy_passwd?u_id=${user_id}" data-ajax="false">Unhappy Password</a></li>
             <li data-role="list-divider" style="color:darkgreen;">Message Group</li>
@@ -2626,16 +2628,16 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
           <ul data-role="listview">
             <li data-role="list-divider" style="color:darkgreen;">Maintain Your Profile</li>
             <li><a href="/edit_alias?u_id=${user_id}" data-ajax="false">Alias</a></li>
-					  <li><a href="/edit_email?u_id=${user_id}" data-ajax="false">Email</a></li>` +
-            telegram_id_input + `
+					  <li><a href="/edit_email?u_id=${user_id}" data-ajax="false">Email</a></li>
+            ${telegram_id_input}
             <li><a href="/edit_happy_passwd?u_id=${user_id}" data-ajax="false">Happy Password</a></li>
 					  <li><a href="/edit_unhappy_passwd?u_id=${user_id}" data-ajax="false">Unhappy Password</a></li>
             <li data-role="list-divider" style="color:darkgreen;">Message Group</li>
             <li><a href="/add_group" data-ajax="false">Add Group</a></li>
             <li><a href="/add_private_group" data-ajax="false">Add Private Group</a></li>
 					  <li><a href="/delete_group_by_admin" data-ajax="false">Delete Group</a></li>
-					  <li data-role="list-divider" style="color:darkgreen;">System Administration</li>` +
-            create_user_account + `
+					  <li data-role="list-divider" style="color:darkgreen;">System Administration</li>
+            ${create_user_account}
             <li><a href="/promote_user" data-ajax="false">Promote User</a></li>
             <li><a href="/demote_user" data-ajax="false">Demote User</a></li>
             <li><a href="/lock_user" data-ajax="false">Lock/Unlock User</a></li>
@@ -2645,6 +2647,244 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
 			  </div>
       </div>`;
     }
+    
+    // Compress javascript code block //
+    js = `
+    var message_scheduler_id;
+    var myWebSocket = null;
+    var wsPingServer = null;
+    var wsOpenSocket = null;   
+    var wsCheckTimeout = null;
+    var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
+    var user_id = ${user_id};
+    var sess_code = "";
+    var aes_key = '';
+    var is_reopen = false;
+    
+    function connectWebServer() {
+      var ws = new WebSocket("${wspath}");
+    
+      function ping() {
+        var packet = {type: 'cmd', content: 'ping'};
+        ws.send(JSON.stringify(packet));
+      }
+      
+      function checkTimeout() {
+        var packet = {type: 'cmd', content: 'check_timeout'};
+        ws.send(JSON.stringify(packet));
+      }
+      
+      function reopenWebSocket() {                                    
+        is_reopen = true; 
+        myWebSocket = connectWebServer();
+      }
+    
+      ws.onopen = function(e) {
+        //-- Once the websocket has been opened, stop the websocket openning scheduler (if it is activated). --//  
+        if (wsOpenSocket != null) {clearTimeout(wsOpenSocket)};
+        //-- By default, WebSocket connection of Nginx reverse proxy server will be disconnected on 60 seconds (i.e. Timeout), so we --//
+        //-- need to send something to the server to keep the connection open within this time interval continuously.                --//
+        wsPingServer = setInterval(ping, 50000);                 // Ping the server every 50 seconds                    
+        wsCheckTimeout = setInterval(checkTimeout, 300000);      // Check session timeout every 5 minutes
+        //********************
+        //console.log('Websocket connection opened');
+        //********************
+        
+        if (is_reopen) {                                        
+          //-- Refresh page as websocket is reconnected --//      
+          is_reopen = false;
+          refreshPage();
+        }
+      }
+      
+      ws.onmessage = function(e) {
+        var packet = JSON.parse(e.data);
+        var type = packet.type;            // Possible values are 'cmd' (command) and 'msg' (message).
+        var content = packet.content;      // Note: 'content' is highly possible an object, not just plain text.
+
+        //**********
+        //console.log(type);
+        //console.log(content);
+        //**********
+        
+        if (type == 'msg') {
+          if (content.op == 'msg_refresh') {
+            refreshPage();
+          }
+        }
+        else { 
+          processCommand(content);
+        }
+      }
+      
+      ws.onclose = function(e) {
+        //****************
+        //console.log('Websocket connection closed');
+        //****************
+        clearInterval(wsPingServer);
+        //-- Reopen websocket automatically within 100ms --//
+        wsOpenSocket = setTimeout(reopenWebSocket, 100);
+      }
+      
+      ws.onerror = function(e) {
+        console.log('Error: ' + e.message);
+      }
+      
+      return ws;
+    }  
+
+    $(document).on("pageshow", function(event) {
+      //-- Open a websocket --//
+      myWebSocket = connectWebServer();                         
+    });
+
+    function refreshPage() {
+      $.ajax({
+        type: 'POST',
+        url: '/check_new_message_count',
+        dataType: 'json',
+        data: {user_id: ${user_id}},
+        success: function(ret_data) {
+          refreshMessageCount(ret_data);
+        },
+        error: function(xhr, ajaxOptions, thrownError) {
+          //alert("Unable to refresh message home page. Error " + xhr.status + ": " + thrownError);
+        }
+      });              
+    }
+
+    function refreshMessageCount(ret_data) {
+      var private_group_marker = "<img src='/images/lock.png' height='15px'>";
+
+      for (var i = 0; i < ret_data.length; i++) {
+        var rec = ret_data[i];          
+        var this_group_id = parseInt(rec.group_id, 10);
+        var this_group_name = rec.group_name;
+        var this_group_type = parseInt(rec.group_type, 10);
+        var this_unread_cnt = parseInt(rec.unread_cnt, 10);
+        var this_marker = (this_group_type == 1)? private_group_marker : ''; 
+
+        //-- Update unread message counter shown --//
+        $('#grp_' + this_group_id).html(this_marker + this_group_name + "<br><font size='2pt'>New message: " + this_unread_cnt + "</font>");          
+      }      
+    }
+    
+    function processCommand(command) {
+      var cmd_op = command.op;
+      
+      switch (cmd_op) {
+        case 'pong':
+          break;
+      
+        case 'sess_code':
+          sess_code = command.content.trim();
+          
+          //-- Check whether session AES key exist or not. If it doesn't exist, generate it --//
+          //-- and push a copy to back-end server before load up messages.                  --//
+          //-- Note: This situation is none ideal, but it is the last resort to handle this --//
+          //--       situation.                                                             --//
+          let this_promise = new Promise((resolve, reject) => { 
+            let renew_aes_key = false;
+            aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+            if (typeof(aes_key) != "string" ) {
+              renew_aes_key = true;  
+            }
+            else {
+              aes_key = aes_key.trim();
+              if (aes_key.length < ${_key_len}) {
+                //-- AES passphase is too weak --//
+                renew_aes_key = true;
+              }
+            }
+            
+            if (renew_aes_key) {
+              //-- 2023-12-01: After consider security issue, it is too risky to upload new AES passphase to the --//
+              //--             server without protection. So, if local AES passphase is lost, it should force    --//
+              //--             logout the user.                                                                  --//  
+              reject('0');
+            
+              //*****************************************************************************************************
+              //aes_key = generateTrueRandomStr('A', ${_key_len});              // Defined on crypto-lib.js
+              //if (is_iOS) {
+              //  Cookies.set("aes_key", aes_key, {expires: 1});
+              //}
+              //else {
+              //  setLocalStoredItem("aes_key", aes_key);
+              //}
+              //
+              //-- Note: This section should be further enhance later to use RSA key exchange to protect --//
+              //--       the push AES key. The current implementation doesn't secure enough.             --//   
+              //$.ajax({
+              //  type: 'POST',
+              //  url: '/push_aes_key',
+              //  dataType: 'html',
+              //  data: {user_id: user_id, aes_key: aes_key},
+              //  success: function(ret_data) {
+              //    let result = JSON.parse(ret_data);
+              //    
+              //    if (result.ok == '1') {
+              //      resolve('1');
+              //	  }
+              //    else {
+              //      console.log("Unable to push AES key to server. Error: " + result.msg);
+              //      reject('0');
+              //	  }
+              //  },
+              //  error: function(xhr, ajaxOptions, thrownError) {
+              //    console.log("Unable to push AES key to server. Error " + xhr.status + ": " + thrownError);
+              //    reject('0');
+              //  }
+              //});
+              //***********************************************************************************************
+            }
+            else {
+              resolve('1');
+            }                  
+          });
+          
+          this_promise.catch((error) => {
+            let msg = "Secure key is lost, system is going to log you out. Please login again.";
+            alert(msg);
+            logout();							  
+          });
+          
+          break;
+          
+        case 'timeout':
+          if (command.content == 'YES') {
+            logout();
+          }
+          break;  
+
+        case 'group_deleted':
+          //-- A message group has been deleted, refresh whole page. --//
+          window.location.href = "/message";
+          break; 
+          
+        case 'force_logout':
+          logout();
+          break;  
+          
+        default:
+          //-- do nothing --//   
+      }                             
+    }
+
+    function logout() {
+      window.location.href = '/logout_msg';
+    }
+
+    function doomEntireSystem() {
+      //-- It will nuke the site and destroy all data, use it with great care. --//
+      if (confirm("Do you really want to destroy entire system?")) {
+        if (confirm("Last chance! Really want to go?")) {
+          var url = "/destroy_entire_system";
+          window.location.href = url;
+        }
+      }
+    }`;
+    
+    js = await wev.minifyJS(js);
     
     html = `<!doctype html>
             <html>
@@ -2678,239 +2918,7 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
 				      <script src="/js/common_lib.js"></script>
             
               <script>
-                var message_scheduler_id;
-                var myWebSocket = null;
-                var wsPingServer = null;
-                var wsOpenSocket = null;   
-                var wsCheckTimeout = null;
-                var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
-                var user_id = ${user_id};
-                var sess_code = "";
-                var aes_key = '';
-                var is_reopen = false;
-                
-                function connectWebServer() {
-                  var ws = new WebSocket("` + wspath + `");
-                
-                  function ping() {
-                    var packet = {type: 'cmd', content: 'ping'};
-                    ws.send(JSON.stringify(packet));
-                  }
-                  
-                  function checkTimeout() {
-                    var packet = {type: 'cmd', content: 'check_timeout'};
-                    ws.send(JSON.stringify(packet));
-                  }
-                  
-                  function reopenWebSocket() {                                    
-                    is_reopen = true; 
-                    myWebSocket = connectWebServer();
-                  }
-                
-                  ws.onopen = function(e) {
-                    //-- Once the websocket has been opened, stop the websocket openning scheduler (if it is activated). --//  
-                    if (wsOpenSocket != null) {clearTimeout(wsOpenSocket)};
-                    //-- By default, WebSocket connection of Nginx reverse proxy server will be disconnected on 60 seconds (i.e. Timeout), so we --//
-                    //-- need to send something to the server to keep the connection open within this time interval continuously.                --//
-                    wsPingServer = setInterval(ping, 50000);                 // Ping the server every 50 seconds                    
-                    wsCheckTimeout = setInterval(checkTimeout, 300000);      // Check session timeout every 5 minutes
-                    //********************
-                    //console.log('Websocket connection opened');
-                    //********************
-                    
-                    if (is_reopen) {                                        
-                      //-- Refresh page as websocket is reconnected --//      
-                      is_reopen = false;
-                      refreshPage();
-                    }
-                  }
-                  
-                  ws.onmessage = function(e) {
-                    var packet = JSON.parse(e.data);
-                    var type = packet.type;            // Possible values are 'cmd' (command) and 'msg' (message).
-                    var content = packet.content;      // Note: 'content' is highly possible an object, not just plain text.
-
-                    //**********
-                    //console.log(type);
-                    //console.log(content);
-                    //**********
-                    
-                    if (type == 'msg') {
-                      if (content.op == 'msg_refresh') {
-                        refreshPage();
-                      }
-                    }
-                    else { 
-                      processCommand(content);
-                    }
-                  }
-                  
-                  ws.onclose = function(e) {
-                    //****************
-                    //console.log('Websocket connection closed');
-                    //****************
-                    clearInterval(wsPingServer);
-                    //-- Reopen websocket automatically within 100ms --//
-                    wsOpenSocket = setTimeout(reopenWebSocket, 100);
-                  }
-                  
-                  ws.onerror = function(e) {
-                    console.log('Error: ' + e.message);
-                  }
-                  
-                  return ws;
-                }  
-  
-                $(document).on("pageshow", function(event) {
-                  //-- Open a websocket --//
-                  myWebSocket = connectWebServer();                         
-                });
-
-                function refreshPage() {
-                  $.ajax({
-                    type: 'POST',
-                    url: '/check_new_message_count',
-                    dataType: 'json',
-                    data: {user_id: ${user_id}},
-                    success: function(ret_data) {
-                      refreshMessageCount(ret_data);
-                    },
-                    error: function(xhr, ajaxOptions, thrownError) {
-                      //alert("Unable to refresh message home page. Error " + xhr.status + ": " + thrownError);
-                    }
-                  });              
-                }
-    
-                function refreshMessageCount(ret_data) {
-                  var private_group_marker = "<img src='/images/lock.png' height='15px'>";
-    
-                  for (var i = 0; i < ret_data.length; i++) {
-                    var rec = ret_data[i];          
-                    var this_group_id = parseInt(rec.group_id, 10);
-                    var this_group_name = rec.group_name;
-                    var this_group_type = parseInt(rec.group_type, 10);
-                    var this_unread_cnt = parseInt(rec.unread_cnt, 10);
-                    var this_marker = (this_group_type == 1)? private_group_marker : ''; 
-
-                    //-- Update unread message counter shown --//
-                    $('#grp_' + this_group_id).html(this_marker + this_group_name + "<br><font size='2pt'>New message: " + this_unread_cnt + "</font>");          
-                  }      
-                }
-                
-                function processCommand(command) {
-                  var cmd_op = command.op;
-                  
-                  switch (cmd_op) {
-                    case 'pong':
-                      break;
-                  
-                    case 'sess_code':
-                      sess_code = command.content.trim();
-                      
-			                //-- Check whether session AES key exist or not. If it doesn't exist, generate it --//
-			                //-- and push a copy to back-end server before load up messages.                  --//
-						          //-- Note: This situation is none ideal, but it is the last resort to handle this --//
-						          //--       situation.                                                             --//
-						          let this_promise = new Promise((resolve, reject) => { 
-							          let renew_aes_key = false;
-							          aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
-							          if (typeof(aes_key) != "string" ) {
-							            renew_aes_key = true;  
-											  }
-											  else {
-											    aes_key = aes_key.trim();
-											    if (aes_key.length < ${_key_len}) {
-											      //-- AES passphase is too weak --//
-											      renew_aes_key = true;
-												  }
-											  }
-							          
-							          if (renew_aes_key) {
-							            //-- 2023-12-01: After consider security issue, it is too risky to upload new AES passphase to the --//
-							            //--             server without protection. So, if local AES passphase is lost, it should force    --//
-							            //--             logout the user.                                                                  --//  
-							            reject('0');
-							          
-							            //*****************************************************************************************************
-							            //aes_key = generateTrueRandomStr('A', ${_key_len});              // Defined on crypto-lib.js
-							            //if (is_iOS) {
-							            //  Cookies.set("aes_key", aes_key, {expires: 1});
-												  //}
-												  //else {
-												  //  setLocalStoredItem("aes_key", aes_key);
-												  //}
-							            //
-											    //-- Note: This section should be further enhance later to use RSA key exchange to protect --//
-											    //--       the push AES key. The current implementation doesn't secure enough.             --//   
-											    //$.ajax({
-											    //  type: 'POST',
-											    //  url: '/push_aes_key',
-											    //  dataType: 'html',
-											    //  data: {user_id: user_id, aes_key: aes_key},
-											    //  success: function(ret_data) {
-											    //    let result = JSON.parse(ret_data);
-											    //    
-											    //    if (result.ok == '1') {
-											    //      resolve('1');
-													//	  }
-											    //    else {
-											    //      console.log("Unable to push AES key to server. Error: " + result.msg);
-											    //      reject('0');
-													//	  }
-													//  },
-													//  error: function(xhr, ajaxOptions, thrownError) {
-													//    console.log("Unable to push AES key to server. Error " + xhr.status + ": " + thrownError);
-								          //    reject('0');
-								          //  }
-												  //});
-												  //***********************************************************************************************
-												}
-												else {
-												  resolve('1');
-											  }                  
-										  });
-										  
-										  this_promise.catch((error) => {
-										    let msg = "Secure key is lost, system is going to log you out. Please login again.";
-										    alert(msg);
-										    logout();							  
-										  });
-                      
-                      break;
-                      
-                    case 'timeout':
-                      if (command.content == 'YES') {
-                        logout();
-                      }
-                      break;  
-
-                    case 'group_deleted':
-                      //-- A message group has been deleted, refresh whole page. --//
-                      window.location.href = "/message";
-                      break; 
-                      
-                    case 'force_logout':
-                      logout();
-                      break;  
-                      
-                    default:
-                      //-- do nothing --//   
-                  }                             
-                }
-    
-                function logout() {
-                  window.location.href = '/logout_msg';
-                }
-    
-                function doomEntireSystem() {
-                  //-- It will nuke the site and destroy all data, use it with great care. --//
-                  if (confirm("Do you really want to destroy entire system?")) {
-                    if (confirm("Last chance! Really want to go?")) {
-                      var url = "/destroy_entire_system";
-                      window.location.href = url;
-                    }
-                  }
-                }            
+                ${js}
               </script>
             </head>
               
@@ -2919,8 +2927,8 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
               Important: 'data-ajax="false"' must be set for links with dynamic content. Otherwise, unexpected result such as invalid javascript 
                          content and expired passed parameters value will be obtained.                                                           
               -->
-              <div data-role="page" id="mainpage">` +
-                panel + `
+              <div data-role="page" id="mainpage">
+                ${panel}
 
 	              <div data-role="header" style="overflow:hidden;" data-position="fixed">
 		              <a href="#setup" data-icon="bars" class="ui-btn-left">Setup</a>					
@@ -4498,34 +4506,35 @@ async function _printStyleDoSMSpage() {
   var html = '';
   
   try {
-    html = `<!doctype html>
-            <html>
-            <head>
-              <title>Message</title>
-              <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-              <meta http-equiv='Content-Type' content='text/html; charset=utf-8'> 
-    
-              <style>
-                .s_message {
-                  width:100%;
-                  height:60px;
-                  max-height:200px;
-                }
-                
-                .ui-panel.ui-panel-open {
-                  position:fixed;
-                }
-                
-                .ui-panel-inner {
-                  position: absolute;
-                  top: 1px;
-                  left: 0;
-                  right: 0;
-                  bottom: 0px;
-                  overflow: scroll;
-                  -webkit-overflow-scrolling: touch;
-                }    
-              </style>`;
+    html = `
+    <!doctype html>
+    <html>
+    <head>
+      <title>Message</title>
+      <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+      <meta http-equiv='Content-Type' content='text/html; charset=utf-8'> 
+
+      <style>
+        .s_message {
+          width:100%;
+          height:60px;
+          max-height:200px;
+        }
+        
+        .ui-panel.ui-panel-open {
+          position:fixed;
+        }
+        
+        .ui-panel-inner {
+          position: absolute;
+          top: 1px;
+          left: 0;
+          right: 0;
+          bottom: 0px;
+          overflow: scroll;
+          -webkit-overflow-scrolling: touch;
+        }    
+      </style>`;
   }
   catch(e) {
     throw e;  
@@ -4569,7 +4578,7 @@ exports.updateSessionSecureKey = async function(msg_pool, user_id, sess_code, ae
 
                                         
 async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, user_id, update_token, msg_width, indentation, my_msg_colour, rv_msg_colour, rows_limit, top_id, m_params) {
-  var login_url, message_url, logout_url, d_site_dns, spaces, space3, first_msg_id, first_msg_date, last_msg_date, html;
+  var login_url, message_url, logout_url, d_site_dns, spaces, space3, first_msg_id, first_msg_date, last_msg_date, js, html;
   
   try {
     html = ``;
@@ -4591,6 +4600,1404 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
     //--       of view of local javascript engine to interpret 'html')                                         --//    
     m_params = JSON.stringify(m_params);       
     
+    js = `
+    var update_token = "${update_token}";
+    var scheduler_id;        
+    var op_flag = '';   // op_flag must be initialised to avoid file uploading problem
+    var op_user_id;
+    var op_msg;
+    var group_id = ${group_id};
+    var user_id = ${user_id};
+    var first_msg_id = "${first_msg_id}";
+    var first_msg_date = "${first_msg_date}";
+    var last_msg_date = "${last_msg_date}";
+    var rows_limit = ${rows_limit};
+    var m_params = ${m_params};
+    var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
+    var sess_code = '';            // Session code.
+    var aes_key = '';              // AES key is used to encrypt uploaded messages and decrypt received messages.
+    var load_message = false;      // Messages loading control flag          
+    //-- Below variables are websocket related --//
+    var myWebSocket = null;
+    var wsPingServer = null;
+    var wsOpenSocket = null;   
+    var wsCheckTimeout = null;
+    var is_reopen = false;
+
+    function connectWebServer() {
+      var ws = new WebSocket("${wspath}");
+    
+      function ping() {
+        var packet = {type: 'cmd', content: 'ping'};
+        ws.send(JSON.stringify(packet));
+      }
+      
+      function checkTimeout() {
+        var packet = {type: 'cmd', content: 'check_timeout'};
+        ws.send(JSON.stringify(packet));
+      }
+                
+      function reopenWebSocket() {                                    
+        is_reopen = true; 
+        myWebSocket = connectWebServer();
+      }
+    
+      ws.onopen = function(e) {
+        //-- Once the websocket has been opened, stop the websocket openning scheduler (if it is activated). --//  
+        if (wsOpenSocket != null) {clearTimeout(wsOpenSocket)};
+        //-- By default, WebSocket connection of Nginx reverse proxy server will be disconnected on 60 seconds (i.e. Timeout), so we --//
+        //-- need to send something to the server to keep the connection open within this time interval continuously.                --//
+        wsPingServer = setInterval(ping, 50000);                 // Ping the server every 50 seconds                    
+        wsCheckTimeout = setInterval(checkTimeout, 300000);      // Check session timeout every 5 minutes
+        
+        if (is_reopen) {                                        
+          //-- Refresh page as websocket is reconnected --//      
+          is_reopen = false;
+          checkMessage();
+        }
+      }
+      
+      ws.onmessage = function(e) {
+        var packet = JSON.parse(e.data);
+        var type = packet.type;            // Possible values are 'cmd' (command) and 'msg' (message).
+        var content = packet.content;      // Note: 'content' is highly possible an object, not just plain text.
+        
+        if (type == 'msg') {
+          if (content.op == 'msg_refresh') {
+            var refresh_group_id = content.group_id;
+            
+            if (refresh_group_id == group_id) {                            
+              // Note: The ultimate solution is to get new message(s) via websocket, and update it on user screen in here. 
+              //       i.e. Use 'content' to feed in message(s). However, for a temporary workaround. I put checkMessage() 
+              //       here to get new message(s).  
+              checkMessage();
+            }
+          }
+        }
+        else { 
+          processCommand(content);
+        }
+      }
+      
+      ws.onclose = function(e) {
+        //****************
+        //console.log('Websocket connection closed');
+        //****************
+        clearInterval(wsPingServer);
+        //-- Reopen websocket automatically within 100ms --//
+        wsOpenSocket = setTimeout(reopenWebSocket, 100);
+      }
+      
+      ws.onerror = function(e) {
+        console.log('Error: ' + e.message);
+      }
+      
+      return ws;
+    }          
+    
+    function processCommand(command) {
+      var cmd_op = command.op;
+                
+      switch (cmd_op) {
+        case 'pong':
+          break;
+      
+        case 'sess_code':
+          sess_code = command.content.trim();
+          
+          if (load_message) {   
+            //-- Check whether session AES key exist or not. If it doesn't exist, generate it --//
+            //-- and push a copy to back-end server before load up messages.                  --//
+            //--                                                                              --//
+            //-- Note: Due to asynchronous nature of javascript execution, it needs to use a  --//
+            //--       promise to ensure the AES key exists before load up messages from the  --//
+            //--       server.                                                                --//                      
+            let this_promise = new Promise((resolve, reject) => {                  
+              //-- Note: This situation is none ideal, but it is the last resort to handle this situation. --//
+              let renew_aes_key = false;
+              aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+              if (typeof(aes_key) != "string" ) {
+                renew_aes_key = true;  
+              }
+              else {
+                aes_key = aes_key.trim();
+                if (aes_key.length < ${_key_len}) {
+                  //-- AES passphase is too weak --//
+                  renew_aes_key = true;
+                }
+              }
+              
+              if (renew_aes_key) {
+                //-- 2023-12-01: After consider security issue, it is too risky to upload new AES passphase to the --//
+                //--             server without protection. So, if local AES passphase is lost, it should force    --//
+                //--             logout the user.                                                                  --//  
+                reject('0');
+              
+                //****************************************************************************************************
+                //aes_key = generateTrueRandomStr('A', ${_key_len});              // Defined on crypto-lib.js
+                //if (is_iOS) {
+                //  Cookies.set("aes_key", aes_key, {expires: 1});
+                //}
+                //else {
+                //  setLocalStoredItem("aes_key", aes_key);
+                //}
+                //
+                //-- Note: This section should be further enhance later to use RSA key exchange to protect --//
+                //--       the push AES key. The current implementation doesn't secure enough.             --//   
+                //$.ajax({
+                //  type: 'POST',
+                //  url: '/push_aes_key',
+                //  dataType: 'html',
+                //  data: {user_id: user_id, aes_key: aes_key},
+                //  success: function(ret_data) {
+                //    let result = JSON.parse(ret_data);
+                //    
+                //    if (result.ok == '1') {
+                //      resolve('1');
+                //	  }
+                //    else {
+                //      console.log("Unable to push AES key to server. Error: " + result.msg);
+                //      reject('0');
+                //	  }
+                //  },
+                //  error: function(xhr, ajaxOptions, thrownError) {
+                //    console.log("Unable to push AES key to server. Error " + xhr.status + ": " + thrownError);
+                //    reject('0');
+                //  }
+                //});
+                //****************************************************************************************************
+              }
+              else {
+                resolve('1');
+              }                  
+            });
+            
+            this_promise.then((result) => {
+              //-- Load up group messages --//
+              goLoadMessage();
+              load_message = false;
+            }).catch((error) => {
+              let msg = "Secure key is lost, system is going to log you out. Please login again.";
+              alert(msg);
+              logoutSMS();							  
+            });
+          }
+          
+          break;
+          
+        case 'timeout':
+          if (command.content.trim() == 'YES') {
+            logoutSMS();
+          }
+          break;  
+        
+        case 'group_deleted':
+          var deleted_group_id = command.group_id;
+          
+          if (deleted_group_id == group_id) {
+            clearLocalData();
+            window.location.href = "/message";
+          }
+          
+          break;
+          
+        case 'force_logout':
+          logoutSMS();
+          break;
+          
+        default:
+          //-- do nothing --//   
+      }                             
+    }
+    
+    //function logout() {
+      //window.location.href = '/logout_msg';
+      //window.location.href = "${logout_url}";
+    //}
+
+    $(document).on("pageinit", function() {
+      $(function() {
+        $('html,body').animate({scrollTop: $('#page_end').offset().top}, 500);
+      })
+    });
+  
+    $(document).on("pagecreate", function() {      
+      $('#btn_msg_send').hide();
+      $('#reply_row').hide();
+      $('#file_upload').hide();
+      $('#go_camera').hide();
+      $('#go_file').hide();
+      $('#go_audio').hide();
+    });
+    
+    $(document).on("pagecreate", function() {
+      //-- Define event handlers for the message input textarea object --//
+      $('#s_message').click(
+        function() {                  
+          $(this).keyup();          
+        }
+      );
+                  
+      $('#s_message').keyup(
+        function() {
+          var slen = $(this).val().length;
+          if (slen > 0) {            
+            $('#btn_msg_send').show();
+            $('#btn_attach_file').hide();
+            $('#btn_audio_input').hide();
+          }
+          else {
+            $('#btn_msg_send').hide();
+            $('#btn_attach_file').show();
+            $('#btn_audio_input').show();            
+          }
+        }
+      );
+      
+      $('#btn_msg_send').on("click", function(event){
+        if ($(this).is("[disabled]")) {
+          event.preventDefault();
+        }
+      });      
+    });
+    
+    $(document).on("pageshow", function(event) {          
+      //-- Once it enters this module, instruct to load messages and this is the control flag. --// 
+      load_message = true;
+      //-- Open a websocket --//
+      myWebSocket = connectWebServer();
+    });
+    
+    //-- Swipe right in a message group will go to previous page, i.e. the message group(s) landing page. --//
+    $(function() {
+      $('#dosms').on("swiperight", swiperightHandler);
+      
+      function swiperightHandler(event) {
+        goHome();
+      }
+    });
+            
+    //-- Store initial values on local storage of the web browser --//
+    if (is_iOS) {
+      //-- iOS behavior is different from other platforms, so that it needs to put cross pages data to cookie as work-around. --//
+      Cookies.set("g_id", group_id, {expires: 1});              // Defined on js.cookie.min.js    
+      Cookies.set("u_id", user_id, {expires: 1});
+      Cookies.set("m_id", first_msg_id, {expires: 1});
+    }
+    else {
+      setLocalStoredItem("g_id", group_id);                     // Defined on common_lib.js
+      setLocalStoredItem("u_id", user_id);
+      setLocalStoredItem("m_id", first_msg_id);
+    }
+                                          
+    function clearLocalData() {
+      if (is_iOS) {
+        Cookies.remove("g_id");                                    // Defined on js.cookie.min.js
+        Cookies.remove("u_id");
+        Cookies.remove("m_id");
+        Cookies.remove("top_id");
+      }
+      else {
+        deleteLocalStoredItem("g_id");                             // Defined on common_lib.js
+        deleteLocalStoredItem("u_id");                             
+        deleteLocalStoredItem("m_id");                             
+        deleteLocalStoredItem("top_id");                                   
+      }      
+    }
+    
+    function logoutSMS() {
+      clearLocalData();
+      //window.location.href = "/logout_msg";
+      window.location.href = "${logout_url}";
+    }
+    
+    function goHome() {
+      clearLocalData();
+      //window.location.href = "/message";      
+      window.location.href = "${message_url}";
+    }
+        
+    //function runScheduler() {
+    //  scheduler_id = setInterval(checkMessage, 2000);          
+    //}
+    
+    function checkMessage() {
+      $.ajax({
+        type: 'POST',
+        url: '/check_message_update_token',
+        dataType: 'html',
+        data: {group_id: ${group_id}, user_id: ${user_id}},
+        success: function(ret_data) {
+          var result = JSON.parse(ret_data);                  // Note: Return data is in JSON format.
+          var mg_status = result.mg_status;
+          var new_token = allTrim(mg_status.update_token);
+          if (update_token != new_token) {
+            if (new_token == "expired") {
+              //-- Session is expired, go to login page --//
+              alert("Session expired!");
+              logoutSMS();                
+            }
+            else if (new_token == "group_deleted") {
+              //-- Message group has been deleted by someone, go to message group main page now. --//
+              clearLocalData();
+              window.location.href = "${message_url}";                                  
+            }
+            else if (new_token == "user_locked") {
+              //-- User has been locked, force logout him/her immediately. --//
+              logoutSMS();      
+            }
+            else if (new_token == "not_group_member") {
+              //-- User has been kicked from the group, redirect him/her to message group main page immediately. --//
+              clearLocalData();
+              window.location.href = "${message_url}"; 
+            }              
+            else if (new_token == "error") {
+              var err_msg = mg_status.error;
+              //-- System error is found, show user what is wrong. --//
+              alert("Unable to check new message. Error: " + err_msg);
+              //logoutSMS(); 
+            }
+            else {
+              //-- If message update token has been changed, refresh message section to pull in new message(s). --//
+              //-- '0' means get all unread messages, '1' means to get the last sent message.                   --// 
+              loadNewMessages(${group_id}, ${user_id}, 0);
+              update_token = new_token;                
+            }
+          }
+        },
+        error: function(xhr, ajaxOptions, thrownError) {
+          //alert("Unable to pull in new message. Error " + xhr.status + ": " + thrownError);
+        }
+      });      
+    }
+            
+    function stopScheduler() {
+      clearInterval(scheduler_id);
+    }
+    
+    async function sendMessage(group_id, user_id) {
+      group_id = parseInt(group_id, 10);
+      user_id = parseInt(user_id, 10);
+    
+      var ta = document.getElementById("s_message");
+      
+      var content = allTrim(ta.value);
+      if (content.length > 0) {
+        //-- Get the AES key to encrypt the sending message --//
+        let key_ready = true;
+        aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");				  
+        if (typeof(aes_key) != "string") {
+          key_ready = false;
+        }            
+        else {
+          aes_key = aes_key.trim();
+          if (aes_key.length < ${_key_len}) {
+            key_ready = false;
+          }
+        }
+        
+        if (key_ready) {                    
+          //-- Encrypt the message with AES-256 before send it out --//
+          var algorithm = "AES-GCM";
+          var enc_msg_obj = await aesEncryptJSON(algorithm, aes_key, content);
+          var msg_iv = enc_msg_obj.iv;
+          var encrypted_msg = enc_msg_obj.encrypted;
+          var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
+          var op_iv = enc_op_msg_obj.iv;
+          var encrypted_op_msg = enc_op_msg_obj.encrypted;   
+                        
+          //-- Change button image from 'send.png' to 'yellow_flash.jpg' --//
+          $('#btn_msg_send').attr('src', '/images/yellow_flash.jpg');        
+          $('#btn_msg_send').attr("disabled", "disabled");     
+        
+          // Clear AES key from RAM after used //
+          aes_key = "";
+                              
+          $.ajax({
+            type: 'POST',
+            url: '/send_message',
+            dataType: 'html',
+            data: {group_id: group_id, sender_id: user_id, algorithm: algorithm, msg_iv: msg_iv, message: encrypted_msg, op_flag: op_flag, op_user_id: op_user_id, op_iv: op_iv, op_msg: encrypted_op_msg},
+            success: function(ret_data) {
+              //var result = eval('(' + ret_data + ')');      // Note: Return data in JSON format, so that 'evel' is required.
+              var result = JSON.parse(ret_data);              // Note: Return data is in JSON format.                
+              var new_token = allTrim(result.mg_status.update_token);                        
+              ta.value = "";
+              //-- Refresh message section --//
+              //-- '0' means get all unread messages, '1' means to get the last sent message. --//
+              loadNewMessages(${group_id}, ${user_id}, 1);
+              update_token = new_token;
+              noReply();
+              $('#s_message').click();
+              $('#btn_msg_send').hide();
+              $('#btn_msg_send').removeAttr("disabled");
+              $('#btn_msg_send').attr('src', '/images/send.png');                
+              $('#btn_attach_file').show();
+              $('#btn_audio_input').show();                            
+            },
+            error: function(xhr, ajaxOptions, thrownError) {
+              alert("Unable to send message. Error " + xhr.status + ": " + thrownError);
+              $('#btn_msg_send').removeAttr("disabled");
+              $('#btn_msg_send').attr('src', '/images/send.png');
+              noReply();
+            }          
+          });
+        }
+        else {
+          alert("The secure key is lost, the system is going to log you out.");
+          logoutSMS();
+        }
+      }
+      else {
+        alert("Empty message won't be sent");
+      }
+    }
+    
+    function quitMessageGroup(group_id, user_id) {
+      if (confirm("Do you really want to exit?")) {
+        var url = "/exit_group?g_id=" + group_id + "&member_id=" + user_id;
+        window.location.href = url;
+      }      
+    }
+    
+    function deleteThisGroup(group_id) {
+      if (confirm("Do you want to delete this message group?")) {
+        if (confirm("Last chance! Really want to delete this group?")) {
+          var url = "/delete_group?group_id=" + group_id;
+          window.location.href = url;
+        }
+      }
+    }
+    
+    function replyMessage(msg_id, sender_id, sender, msg_30) {
+      op_flag = 'R';
+      op_user_id = sender_id;
+      msg_30 = msg_30.replace(/¡/g, "'");      // Note: All single quote characters on msg_30 are converted to '¡' before passed in here.
+      op_msg = msg_30;
+      var html = "<font color='#0081FE' size='2px'><b>" + sender + "</b></font><br>" + op_msg;
+      $('#reply_msg_area').html(html);
+      $('#reply_row').show();    
+    }
+    
+    function noReply() {
+      op_flag = '';
+      op_user_id = 0;
+      op_msg = '';
+      $('#reply_msg_area').html('');
+      $('#reply_row').hide();          
+    }
+    
+    function forwardMessage(group_id, msg_id) {
+      var url = "/forward_message?from_group_id=" + group_id + "&msg_id=" + msg_id;
+      window.location.href = url;
+    }
+
+    function showTextInputPanel() {
+      $('#text_send').show();
+      $('#file_upload').hide();
+      $('#go_camera').hide();
+      $('#go_file').hide();
+      $('#go_audio').hide();
+    }
+    
+    function attachFile() {
+      $('#text_send').hide();
+      $('#file_upload').show();
+      $('#go_camera').hide();
+      $('#go_file').hide();
+      $('#go_audio').hide();
+    }
+    
+    function openCamera() {
+      $('#text_send').hide();
+      $('#file_upload').hide();
+      $('#go_camera').show();
+      $('#go_file').hide();
+      $('#go_audio').hide();
+      $('#photo').click();
+    }
+    
+    function selectFileToUpload() {
+      $('#text_send').hide();
+      $('#file_upload').hide();
+      $('#go_camera').hide();
+      $('#go_file').show();
+      $('#go_audio').hide();      
+      $('#ul_file').click();      
+    }
+    
+    async function sendPhoto(group_id, user_id) {
+      var send_button_status = $('#btn_send_photo').attr("disabled");
+      if (send_button_status == "disabled") {
+        return false;
+      }
+                      
+      var image_name = allTrim($('#photo').val());   
+      if (image_name != "") {   
+        let key_ready = true;
+        aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");				  
+        if (typeof(aes_key) != "string") {
+          key_ready = false;
+        }            
+        else {
+          aes_key = aes_key.trim();
+          if (aes_key.length < ${_key_len}) {
+            key_ready = false;
+          }
+        }
+        
+        if (key_ready) { 
+          var image = $('#photo').prop('files')[0];
+          //-- Encode uploaded file name to handle Chinese characters --// 
+          image.name = unescape(encodeURIComponent(image.name));               
+          //-- Encrypt 'caption' and 'op_msg' before send the data set to the server --//  
+          var algorithm = "AES-GCM";                   
+          var this_caption = allTrim($('#caption').val());
+          this_caption = (typeof(this_caption) == "string")? this_caption : '';
+          op_msg = (typeof(op_msg) == "string")? op_msg : '';              
+          var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, this_caption);
+          var caption_iv = enc_caption_obj.iv;
+          var enc_caption = enc_caption_obj.encrypted;
+          var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
+          var op_iv = enc_op_msg_obj.iv;
+          var enc_op_msg = enc_op_msg_obj.encrypted;
+            
+          var form_data = new FormData();
+          form_data.append('group_id', group_id);
+          form_data.append('sender_id', user_id);
+          form_data.append('ul_ftype', 'photo');
+          form_data.append('ul_file', image);
+          form_data.append('algorithm', algorithm);
+          form_data.append('caption_iv', caption_iv);
+          form_data.append('caption', enc_caption);
+          form_data.append('op_flag', op_flag);
+          form_data.append('op_user_id', op_user_id);
+          form_data.append('op_iv', op_iv);
+          form_data.append('op_msg', enc_op_msg);
+          //-- Change button image from 'send.png' to 'files_uploading.gif' --//
+          $('#btn_send_photo').attr('src', '/images/files_uploading.gif');
+          //-- Then disable it to prevent upload a photo twice --//
+          $('#btn_send_photo').attr("disabled", "disabled");
+
+          // Clear aes_key from RAM after used //
+          aes_key = '';
+        
+          $.ajax({
+            type: 'POST',
+            url: '/upload_files',
+            dataType: 'text',
+            cache: false,
+            contentType: false,
+            processData: false,
+            data: form_data,
+            success: function(response) {
+              var new_token = response;
+              
+              switch (new_token) {
+                case 'error': 
+                  alert("Error is found as file upload.");
+                  $('#btn_send_photo').removeAttr("disabled");
+                  $('#btn_send_photo').attr('src', '/images/send.png');
+                  break;
+                  
+                case 'sess_expired':
+                  alert("Session expired");
+                  logoutSMS();
+                  break;
+                  
+                default:    
+                  //-- Refresh message section (just load the last sent message only) --//
+                  //-- '0' means get all unread messages, '1' means to get the last sent message. --//
+                  loadNewMessages(${group_id}, ${user_id}, 1);
+                  update_token = new_token;                        
+                  $('#btn_send_photo').removeAttr("disabled");
+                  $('#btn_send_photo').attr('src', '/images/send.png');
+                  $('#caption').val("");
+                  showTextInputPanel();
+                  noReply();                
+                  //-- Inform other group members to refresh message via WebSocket --//
+                  informGroupMembersToRefresh(group_id, user_id);                                
+              }
+            },
+            error: function(xhr, ajaxOptions, thrownError) {
+              alert("Unable to upload photo. Error " + xhr.status + ": " + thrownError);
+              $('#btn_send_photo').removeAttr("disabled");
+              $('#btn_send_photo').attr('src', '/images/send.png');
+            }                    
+          });
+        }
+        else {
+          alert("The secure key is lost, the system is going to log you out.");
+          logoutSMS();            
+        }
+      }
+      else {
+        alert("Please take a photo before click the send button");
+      }
+    }
+    
+    async function sendFile(group_id, user_id) {
+      var send_button_status = $('#btn_send_file').attr("disabled");
+      if (send_button_status == "disabled") {
+        return false;
+      }
+      
+      var file_name = allTrim($('#ul_file').val());   
+      if (file_name != "") {
+        let key_ready = true;
+        aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");				  
+        if (typeof(aes_key) != "string") {
+          key_ready = false;
+        }            
+        else {
+          aes_key = aes_key.trim();
+          if (aes_key.length < ${_key_len}) {
+            key_ready = false;
+          }
+        }
+        
+        if (key_ready) {           
+          var ul_file = $('#ul_file').prop('files')[0];
+          //-- Encode uploaded file name to handle Chinese characters --// 
+          ul_file.name = unescape(encodeURIComponent(ul_file.name));       
+          //-- Encrypt 'caption' and 'op_msg' before send the data set to the server, even 'caption' --//
+          //-- is blank in this case.                                                                --//  
+          var algorithm = "AES-GCM";                   
+          op_msg = (typeof(op_msg) == "string")? op_msg : '';     
+          var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, '');   // Caption is always blank in this case
+          var caption_iv = enc_caption_obj.iv;
+          var enc_caption = enc_caption_obj.encrypted;
+          var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
+          var op_iv = enc_op_msg_obj.iv;
+          var enc_op_msg = enc_op_msg_obj.encrypted;
+                                       
+          var form_data = new FormData();
+          form_data.append('group_id', group_id);
+          form_data.append('sender_id', user_id);
+          form_data.append('ul_ftype', 'file');
+          form_data.append('ul_file', ul_file);            
+          form_data.append('algorithm', algorithm);
+          form_data.append('caption_iv', caption_iv);
+          form_data.append('caption', enc_caption);
+          form_data.append('op_flag', op_flag);
+          form_data.append('op_user_id', op_user_id);
+          form_data.append('op_iv', op_iv);
+          form_data.append('op_msg', enc_op_msg);
+          //-- Change button image from 'send.png' to 'files_uploading.gif' --//
+          $('#btn_send_file').attr('src', '/images/files_uploading.gif');
+          //-- Then disable it to prevent upload a file twice --//
+          $('#btn_send_file').attr("disabled", "disabled");
+
+          // Clear aes_key from RAM after used //
+          aes_key = '';
+        
+          $.ajax({
+            type: 'POST',
+            url: '/upload_files',
+            dataType: 'text',
+            cache: false,
+            contentType: false,
+            processData: false,
+            data: form_data,
+            success: function(response) {
+              var new_token = response;
+              
+              switch (new_token) {
+                case 'error': 
+                  alert("Error is found as file upload.");
+                  $('#btn_send_file').removeAttr("disabled");
+                  $('#btn_send_file').attr('src', '/images/send.png');
+                  break;
+                  
+                case 'sess_expired':
+                  alert("Session expired");
+                  logoutSMS();
+                  break;
+                  
+                default:    
+                  //-- Refresh message section (just load the last sent message only) --//
+                  //-- '0' means get all unread messages, '1' means to get the last sent message. --//
+                  loadNewMessages(${group_id}, ${user_id}, 1);
+                  update_token = new_token;                        
+                  $('#btn_send_file').removeAttr("disabled");
+                  $('#btn_send_file').attr('src', '/images/send.png');
+                  showTextInputPanel();
+                  noReply();                
+                  //-- Inform other group members to refresh message via WebSocket --//
+                  informGroupMembersToRefresh(group_id, user_id);                                
+              }
+            },
+            error: function(xhr, ajaxOptions, thrownError) {
+              alert("Unable to upload file. Error " + xhr.status + ": " + thrownError);
+              $('#btn_send_file').removeAttr("disabled");
+              $('#btn_send_file').attr('src', '/images/send.png');
+            }                    
+          });
+        }
+        else {
+          alert("The secure key is lost, the system is going to log you out.");
+          logoutSMS();                        
+        } 
+      }
+      else {
+        alert("Please select a file before click the send button");
+      }
+    }
+    
+    function hasGetUserMedia() {
+      return !!(navigator.mediaDevices &&
+        navigator.mediaDevices.getUserMedia);
+    }
+    
+    function audioInput() {
+      if (hasGetUserMedia()) {
+        $('#text_send').hide();
+        $('#file_upload').hide();
+        $('#go_camera').hide();
+        $('#go_file').hide();
+        $('#go_audio').show();
+        $('#sound').click();
+      }
+      else {
+        alert("Your web browser doesn't support audio input.");
+      }
+    }
+    
+    async function sendSound(group_id, user_id) {
+      var send_button_status = $('#btn_send_sound').attr("disabled");
+      if (send_button_status == "disabled") {
+        return false;
+      }
+      
+      var file_name = allTrim($('#sound').val());   
+      if (file_name != "") {
+        var sound = $('#sound').prop('files')[0];
+        //-- Encode uploaded file name to handle Chinese characters --// 
+        sound.name = unescape(encodeURIComponent(sound.name));    
+                                        
+        //-- Encrypt 'caption' and 'op_msg' before send the data set to the server, even 'caption' --//
+        //-- is blank in this case.                                                                --//  
+        var algorithm = "AES-GCM";                   
+        op_msg = (typeof(op_msg) == "string")? op_msg : '';              
+        var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, '');
+        var caption_iv = enc_caption_obj.iv;
+        var enc_caption = enc_caption_obj.encrypted;
+        var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
+        var op_iv = enc_op_msg_obj.iv;
+        var enc_op_msg = enc_op_msg_obj.encrypted;
+                                     
+        var form_data = new FormData();
+        form_data.append('group_id', group_id);
+        form_data.append('sender_id', user_id);
+        form_data.append('ul_ftype', 'sound');
+        form_data.append('ul_file', sound);              
+        form_data.append('algorithm', algorithm);
+        form_data.append('caption_iv', caption_iv);
+        form_data.append('caption', enc_caption);
+        form_data.append('op_flag', op_flag);
+        form_data.append('op_user_id', op_user_id);
+        form_data.append('op_iv', op_iv);
+        form_data.append('op_msg', enc_op_msg);
+        //-- Change button image from 'send.png' to 'files_uploading.gif' --//
+        $('#btn_send_sound').attr('src', '/images/files_uploading.gif');
+        //-- Then disable it to prevent upload a file twice --//
+        $('#btn_send_sound').attr("disabled", "disabled");
+      
+        $.ajax({
+          type: 'POST',
+          url: '/upload_files',
+          dataType: 'text',
+          cache: false,
+          contentType: false,
+          processData: false,
+          data: form_data,
+          success: function(response) {
+            var new_token = response;
+            
+            switch (new_token) {
+              case 'error': 
+                alert("Error is found as file upload.");
+                $('#btn_send_sound').removeAttr("disabled");
+                $('#btn_send_sound').attr('src', '/images/send.png');
+                break;
+                
+              case 'sess_expired':
+                alert("Session expired");
+                logoutSMS();
+                break;
+                
+              default:    
+                //-- Refresh message section (just load the last sent message only) --//
+                //-- '0' means get all unread messages, '1' means to get the last sent message. --//
+                loadNewMessages(${group_id}, ${user_id}, 1);
+                update_token = new_token;                        
+                $('#btn_send_sound').removeAttr("disabled");
+                $('#btn_send_sound').attr('src', '/images/send.png');
+                showTextInputPanel();
+                noReply();                
+                //-- Inform other group members to refresh message via WebSocket --//
+                informGroupMembersToRefresh(group_id, user_id);                                
+            }
+          },
+          error: function(xhr, ajaxOptions, thrownError) {
+            alert("Unable to upload sound file. Error " + xhr.status + ": " + thrownError);
+            $('#btn_send_sound').removeAttr("disabled");
+            $('#btn_send_sound').attr('src', '/images/send.png');
+          }                    
+        });      
+      }
+      else {
+        alert("Please record a sound file before click the send button");
+      }      
+    }
+    
+    //-------------------------------------------------------------------------------------------------------//			                  
+    function goLoadMessage() {
+      $.ajax({
+        type: 'POST',
+        url: '/load_message',
+        dataType: 'html',
+        data: {group_id: group_id, user_id: user_id, m_params: JSON.stringify(m_params)},
+        success: function(ret_data) {
+          var result = JSON.parse(ret_data);              // Note: Return data is in JSON format.                
+          var new_token = allTrim(result.update_token);
+          var msg_list = result.message;               
+          
+          if (new_token != 'error') {         
+            showMessages(msg_list);
+            update_token = new_token;
+          }
+          else {
+            alert("Unable to load message. Error is found.");
+          }
+        },
+        error: function(xhr, ajaxOptions, thrownError) {
+          alert("Unable to load message. Error " + xhr.status + ": " + thrownError);
+        }          
+      });
+    }
+    
+    async function showMessages(msg_list) {
+      first_msg_id = (msg_list.length > 0)? msg_list[0].msg_id : '';
+      first_msg_date = (msg_list.length > 0)? msg_list[0].s_date : '';
+      last_msg_date = (msg_list.length > 0)? msg_list[msg_list.length - 1].s_date : ''; 
+    
+      var blank_line = "<tr style='height:8px;'><td></td></tr>"; 
+      var new_msg_start = 'W';            // 'W' = Wait for new message (if any), 'S' = New message has been met and new message seperator line been shown. 
+      //-- Refresh 'Read More' button --//
+      var read_more = (msg_list.length >= rows_limit && msg_list[0].msg_id != '${top_id}')? "<img id='btn_load_more' src='/images/readmore.png' height='50px' onClick='loadPrevMessages(group_id, user_id);'><br>" : '';
+      $('#read_more').html("<td align=center valign=center>" + read_more + "</td>");
+      
+      //-- Get the AES key to decrypt the feeding messages --//
+      aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");				  
+      
+      var prv_s_date = '';
+      for (var i = 0; i < msg_list.length; i++) {
+        var rec = msg_list[i];
+      
+        var this_msg_id = rec.msg_id;
+        var this_is_my_msg = rec.is_my_msg;
+        var this_user_color = (rec.user_status == 'A')? '#8B0909' : '#A4A5A5';
+        var is_member = (!rec.is_member)? "(Non member)" : '';
+        var this_sender_id = rec.sender_id;
+        var this_sender = rec.sender;
+        var this_sender = "<font color='" + this_user_color + "' size='2px'><b>" + this_sender + " " + is_member + "</b></font>";
+        var this_s_date = rec.s_date;
+        var this_s_time_12 = rec.s_time_12;
+        var this_from_now = rec.from_now;
+        var this_week_day = rec.week_day;
+        var this_message = await aesDecryptBase64(rec.algorithm, aes_key, rec.iv, rec.message);      // Defined on crypto-lib.js
+        var this_fileloc = rec.fileloc;
+        var this_file_link = (rec.file_link != '' && rec.message != '')? rec.file_link + '<br>' : rec.file_link;
+        var this_op_flag = rec.op_flag;
+        var this_op_user = rec.op_user;
+        var this_op_msg = await aesDecryptBase64(rec.algorithm, aes_key, rec.op_iv, rec.op_msg);
+        var this_msg_time = "<font color='#31B404' size='2px'>" + this_s_time_12 + "</font>";
+        var is_new_msg = rec.is_new_msg;
+        // Process " and ' characters on 'this_msg_30' to avoid syntax error //
+        var this_msg_30 = processQuotationMarks(await aesDecryptBase64(rec.algorithm, aes_key, rec.msg_30_iv, rec.msg_30));    // Used for message replying
+        var fw_header = '';
+        var re_header = '';
+        var this_tr = '';
+        
+        if (this_file_link.match(/audio controls/gi)) {
+          this_file_link += '<br>';
+        }
+                    
+        //-- If it is reply or forward message, process it here --//
+        if (this_op_flag == 'R') {
+          re_header = "<table width='100%' cellspacing=2 cellpadding=6>" +
+                      "<tr>" +
+                      "  <td style='border-left: 5px solid #0180FF;'>" +
+                      "    <font color='#0081FE' size='2px'><b>" + this_op_user + "</b></font><br>" + this_op_msg +
+                      "  </td>" +
+                      "</tr>" +
+                      "</table>";  
+        }
+        else if (this_op_flag == 'F') {
+          fw_header = "<font color='#298A09' size='2px'>Forwarded message<br>From <b>" + this_op_user + "</b><br></font>";
+        }  
+      
+        //-- Show date --//
+        if (prv_s_date != this_s_date) {
+          var date_tr = "<tr style='background-color:#D9D9D8'><td align=center>" + this_s_date + "</td></tr>" + blank_line;
+          $('#msg_table').append(date_tr).enhanceWithin();
+          prv_s_date = this_s_date;
+        }
+        
+        //-- Show new message seperation marker --//
+        if (is_new_msg && new_msg_start == 'W') {
+          var new_msg_tr = "<tr id='new_msg' style='background-color:#F5A8BD'><td align=center>New Message(s) Below</td></tr>" + blank_line;
+          $('#msg_table').append(new_msg_tr).enhanceWithin();
+          new_msg_start = 'S'; 
+        }
+      
+        if (this_is_my_msg) {
+          var delete_link = "<a href=\\"javascript:deleteMessage('" + this_msg_id + "');\\">Delete</a>";
+          var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
+          var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
+      
+          this_tr = "<tr id='row_" + this_msg_id + "'>" +
+                    "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
+                    "  <td width='100%'>" +
+                    "    <table width='100%' cellspacing=0 cellpadding=0 style='table-layout:fixed;'>" +
+                    "    <tr>" +
+                    "      <td width='${indentation}%'></td>" +
+                    "      <td width='${msg_width}%' style='background-color:${my_msg_colour}; word-wrap:break-word;'>" + fw_header + re_header + this_file_link + this_message + "<br>" + this_msg_time + " ${spaces} " + delete_link + " ${space3} " + reply_link + " ${space3} " + forward_link + "</td>" +
+                    "    </tr>" +
+                    "    </table>" +
+                    "  </td>" +
+                    "</tr>";            
+        }
+        else {
+          var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
+          var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
+        
+          this_tr = "<tr id='row_" + this_msg_id + "'>" +
+                    "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
+                    "  <td width='100%'>" +
+                    "    <table width='100%' cellspacing=0 cellpadding=0 style='table-layout:fixed;'>" +
+                    "    <tr>" + 
+                    "      <td width='${msg_width}%' style='background-color:${rv_msg_colour}; word-wrap:break-word;'>" + this_sender + "<br>" + fw_header + re_header + this_file_link + this_message + "<br>" + this_msg_time + " ${spaces} " + reply_link + " ${space3} " + forward_link + "</td>" +
+                    "      <td width='${indentation}%'></td>" +
+                    "    </tr>" +
+                    "    </table>" +
+                    "  </td>" +
+                    "</tr>";            
+        }
+        
+        $('#msg_table').append(this_tr).enhanceWithin();  
+        this_tr = "<tr id='blankline_" + this_msg_id + "' style='height:8px;'><td></td></tr>";
+        $('#msg_table').append(this_tr).enhanceWithin();
+      }      
+      
+      // Clear aes_key from RAM after used //
+      aes_key = '';
+      
+      //-- Seek to last message --//            
+      $('html, body').animate({scrollTop: $('#page_end').offset().top}, 500);                                      
+    }
+    
+    function getMessageIdListFromOtherSenders() {
+      var result = '';
+      var buffer = new Array();
+      var omid_list = document.querySelectorAll('[id^="omid_"]');
+      for (var i = 0; i < omid_list.length; ++i) {
+        buffer[i] = omid_list[i].value; 
+      }
+      result = buffer.join('|');
+      
+      return result;
+    }
+    
+    function informGroupMembersToRefresh(group_id, user_id) {
+      if (typeof(myWebSocket) != 'undefined' && myWebSocket != null) {
+        var packet = {type: 'msg', content: {op: 'msg_refresh', group_id: group_id, user_id: user_id}};
+        myWebSocket.send(JSON.stringify(packet));
+      }
+      else {
+        console.log("Websocket handler is lost!");
+      }
+    }
+    
+    function loadNewMessages(group_id, user_id, last_sent_msg_only) {
+      var omid_list = getMessageIdListFromOtherSenders();
+      
+      //-- Note: Boolean value sent to back-end application will be changed to string automatically. Therefore, don't send --//
+      //--       boolean value to back-end directly, but rather convert it to different type of value which can be sent to --//
+      //--       back-end safely, such as numeric value. For example, 0 for the false, and 1 for the true.                 --//                                                               --//  
+      
+      $.ajax({
+        type: 'POST',
+        url: '/pull_new_message',
+        dataType: 'json',
+        data: {group_id: group_id, receiver_id: user_id, last_sent_msg_only: last_sent_msg_only, omid_list: omid_list},
+        success: function(ret_data) {              
+          var valid_ret_data = false;
+          if (Array.isArray(ret_data)) {
+            if (ret_data.length > 0) {
+              valid_ret_data = true;
+            } 
+          } 
+          
+          if (valid_ret_data) {            
+            if (ret_data[0].msg_status == "error") {
+              alert(ret_data[0].message);
+            }               
+            else {
+              if (ret_data[0].msg_status == "deleted") {
+                hideMessageDeletedByOtherSender(ret_data);
+              }
+              else {
+                addMessageRow(ret_data, last_sent_msg_only);
+              }
+              
+              //-- Inform other group members to refresh message via WebSocket --//
+              informGroupMembersToRefresh(group_id, user_id);
+            }
+          }
+        },
+        error: function(xhr, ajaxOptions, thrownError) {
+          alert("Unable to draw new message(s). Error " + xhr.status + ": " + thrownError);
+        }             
+      });      
+    }
+    
+    function hideMessageDeletedByOtherSender(ret_data) {
+      for (var i = 0; i < ret_data.length; i++) {
+        var rec = ret_data[i];          
+        var this_msg_id = rec.msg_id;
+
+        $('#row_' + this_msg_id).hide();
+        $('#blankline_' + this_msg_id).hide();
+        $('#omid_' + this_msg_id).remove();
+      }      
+    }
+    
+    async function addMessageRow(ret_data, last_sent_msg_only) {
+      last_sent_msg_only = parseInt(last_sent_msg_only, 10);
+    
+      aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+    
+      for (var i = 0; i < ret_data.length; i++) {
+        var rec = ret_data[i];          
+        var this_msg_id = rec.msg_id;
+        var this_is_my_msg = rec.is_my_msg;
+        var this_user_color = '#8B0909';
+        if (allTrim(rec.user_status) != "A") {this_user_color = '#A4A5A5';}
+        var is_member = '';
+        if (parseInt(rec.is_member, 10) == 0) {is_member = "(Non member)";}
+        var this_sender_id = rec.sender_id;
+        var this_sender = "<font color='" + this_user_color + "' size='2px'><b>" + rec.sender + " " + is_member + "</b></font>";
+        var this_s_date = rec.s_date;
+        var this_s_time_12 = rec.s_time_12;
+        var this_from_now = rec.from_now;
+        var this_week_day = rec.week_day;
+        var this_message = await aesDecryptBase64(rec.algorithm, aes_key, rec.iv, rec.message);      // Defined on crypto-lib.js
+        var this_fileloc = rec.fileloc;
+        var this_file_link = (rec.file_link != '' && rec.message != '')? rec.file_link + '<br>' : rec.file_link;
+        var this_op_flag = rec.op_flag;
+        var this_op_user = rec.op_user;            
+        var this_op_msg = await aesDecryptBase64(rec.algorithm, aes_key, rec.op_iv, rec.op_msg); 
+        var show_time = this_s_time_12;
+        //if (this_from_now != "") {show_time = this_from_now;}
+        var this_msg_time = "<font color='#31B404' size='2px'>" + show_time + "</font>";
+        var is_new_msg = rec.is_new_msg;
+        // Process " and ' characters on 'this_msg_30' to avoid syntax error //
+        var this_msg_30 = processQuotationMarks(await aesDecryptBase64(rec.algorithm, aes_key, rec.msg_30_iv, rec.msg_30));   // Used for message replying
+        var this_tr = '';
+        var re_header = "";
+        var fw_header = "";
+        
+        if (this_file_link.match(/audio controls/gi)) {
+          this_file_link = this_file_link + "<br>";
+        }
+        
+        //-- If it is reply or forward message, process it here. --//
+        if (this_op_flag == 'R') {
+          re_header = "<table width='100%' cellspacing=2 cellpadding=6>" +
+                      "<tr>" +
+                      "  <td style='border-left: 5px solid #0180FF;'>" +
+                      "    <font color='#0081FE' size='2px'><b>" + this_op_user + "</b></font><br>" + this_op_msg +
+                      "  </td>" +
+                      "</tr>" +
+                      "</table>";
+        }
+        else if (this_op_flag == 'F') {
+          fw_header = "<font color='#298A09' size='2px'>Forwarded message<br>From <b>" + this_op_user + "</b><br></font>";
+        }
+                
+        if (last_msg_date != this_s_date) {
+          var date_tr = "<tr style='background-color:#D9D9D8'><td align=center>" + this_s_date + "</td></tr>";
+          $('#msg_table').append(date_tr).enhanceWithin();
+          if (last_sent_msg_only == 1) {
+            var blank_tr = "<tr style='height:8px;'><td></td></tr>";
+            $('#msg_table').append(blank_tr).enhanceWithin(); 
+          }
+          last_msg_date = this_s_date
+        }
+            
+        if (this_is_my_msg) {
+          var delete_link = "<a href=\\"javascript:deleteMessage('" + this_msg_id + "');\\">Delete</a>";
+          var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
+          var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
+      
+          this_tr = "<tr id='row_" + this_msg_id + "'>" +
+                    "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
+                    "  <td width='100%'>" +
+                    "    <table width='100%' cellspacing=0 cellpadding=0 style='table-layout:fixed;'>" +
+                    "    <tr>" +
+                    "      <td width='${indentation}%'></td>" +
+                    "      <td width='${msg_width}%' style='background-color:${my_msg_colour}; word-wrap:break-word;'>" + fw_header + re_header + this_file_link + this_message + "<br>" + this_msg_time + " ${spaces} " + delete_link + " ${space3} " + reply_link + " ${space3} " + forward_link + "</td>" +
+                    "    </tr>" +
+                    "    </table>" +
+                    "  </td>" +
+                    "</tr>";
+        }
+        else {
+          var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
+          var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
+        
+          this_tr = "<tr id='row_" + this_msg_id + "'>" +
+                    "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
+                    "  <td width='100%'>" +
+                    "    <table width='100%' cellspacing=0 cellpadding=0 style='table-layout:fixed;'>" +
+                    "    <tr>" + 
+                    "      <td width='${msg_width}%' style='background-color:${rv_msg_colour}; word-wrap:break-word;'>" + this_sender + "<br>" + fw_header + re_header + this_file_link + this_message + "<br>" + this_msg_time + " ${spaces} " + reply_link + " ${space3} " + forward_link + "</td>" +
+                    "      <td width='${indentation}%'></td>" +
+                    "    </tr>" +
+                    "    </table>" +
+                    "  </td>" +
+                    "</tr>";
+        }
+    
+        $('#msg_table').append(this_tr).enhanceWithin();  
+        this_tr = "<tr id='blankline_" + this_msg_id + "' style='height:8px;'><td></td></tr>";
+        $('#msg_table').append(this_tr).enhanceWithin();
+
+        //-- Seek to last message --//            
+        $('html, body').animate({scrollTop: $('#page_end').offset().top}, 500);
+      }
+      
+      // Clear session AES key from RAM after used //
+      aes_key = "";      
+    }
+        
+    function deleteMessage(msg_id) {
+      if (msg_id != '') {
+        $.ajax({
+          type: 'POST',
+          url: '/delete_message',
+          dataType: 'html',
+          data: {group_id: group_id, msg_id: msg_id},
+          success: function(ret_data) {
+            //-- If message is deleted successfully, hide the row contained the deleted message, and update the value of --//
+            //-- 'update_token' on do_sms.pl to avoid page refreshing.                                                   --//
+            //var result = eval('(' + ret_data + ')');      // Note: Return data in JSON format, so that 'evel' is required.
+            var result = JSON.parse(ret_data);              // Note: Return data is in JSON format.
+            var mg_status = result.mg_status;
+            var new_token = allTrim(mg_status.update_token);
+            
+            switch (new_token) {
+              case 'error':
+                alert("Error is found when delete this message");
+                break;
+                
+              case 'sess_expired':
+                alert("Session expired!");
+                logoutSMS();
+                break;
+                
+              default:    
+                parent.update_token = new_token;            
+                $('#row_' + msg_id).hide();
+                $('#blankline_' + msg_id).hide();
+                $('#omid_' + msg_id).remove();
+                //-- Inform other group members to refresh message via WebSocket --//
+                informGroupMembersToRefresh(group_id, user_id);                
+            }
+          },
+          error: function(xhr, ajaxOptions, thrownError) {
+            alert("Unable to delete message. Error " + xhr.status + ": " + thrownError);
+          }
+        });
+      }
+    }
+    
+    function loadPrevMessages(group_id, user_id) {
+      var button_status = $('#btn_load_more').attr("disabled");
+      if (button_status == "disabled") {
+        return false;
+      }
+
+      //-- Change button image from 'readmore.png' to 'files_uploading.gif' --//
+      $('#btn_load_more').attr('src', '/images/files_uploading.gif');
+      //-- Then disable it to prevent load more than one message block --//
+      $('#btn_load_more').attr("disabled", "disabled");
+                  
+      //-- Note: 'first_msg_id' means the ID of the first message which has already loaded --//
+      $.ajax({
+        type: 'POST',
+        url: '/pull_prev_message',
+        dataType: 'json',
+        data: {group_id: group_id, receiver_id: user_id, first_msg_id: first_msg_id, rows_limit: rows_limit},
+        success: function(ret_data) {                     
+          if (ret_data.msg_status == "error") {
+            alert(ret_data.message);
+          }               
+          else {                       
+            first_msg_id = addPrevMessageRow(JSON.parse(ret_data.message));
+            if (is_iOS) {
+              Cookies.set("m_id", first_msg_id, {expires: 1});      // Defined on js.cookies.min.js
+            }
+            else {
+              setLocalStoredItem("m_id", first_msg_id);             // Defined on common_lib.js
+            }
+          }
+          
+          $('#btn_load_more').removeAttr("disabled");
+          $('#btn_load_more').attr('src', '/images/readmore.png');          
+        },
+        error: function(xhr, ajaxOptions, thrownError) {
+          alert("Unable to get previous message(s). Error " + xhr.status + ": " + thrownError);
+          $('#btn_load_more').removeAttr("disabled");
+          $('#btn_load_more').attr('src', '/images/readmore.png');                    
+        }             
+      });            
+    }
+        
+    async function addPrevMessageRow(ret_data) {
+      var the_msg_id = '';
+      
+      //-- Get the AES key to decrypt received messages --//
+      aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+                
+      for (var i = 0; i < ret_data.length; i++) {
+        var rec = ret_data[i];          
+        var this_msg_id = rec.msg_id;
+        var this_is_my_msg = rec.is_my_msg;
+        var this_user_color = (allTrim(rec.user_status) == "A")? '#8B0909' : '#A4A5A5';
+        var is_member = (parseInt(rec.is_member, 10) == 0)? "(Non member)" : '';
+        var this_sender_id = rec.sender_id;
+        var this_sender = "<font color='" + this_user_color + "' size='2px'><b>" + rec.sender + " " + is_member + "</b></font>";
+        var this_s_date = rec.s_date;
+        var this_s_time_12 = rec.s_time_12;
+        var this_from_now = rec.from_now;
+        var this_week_day = rec.week_day;
+        var this_message = await aesDecryptBase64(rec.algorithm, aes_key, rec.iv, rec.message);
+        var this_fileloc = rec.fileloc;
+        var this_file_link = rec.file_link;
+        var this_op_flag = rec.op_flag;
+        var this_op_user = rec.op_user;            
+        var this_op_msg = await aesDecryptBase64(rec.algorithm, aes_key, rec.op_iv, rec.op_msg);        
+        var show_time = this_s_time_12;
+        var this_msg_time = "<font color='#31B404' size='2px'>" + show_time + "</font>";
+        var is_new_msg = rec.is_new_msg;
+        // Process " and ' characters on 'this_msg_30' to avoid syntax error //
+        var this_msg_30 = processQuotationMarks(await aesDecryptBase64(rec.algorithm, aes_key, rec.msg_30_iv, rec.msg_30));
+        // Process " and ' characters on 'this_msg_30' to avoid syntax error //
+        this_msg_30 = this_msg_30.replace(/"/g, '“'); 
+        this_msg_30 = this_msg_30.replace(/'/g, '‘');           
+        var this_tr = '';
+        var re_header = "";
+        var fw_header = "";
+
+        //-- With reason still unknown, extra garbage record(s) may be embedded in the return data, so it needs to --//
+        //-- take this checking for returned records.                                                              --//
+        if (typeof(this_msg_id) != 'undefined' && this_msg_id != null) {        
+          if (this_file_link.match(/audio controls/gi)) {
+            this_file_link = this_file_link + "<br>";
+          }
+        
+          //-- If it is replied or forward message, process it here. --//
+          if (this_op_flag == 'R') {
+            re_header = "<table width='100%' cellspacing=2 cellpadding=6>" +
+                        "<tr>" +
+                        "  <td style='border-left: 5px solid #0180FF;'>" +
+                        "    <font color='#0081FE' size='2px'><b>" + this_op_user + "</b></font><br>" + this_op_msg +
+                        "  </td>" +
+                        "</tr>" +
+                        "</table>";
+          }
+          else if (this_op_flag == 'F') {
+            fw_header = "<font color='#298A09' size='2px'>Forwarded message<br>From <b>" + this_op_user + "</b><br></font>";
+          }
+                
+          if (first_msg_date != this_s_date) {
+            var blank_tr = "<tr style='height:8px;'><td></td></tr>";
+            $('#msg_table > tbody > tr').eq(0).before(blank_tr).enhanceWithin();                                  
+            var date_tr = "<tr style='background-color:#D9D9D8'><td align=center>" + this_s_date + "</td></tr>";
+            $('#msg_table > tbody > tr').eq(0).before(date_tr).enhanceWithin();
+            first_msg_date = this_s_date
+          }
+                                
+          if (this_is_my_msg) {
+            var delete_link = "<a href=\\"javascript:deleteMessage('" + this_msg_id + "');\\">Delete</a>";
+            var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
+            var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
+      
+            this_tr = "<tr id='row_" + this_msg_id + "'>" +
+                      "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
+                      "  <td width='100%'>" +
+                      "    <table width='100%' cellspacing=0 cellpadding=0 style='table-layout:fixed;'>" +
+                      "    <tr>" +
+                      "      <td width='${indentation}%'></td>" +
+                      "      <td width='${msg_width}%' style='background-color:${my_msg_colour}; word-wrap:break-word;'>" + fw_header + re_header + this_file_link + this_message + "<br>" + this_msg_time + " ${spaces} " + delete_link + " ${space3} " + reply_link + " ${space3} " + forward_link + "</td>" +
+                      "    </tr>" +
+                      "    </table>" +
+                      "  </td>" +
+                      "</tr>";
+          }
+          else {
+            var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
+            var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
+        
+            this_tr = "<tr id='row_" + this_msg_id + "'>" +
+                      "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
+                      "  <td width='100%'>" +
+                      "    <table width='100%' cellspacing=0 cellpadding=0 style='table-layout:fixed;'>" +
+                      "    <tr>" + 
+                      "      <td width='${msg_width}%' style='background-color:${rv_msg_colour}; word-wrap:break-word;'>" + this_sender + "<br>" + fw_header + re_header + this_file_link + this_message + "<br>" + this_msg_time + " ${spaces} " + reply_link + " ${space3} " + forward_link + "</td>" +
+                      "      <td width='${indentation}%'></td>" +
+                      "    </tr>" +
+                      "    </table>" +
+                      "  </td>" +
+                      "</tr>";
+          }
+    
+          $('#msg_table > tbody > tr').eq(0).after(this_tr).enhanceWithin();
+          this_tr = "<tr id='blankline_" + this_msg_id + "' style='height:8px;'><td></td></tr>";
+          $('#msg_table > tbody > tr').eq(0).after(this_tr).enhanceWithin();            
+        
+          the_msg_id = this_msg_id;
+        }
+      }
+      
+      // Clear aes_key from RAM after used //
+      aes_key = '';
+      
+      //-- Try to retrieve the first message id of this group of this user (Note: It may not exist) --//
+      var top_msg_id = (is_iOS)? Cookies.get("top_id") : getLocalStoredItem("top_id");   // Defined on js.cookie.min.js : common_lib.js
+      top_msg_id = (top_msg_id == undefined)? 0 : top_msg_id;
+      
+      if (ret_data.length < rows_limit || the_msg_id == top_msg_id) {
+        $('#read_more').hide();
+        if (the_msg_id != top_msg_id) {
+          if (is_iOS) {
+            Cookies.set("top_id", the_msg_id, {expires: 1});
+          }
+          else {
+            setLocalStoredItem("top_id", the_msg_id);
+          }
+        }
+      }
+
+      //-- Return the most updated value of 'first_msg_id' --//      
+      return the_msg_id;
+    }`; 
+    
+    js = await wev.minifyJS(js);
+    
     html = `
       <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
       <link rel="shortcut icon" href="/favicon.ico">
@@ -4601,1402 +6008,9 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       <script src="/js/common_lib.js"></script>
       
       <script>
-        var update_token = "${update_token}";
-        var scheduler_id;        
-        var op_flag = '';   // op_flag must be initialised to avoid file uploading problem
-        var op_user_id;
-        var op_msg;
-        var group_id = ${group_id};
-        var user_id = ${user_id};
-        var first_msg_id = "${first_msg_id}";
-        var first_msg_date = "${first_msg_date}";
-        var last_msg_date = "${last_msg_date}";
-        var rows_limit = ${rows_limit};
-        var m_params = ${m_params};
-        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
-        var sess_code = '';            // Session code.
-        var aes_key = '';              // AES key is used to encrypt uploaded messages and decrypt received messages.
-        var load_message = false;      // Messages loading control flag          
-        //-- Below variables are websocket related --//
-        var myWebSocket = null;
-        var wsPingServer = null;
-        var wsOpenSocket = null;   
-        var wsCheckTimeout = null;
-        var is_reopen = false;
-
-        function connectWebServer() {
-          var ws = new WebSocket("${wspath}");
-        
-          function ping() {
-            var packet = {type: 'cmd', content: 'ping'};
-            ws.send(JSON.stringify(packet));
-          }
-          
-          function checkTimeout() {
-            var packet = {type: 'cmd', content: 'check_timeout'};
-            ws.send(JSON.stringify(packet));
-          }
-                    
-          function reopenWebSocket() {                                    
-            is_reopen = true; 
-            myWebSocket = connectWebServer();
-          }
-        
-          ws.onopen = function(e) {
-            //-- Once the websocket has been opened, stop the websocket openning scheduler (if it is activated). --//  
-            if (wsOpenSocket != null) {clearTimeout(wsOpenSocket)};
-            //-- By default, WebSocket connection of Nginx reverse proxy server will be disconnected on 60 seconds (i.e. Timeout), so we --//
-            //-- need to send something to the server to keep the connection open within this time interval continuously.                --//
-            wsPingServer = setInterval(ping, 50000);                 // Ping the server every 50 seconds                    
-            wsCheckTimeout = setInterval(checkTimeout, 300000);      // Check session timeout every 5 minutes
-            
-            if (is_reopen) {                                        
-              //-- Refresh page as websocket is reconnected --//      
-              is_reopen = false;
-              checkMessage();
-            }
-          }
-          
-          ws.onmessage = function(e) {
-            var packet = JSON.parse(e.data);
-            var type = packet.type;            // Possible values are 'cmd' (command) and 'msg' (message).
-            var content = packet.content;      // Note: 'content' is highly possible an object, not just plain text.
-            
-            if (type == 'msg') {
-              if (content.op == 'msg_refresh') {
-                var refresh_group_id = content.group_id;
-                
-                if (refresh_group_id == group_id) {                            
-                  // Note: The ultimate solution is to get new message(s) via websocket, and update it on user screen in here. 
-                  //       i.e. Use 'content' to feed in message(s). However, for a temporary workaround. I put checkMessage() 
-                  //       here to get new message(s).  
-                  checkMessage();
-                }
-              }
-            }
-            else { 
-              processCommand(content);
-            }
-          }
-          
-          ws.onclose = function(e) {
-            //****************
-            //console.log('Websocket connection closed');
-            //****************
-            clearInterval(wsPingServer);
-            //-- Reopen websocket automatically within 100ms --//
-            wsOpenSocket = setTimeout(reopenWebSocket, 100);
-          }
-          
-          ws.onerror = function(e) {
-            console.log('Error: ' + e.message);
-          }
-          
-          return ws;
-        }          
-        
-        function processCommand(command) {
-          var cmd_op = command.op;
-                    
-          switch (cmd_op) {
-            case 'pong':
-              break;
-          
-            case 'sess_code':
-              sess_code = command.content.trim();
-              
-              if (load_message) {   
-                //-- Check whether session AES key exist or not. If it doesn't exist, generate it --//
-                //-- and push a copy to back-end server before load up messages.                  --//
-                //--                                                                              --//
-                //-- Note: Due to asynchronous nature of javascript execution, it needs to use a  --//
-                //--       promise to ensure the AES key exists before load up messages from the  --//
-                //--       server.                                                                --//                      
-                let this_promise = new Promise((resolve, reject) => {                  
-				          //-- Note: This situation is none ideal, but it is the last resort to handle this situation. --//
-				          let renew_aes_key = false;
-				          aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
-				          if (typeof(aes_key) != "string" ) {
-				            renew_aes_key = true;  
-								  }
-								  else {
-								    aes_key = aes_key.trim();
-								    if (aes_key.length < ${_key_len}) {
-								      //-- AES passphase is too weak --//
-								      renew_aes_key = true;
-									  }
-								  }
-				          
-				          if (renew_aes_key) {
-							      //-- 2023-12-01: After consider security issue, it is too risky to upload new AES passphase to the --//
-							      //--             server without protection. So, if local AES passphase is lost, it should force    --//
-							      //--             logout the user.                                                                  --//  
-				            reject('0');
-				          
-				            //****************************************************************************************************
-				            //aes_key = generateTrueRandomStr('A', ${_key_len});              // Defined on crypto-lib.js
-				            //if (is_iOS) {
-				            //  Cookies.set("aes_key", aes_key, {expires: 1});
-									  //}
-									  //else {
-									  //  setLocalStoredItem("aes_key", aes_key);
-									  //}
-				            //
-								    //-- Note: This section should be further enhance later to use RSA key exchange to protect --//
-								    //--       the push AES key. The current implementation doesn't secure enough.             --//   
-								    //$.ajax({
-								    //  type: 'POST',
-								    //  url: '/push_aes_key',
-								    //  dataType: 'html',
-								    //  data: {user_id: user_id, aes_key: aes_key},
-								    //  success: function(ret_data) {
-								    //    let result = JSON.parse(ret_data);
-								    //    
-								    //    if (result.ok == '1') {
-								    //      resolve('1');
-										//	  }
-								    //    else {
-								    //      console.log("Unable to push AES key to server. Error: " + result.msg);
-								    //      reject('0');
-										//	  }
-										//  },
-										//  error: function(xhr, ajaxOptions, thrownError) {
-										//    console.log("Unable to push AES key to server. Error " + xhr.status + ": " + thrownError);
-					          //    reject('0');
-					          //  }
-									  //});
-									  //****************************************************************************************************
-									}
-									else {
-									  resolve('1');
-								  }                  
-							  });
-							  
-							  this_promise.then((result) => {
-                  //-- Load up group messages --//
-                  goLoadMessage();
-                  load_message = false;
-							  }).catch((error) => {
-							    let msg = "Secure key is lost, system is going to log you out. Please login again.";
-							    alert(msg);
-							    logoutSMS();							  
-							  });
-              }
-              
-              break;
-              
-            case 'timeout':
-              if (command.content.trim() == 'YES') {
-                logoutSMS();
-              }
-              break;  
-            
-            case 'group_deleted':
-              var deleted_group_id = command.group_id;
-              
-              if (deleted_group_id == group_id) {
-                clearLocalData();
-                window.location.href = "/message";
-              }
-              
-              break;
-              
-            case 'force_logout':
-              logoutSMS();
-              break;
-              
-            default:
-              //-- do nothing --//   
-          }                             
-        }
-        
-        //function logout() {
-          //window.location.href = '/logout_msg';
-          //window.location.href = "${logout_url}";
-        //}
-    
-        $(document).on("pageinit", function() {
-          $(function() {
-            $('html,body').animate({scrollTop: $('#page_end').offset().top}, 500);
-          })
-        });
-      
-        $(document).on("pagecreate", function() {      
-          $('#btn_msg_send').hide();
-          $('#reply_row').hide();
-          $('#file_upload').hide();
-          $('#go_camera').hide();
-          $('#go_file').hide();
-          $('#go_audio').hide();
-        });
-        
-        $(document).on("pagecreate", function() {
-          //-- Define event handlers for the message input textarea object --//
-          $('#s_message').click(
-            function() {                  
-              $(this).keyup();          
-            }
-          );
-                      
-          $('#s_message').keyup(
-            function() {
-              var slen = $(this).val().length;
-              if (slen > 0) {            
-                $('#btn_msg_send').show();
-                $('#btn_attach_file').hide();
-                $('#btn_audio_input').hide();
-              }
-              else {
-                $('#btn_msg_send').hide();
-                $('#btn_attach_file').show();
-                $('#btn_audio_input').show();            
-              }
-            }
-          );
-          
-          $('#btn_msg_send').on("click", function(event){
-            if ($(this).is("[disabled]")) {
-              event.preventDefault();
-            }
-          });      
-        });
-        
-        $(document).on("pageshow", function(event) {          
-          //-- Once it enters this module, instruct to load messages and this is the control flag. --// 
-          load_message = true;
-          //-- Open a websocket --//
-          myWebSocket = connectWebServer();
-        });
-        
-        //-- Swipe right in a message group will go to previous page, i.e. the message group(s) landing page. --//
-        $(function() {
-          $('#dosms').on("swiperight", swiperightHandler);
-          
-          function swiperightHandler(event) {
-            goHome();
-          }
-        });
-                
-        //-- Store initial values on local storage of the web browser --//
-        if (is_iOS) {
-          //-- iOS behavior is different from other platforms, so that it needs to put cross pages data to cookie as work-around. --//
-          Cookies.set("g_id", group_id, {expires: 1});              // Defined on js.cookie.min.js    
-          Cookies.set("u_id", user_id, {expires: 1});
-          Cookies.set("m_id", first_msg_id, {expires: 1});
-        }
-        else {
-          setLocalStoredItem("g_id", group_id);                     // Defined on common_lib.js
-          setLocalStoredItem("u_id", user_id);
-          setLocalStoredItem("m_id", first_msg_id);
-        }
-                                              
-        function clearLocalData() {
-          if (is_iOS) {
-            Cookies.remove("g_id");                                    // Defined on js.cookie.min.js
-            Cookies.remove("u_id");
-            Cookies.remove("m_id");
-            Cookies.remove("top_id");
-          }
-          else {
-            deleteLocalStoredItem("g_id");                             // Defined on common_lib.js
-            deleteLocalStoredItem("u_id");                             
-            deleteLocalStoredItem("m_id");                             
-            deleteLocalStoredItem("top_id");                                   
-          }      
-        }
-        
-        function logoutSMS() {
-          clearLocalData();
-          //window.location.href = "/logout_msg";
-          window.location.href = "${logout_url}";
-        }
-        
-        function goHome() {
-          clearLocalData();
-          //window.location.href = "/message";      
-          window.location.href = "${message_url}";
-        }
-            
-        //function runScheduler() {
-        //  scheduler_id = setInterval(checkMessage, 2000);          
-        //}
-        
-        function checkMessage() {
-          $.ajax({
-            type: 'POST',
-            url: '/check_message_update_token',
-            dataType: 'html',
-            data: {group_id: ${group_id}, user_id: ${user_id}},
-            success: function(ret_data) {
-              var result = JSON.parse(ret_data);                  // Note: Return data is in JSON format.
-              var mg_status = result.mg_status;
-              var new_token = allTrim(mg_status.update_token);
-              if (update_token != new_token) {
-                if (new_token == "expired") {
-                  //-- Session is expired, go to login page --//
-                  alert("Session expired!");
-                  logoutSMS();                
-                }
-                else if (new_token == "group_deleted") {
-                  //-- Message group has been deleted by someone, go to message group main page now. --//
-                  clearLocalData();
-                  window.location.href = "${message_url}";                                  
-                }
-                else if (new_token == "user_locked") {
-                  //-- User has been locked, force logout him/her immediately. --//
-                  logoutSMS();      
-                }
-                else if (new_token == "not_group_member") {
-                  //-- User has been kicked from the group, redirect him/her to message group main page immediately. --//
-                  clearLocalData();
-                  window.location.href = "${message_url}"; 
-                }              
-                else if (new_token == "error") {
-                  var err_msg = mg_status.error;
-                  //-- System error is found, show user what is wrong. --//
-                  alert("Unable to check new message. Error: " + err_msg);
-                  //logoutSMS(); 
-                }
-                else {
-                  //-- If message update token has been changed, refresh message section to pull in new message(s). --//
-                  //-- '0' means get all unread messages, '1' means to get the last sent message.                   --// 
-                  loadNewMessages(${group_id}, ${user_id}, 0);
-                  update_token = new_token;                
-                }
-              }
-            },
-            error: function(xhr, ajaxOptions, thrownError) {
-              //alert("Unable to pull in new message. Error " + xhr.status + ": " + thrownError);
-            }
-          });      
-        }
-                
-        function stopScheduler() {
-          clearInterval(scheduler_id);
-        }
-        
-        async function sendMessage(group_id, user_id) {
-          group_id = parseInt(group_id, 10);
-          user_id = parseInt(user_id, 10);
-        
-          var ta = document.getElementById("s_message");
-          
-          var content = allTrim(ta.value);
-          if (content.length > 0) {
-	          //-- Get the AES key to encrypt the sending message --//
-	          let key_ready = true;
-	          aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");				  
-            if (typeof(aes_key) != "string") {
-              key_ready = false;
-					  }            
-            else {
-              aes_key = aes_key.trim();
-              if (aes_key.length < ${_key_len}) {
-                key_ready = false;
-						  }
-					  }
-            
-            if (key_ready) {                    
-	            //-- Encrypt the message with AES-256 before send it out --//
-	            var algorithm = "AES-GCM";
-	            var enc_msg_obj = await aesEncryptJSON(algorithm, aes_key, content);
-	            var msg_iv = enc_msg_obj.iv;
-	            var encrypted_msg = enc_msg_obj.encrypted;
-	            var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
-	            var op_iv = enc_op_msg_obj.iv;
-	            var encrypted_op_msg = enc_op_msg_obj.encrypted;   
-	            	            
-	            //-- Change button image from 'send.png' to 'yellow_flash.jpg' --//
-	            $('#btn_msg_send').attr('src', '/images/yellow_flash.jpg');        
-	            $('#btn_msg_send').attr("disabled", "disabled");     
-	          
-              // Clear AES key from RAM after used //
-              aes_key = "";
-                                  
-	            $.ajax({
-	              type: 'POST',
-	              url: '/send_message',
-	              dataType: 'html',
-	              data: {group_id: group_id, sender_id: user_id, algorithm: algorithm, msg_iv: msg_iv, message: encrypted_msg, op_flag: op_flag, op_user_id: op_user_id, op_iv: op_iv, op_msg: encrypted_op_msg},
-	              success: function(ret_data) {
-	                //var result = eval('(' + ret_data + ')');      // Note: Return data in JSON format, so that 'evel' is required.
-	                var result = JSON.parse(ret_data);              // Note: Return data is in JSON format.                
-	                var new_token = allTrim(result.mg_status.update_token);                        
-	                ta.value = "";
-	                //-- Refresh message section --//
-	                //-- '0' means get all unread messages, '1' means to get the last sent message. --//
-	                loadNewMessages(${group_id}, ${user_id}, 1);
-	                update_token = new_token;
-	                noReply();
-	                $('#s_message').click();
-	                $('#btn_msg_send').hide();
-	                $('#btn_msg_send').removeAttr("disabled");
-	                $('#btn_msg_send').attr('src', '/images/send.png');                
-	                $('#btn_attach_file').show();
-	                $('#btn_audio_input').show();                            
-	              },
-	              error: function(xhr, ajaxOptions, thrownError) {
-	                alert("Unable to send message. Error " + xhr.status + ": " + thrownError);
-	                $('#btn_msg_send').removeAttr("disabled");
-	                $('#btn_msg_send').attr('src', '/images/send.png');
-	                noReply();
-	              }          
-	            });
-					  }
-					  else {
-					    alert("The secure key is lost, the system is going to log you out.");
-					    logoutSMS();
-					  }
-          }
-          else {
-            alert("Empty message won't be sent");
-          }
-        }
-        
-        function quitMessageGroup(group_id, user_id) {
-          if (confirm("Do you really want to exit?")) {
-            var url = "/exit_group?g_id=" + group_id + "&member_id=" + user_id;
-            window.location.href = url;
-          }      
-        }
-        
-        function deleteThisGroup(group_id) {
-          if (confirm("Do you want to delete this message group?")) {
-            if (confirm("Last chance! Really want to delete this group?")) {
-              var url = "/delete_group?group_id=" + group_id;
-              window.location.href = url;
-            }
-          }
-        }
-        
-        function replyMessage(msg_id, sender_id, sender, msg_30) {
-          op_flag = 'R';
-          op_user_id = sender_id;
-          msg_30 = msg_30.replace(/¡/g, "'");      // Note: All single quote characters on msg_30 are converted to '¡' before passed in here.
-          op_msg = msg_30;
-          var html = "<font color='#0081FE' size='2px'><b>" + sender + "</b></font><br>" + op_msg;
-          $('#reply_msg_area').html(html);
-          $('#reply_row').show();    
-        }
-        
-        function noReply() {
-          op_flag = '';
-          op_user_id = 0;
-          op_msg = '';
-          $('#reply_msg_area').html('');
-          $('#reply_row').hide();          
-        }
-        
-        function forwardMessage(group_id, msg_id) {
-          var url = "/forward_message?from_group_id=" + group_id + "&msg_id=" + msg_id;
-          window.location.href = url;
-        }
-    
-        function showTextInputPanel() {
-          $('#text_send').show();
-          $('#file_upload').hide();
-          $('#go_camera').hide();
-          $('#go_file').hide();
-          $('#go_audio').hide();
-        }
-        
-        function attachFile() {
-          $('#text_send').hide();
-          $('#file_upload').show();
-          $('#go_camera').hide();
-          $('#go_file').hide();
-          $('#go_audio').hide();
-        }
-        
-        function openCamera() {
-          $('#text_send').hide();
-          $('#file_upload').hide();
-          $('#go_camera').show();
-          $('#go_file').hide();
-          $('#go_audio').hide();
-          $('#photo').click();
-        }
-        
-        function selectFileToUpload() {
-          $('#text_send').hide();
-          $('#file_upload').hide();
-          $('#go_camera').hide();
-          $('#go_file').show();
-          $('#go_audio').hide();      
-          $('#ul_file').click();      
-        }
-        
-        async function sendPhoto(group_id, user_id) {
-          var send_button_status = $('#btn_send_photo').attr("disabled");
-          if (send_button_status == "disabled") {
-            return false;
-          }
-                          
-          var image_name = allTrim($('#photo').val());   
-          if (image_name != "") {   
-	          let key_ready = true;
-	          aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");				  
-            if (typeof(aes_key) != "string") {
-              key_ready = false;
-					  }            
-            else {
-              aes_key = aes_key.trim();
-              if (aes_key.length < ${_key_len}) {
-                key_ready = false;
-						  }
-					  }
-            
-            if (key_ready) { 
-              var image = $('#photo').prop('files')[0];
-              //-- Encode uploaded file name to handle Chinese characters --// 
-              image.name = unescape(encodeURIComponent(image.name));               
-              //-- Encrypt 'caption' and 'op_msg' before send the data set to the server --//  
-              var algorithm = "AES-GCM";                   
-              var this_caption = allTrim($('#caption').val());
-              this_caption = (typeof(this_caption) == "string")? this_caption : '';
-              op_msg = (typeof(op_msg) == "string")? op_msg : '';              
-              var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, this_caption);
-              var caption_iv = enc_caption_obj.iv;
-              var enc_caption = enc_caption_obj.encrypted;
-              var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
-              var op_iv = enc_op_msg_obj.iv;
-              var enc_op_msg = enc_op_msg_obj.encrypted;
-                
-              var form_data = new FormData();
-              form_data.append('group_id', group_id);
-              form_data.append('sender_id', user_id);
-              form_data.append('ul_ftype', 'photo');
-              form_data.append('ul_file', image);
-              form_data.append('algorithm', algorithm);
-              form_data.append('caption_iv', caption_iv);
-              form_data.append('caption', enc_caption);
-              form_data.append('op_flag', op_flag);
-              form_data.append('op_user_id', op_user_id);
-              form_data.append('op_iv', op_iv);
-              form_data.append('op_msg', enc_op_msg);
-              //-- Change button image from 'send.png' to 'files_uploading.gif' --//
-              $('#btn_send_photo').attr('src', '/images/files_uploading.gif');
-              //-- Then disable it to prevent upload a photo twice --//
-              $('#btn_send_photo').attr("disabled", "disabled");
-  
-              // Clear aes_key from RAM after used //
-              aes_key = '';
-            
-              $.ajax({
-                type: 'POST',
-                url: '/upload_files',
-                dataType: 'text',
-                cache: false,
-                contentType: false,
-                processData: false,
-                data: form_data,
-                success: function(response) {
-                  var new_token = response;
-                  
-                  switch (new_token) {
-                    case 'error': 
-                      alert("Error is found as file upload.");
-                      $('#btn_send_photo').removeAttr("disabled");
-                      $('#btn_send_photo').attr('src', '/images/send.png');
-                      break;
-                      
-                    case 'sess_expired':
-                      alert("Session expired");
-                      logoutSMS();
-                      break;
-                      
-                    default:    
-                      //-- Refresh message section (just load the last sent message only) --//
-                      //-- '0' means get all unread messages, '1' means to get the last sent message. --//
-                      loadNewMessages(${group_id}, ${user_id}, 1);
-                      update_token = new_token;                        
-                      $('#btn_send_photo').removeAttr("disabled");
-                      $('#btn_send_photo').attr('src', '/images/send.png');
-                      $('#caption').val("");
-                      showTextInputPanel();
-                      noReply();                
-                      //-- Inform other group members to refresh message via WebSocket --//
-                      informGroupMembersToRefresh(group_id, user_id);                                
-                  }
-                },
-                error: function(xhr, ajaxOptions, thrownError) {
-                  alert("Unable to upload photo. Error " + xhr.status + ": " + thrownError);
-                  $('#btn_send_photo').removeAttr("disabled");
-                  $('#btn_send_photo').attr('src', '/images/send.png');
-                }                    
-              });
-            }
-            else {
-					    alert("The secure key is lost, the system is going to log you out.");
-					    logoutSMS();            
-            }
-          }
-          else {
-            alert("Please take a photo before click the send button");
-          }
-        }
-        
-        async function sendFile(group_id, user_id) {
-          var send_button_status = $('#btn_send_file').attr("disabled");
-          if (send_button_status == "disabled") {
-            return false;
-          }
-          
-          var file_name = allTrim($('#ul_file').val());   
-          if (file_name != "") {
-	          let key_ready = true;
-	          aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");				  
-            if (typeof(aes_key) != "string") {
-              key_ready = false;
-					  }            
-            else {
-              aes_key = aes_key.trim();
-              if (aes_key.length < ${_key_len}) {
-                key_ready = false;
-						  }
-					  }
-            
-            if (key_ready) {           
-              var ul_file = $('#ul_file').prop('files')[0];
-              //-- Encode uploaded file name to handle Chinese characters --// 
-              ul_file.name = unescape(encodeURIComponent(ul_file.name));       
-              //-- Encrypt 'caption' and 'op_msg' before send the data set to the server, even 'caption' --//
-              //-- is blank in this case.                                                                --//  
-              var algorithm = "AES-GCM";                   
-              op_msg = (typeof(op_msg) == "string")? op_msg : '';     
-              var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, '');   // Caption is always blank in this case
-              var caption_iv = enc_caption_obj.iv;
-              var enc_caption = enc_caption_obj.encrypted;
-              var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
-              var op_iv = enc_op_msg_obj.iv;
-              var enc_op_msg = enc_op_msg_obj.encrypted;
-                                           
-              var form_data = new FormData();
-              form_data.append('group_id', group_id);
-              form_data.append('sender_id', user_id);
-              form_data.append('ul_ftype', 'file');
-              form_data.append('ul_file', ul_file);            
-              form_data.append('algorithm', algorithm);
-              form_data.append('caption_iv', caption_iv);
-              form_data.append('caption', enc_caption);
-              form_data.append('op_flag', op_flag);
-              form_data.append('op_user_id', op_user_id);
-              form_data.append('op_iv', op_iv);
-              form_data.append('op_msg', enc_op_msg);
-              //-- Change button image from 'send.png' to 'files_uploading.gif' --//
-              $('#btn_send_file').attr('src', '/images/files_uploading.gif');
-              //-- Then disable it to prevent upload a file twice --//
-              $('#btn_send_file').attr("disabled", "disabled");
-  
-              // Clear aes_key from RAM after used //
-              aes_key = '';
-            
-              $.ajax({
-                type: 'POST',
-                url: '/upload_files',
-                dataType: 'text',
-                cache: false,
-                contentType: false,
-                processData: false,
-                data: form_data,
-                success: function(response) {
-                  var new_token = response;
-                  
-                  switch (new_token) {
-                    case 'error': 
-                      alert("Error is found as file upload.");
-                      $('#btn_send_file').removeAttr("disabled");
-                      $('#btn_send_file').attr('src', '/images/send.png');
-                      break;
-                      
-                    case 'sess_expired':
-                      alert("Session expired");
-                      logoutSMS();
-                      break;
-                      
-                    default:    
-                      //-- Refresh message section (just load the last sent message only) --//
-                      //-- '0' means get all unread messages, '1' means to get the last sent message. --//
-                      loadNewMessages(${group_id}, ${user_id}, 1);
-                      update_token = new_token;                        
-                      $('#btn_send_file').removeAttr("disabled");
-                      $('#btn_send_file').attr('src', '/images/send.png');
-                      showTextInputPanel();
-                      noReply();                
-                      //-- Inform other group members to refresh message via WebSocket --//
-                      informGroupMembersToRefresh(group_id, user_id);                                
-                  }
-                },
-                error: function(xhr, ajaxOptions, thrownError) {
-                  alert("Unable to upload file. Error " + xhr.status + ": " + thrownError);
-                  $('#btn_send_file').removeAttr("disabled");
-                  $('#btn_send_file').attr('src', '/images/send.png');
-                }                    
-              });
-            }
-            else {
-					    alert("The secure key is lost, the system is going to log you out.");
-					    logoutSMS();                        
-            } 
-          }
-          else {
-            alert("Please select a file before click the send button");
-          }
-        }
-        
-        function hasGetUserMedia() {
-          return !!(navigator.mediaDevices &&
-            navigator.mediaDevices.getUserMedia);
-        }
-        
-        function audioInput() {
-          if (hasGetUserMedia()) {
-            $('#text_send').hide();
-            $('#file_upload').hide();
-            $('#go_camera').hide();
-            $('#go_file').hide();
-            $('#go_audio').show();
-            $('#sound').click();
-          }
-          else {
-            alert("Your web browser doesn't support audio input.");
-          }
-        }
-        
-        async function sendSound(group_id, user_id) {
-          var send_button_status = $('#btn_send_sound').attr("disabled");
-          if (send_button_status == "disabled") {
-            return false;
-          }
-          
-          var file_name = allTrim($('#sound').val());   
-          if (file_name != "") {
-            var sound = $('#sound').prop('files')[0];
-            //-- Encode uploaded file name to handle Chinese characters --// 
-            sound.name = unescape(encodeURIComponent(sound.name));    
-                                            
-            //-- Encrypt 'caption' and 'op_msg' before send the data set to the server, even 'caption' --//
-            //-- is blank in this case.                                                                --//  
-            var algorithm = "AES-GCM";                   
-            op_msg = (typeof(op_msg) == "string")? op_msg : '';              
-            var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, '');
-            var caption_iv = enc_caption_obj.iv;
-            var enc_caption = enc_caption_obj.encrypted;
-            var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
-            var op_iv = enc_op_msg_obj.iv;
-            var enc_op_msg = enc_op_msg_obj.encrypted;
-                                         
-            var form_data = new FormData();
-            form_data.append('group_id', group_id);
-            form_data.append('sender_id', user_id);
-            form_data.append('ul_ftype', 'sound');
-            form_data.append('ul_file', sound);              
-            form_data.append('algorithm', algorithm);
-            form_data.append('caption_iv', caption_iv);
-            form_data.append('caption', enc_caption);
-            form_data.append('op_flag', op_flag);
-            form_data.append('op_user_id', op_user_id);
-            form_data.append('op_iv', op_iv);
-            form_data.append('op_msg', enc_op_msg);
-            //-- Change button image from 'send.png' to 'files_uploading.gif' --//
-            $('#btn_send_sound').attr('src', '/images/files_uploading.gif');
-            //-- Then disable it to prevent upload a file twice --//
-            $('#btn_send_sound').attr("disabled", "disabled");
-          
-            $.ajax({
-              type: 'POST',
-              url: '/upload_files',
-              dataType: 'text',
-              cache: false,
-              contentType: false,
-              processData: false,
-              data: form_data,
-              success: function(response) {
-                var new_token = response;
-                
-                switch (new_token) {
-                  case 'error': 
-                    alert("Error is found as file upload.");
-                    $('#btn_send_sound').removeAttr("disabled");
-                    $('#btn_send_sound').attr('src', '/images/send.png');
-                    break;
-                    
-                  case 'sess_expired':
-                    alert("Session expired");
-                    logoutSMS();
-                    break;
-                    
-                  default:    
-                    //-- Refresh message section (just load the last sent message only) --//
-                    //-- '0' means get all unread messages, '1' means to get the last sent message. --//
-                    loadNewMessages(${group_id}, ${user_id}, 1);
-                    update_token = new_token;                        
-                    $('#btn_send_sound').removeAttr("disabled");
-                    $('#btn_send_sound').attr('src', '/images/send.png');
-                    showTextInputPanel();
-                    noReply();                
-                    //-- Inform other group members to refresh message via WebSocket --//
-                    informGroupMembersToRefresh(group_id, user_id);                                
-                }
-              },
-              error: function(xhr, ajaxOptions, thrownError) {
-                alert("Unable to upload sound file. Error " + xhr.status + ": " + thrownError);
-                $('#btn_send_sound').removeAttr("disabled");
-                $('#btn_send_sound').attr('src', '/images/send.png');
-              }                    
-            });      
-          }
-          else {
-            alert("Please record a sound file before click the send button");
-          }      
-        }
-        
-        //-------------------------------------------------------------------------------------------------------//			                  
-        function goLoadMessage() {
-          $.ajax({
-            type: 'POST',
-            url: '/load_message',
-            dataType: 'html',
-            data: {group_id: group_id, user_id: user_id, m_params: JSON.stringify(m_params)},
-            success: function(ret_data) {
-              var result = JSON.parse(ret_data);              // Note: Return data is in JSON format.                
-              var new_token = allTrim(result.update_token);
-              var msg_list = result.message;               
-              
-              if (new_token != 'error') {         
-                showMessages(msg_list);
-                update_token = new_token;
-              }
-              else {
-                alert("Unable to load message. Error is found.");
-              }
-            },
-            error: function(xhr, ajaxOptions, thrownError) {
-              alert("Unable to load message. Error " + xhr.status + ": " + thrownError);
-            }          
-          });
-        }
-        
-        async function showMessages(msg_list) {
-          first_msg_id = (msg_list.length > 0)? msg_list[0].msg_id : '';
-          first_msg_date = (msg_list.length > 0)? msg_list[0].s_date : '';
-          last_msg_date = (msg_list.length > 0)? msg_list[msg_list.length - 1].s_date : ''; 
-        
-          var blank_line = "<tr style='height:8px;'><td></td></tr>"; 
-          var new_msg_start = 'W';            // 'W' = Wait for new message (if any), 'S' = New message has been met and new message seperator line been shown. 
-          //-- Refresh 'Read More' button --//
-          var read_more = (msg_list.length >= rows_limit && msg_list[0].msg_id != '${top_id}')? "<img id='btn_load_more' src='/images/readmore.png' height='50px' onClick='loadPrevMessages(group_id, user_id);'><br>" : '';
-          $('#read_more').html("<td align=center valign=center>" + read_more + "</td>");
-          
-          //-- Get the AES key to decrypt the feeding messages --//
-          aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");				  
-          
-          var prv_s_date = '';
-          for (var i = 0; i < msg_list.length; i++) {
-            var rec = msg_list[i];
-          
-            var this_msg_id = rec.msg_id;
-            var this_is_my_msg = rec.is_my_msg;
-            var this_user_color = (rec.user_status == 'A')? '#8B0909' : '#A4A5A5';
-            var is_member = (!rec.is_member)? "(Non member)" : '';
-            var this_sender_id = rec.sender_id;
-            var this_sender = rec.sender;
-            var this_sender = "<font color='" + this_user_color + "' size='2px'><b>" + this_sender + " " + is_member + "</b></font>";
-            var this_s_date = rec.s_date;
-            var this_s_time_12 = rec.s_time_12;
-            var this_from_now = rec.from_now;
-            var this_week_day = rec.week_day;
-            var this_message = await aesDecryptBase64(rec.algorithm, aes_key, rec.iv, rec.message);      // Defined on crypto-lib.js
-            var this_fileloc = rec.fileloc;
-            var this_file_link = (rec.file_link != '' && rec.message != '')? rec.file_link + '<br>' : rec.file_link;
-            var this_op_flag = rec.op_flag;
-            var this_op_user = rec.op_user;
-            var this_op_msg = await aesDecryptBase64(rec.algorithm, aes_key, rec.op_iv, rec.op_msg);
-            var this_msg_time = "<font color='#31B404' size='2px'>" + this_s_time_12 + "</font>";
-            var is_new_msg = rec.is_new_msg;
-            // Process " and ' characters on 'this_msg_30' to avoid syntax error //
-            var this_msg_30 = processQuotationMarks(await aesDecryptBase64(rec.algorithm, aes_key, rec.msg_30_iv, rec.msg_30));    // Used for message replying
-            var fw_header = '';
-            var re_header = '';
-            var this_tr = '';
-            
-            if (this_file_link.match(/audio controls/gi)) {
-              this_file_link += '<br>';
-            }
-                        
-            //-- If it is reply or forward message, process it here --//
-            if (this_op_flag == 'R') {
-              re_header = "<table width='100%' cellspacing=2 cellpadding=6>" +
-                          "<tr>" +
-                          "  <td style='border-left: 5px solid #0180FF;'>" +
-                          "    <font color='#0081FE' size='2px'><b>" + this_op_user + "</b></font><br>" + this_op_msg +
-                          "  </td>" +
-                          "</tr>" +
-                          "</table>";  
-            }
-            else if (this_op_flag == 'F') {
-              fw_header = "<font color='#298A09' size='2px'>Forwarded message<br>From <b>" + this_op_user + "</b><br></font>";
-            }  
-          
-            //-- Show date --//
-            if (prv_s_date != this_s_date) {
-              var date_tr = "<tr style='background-color:#D9D9D8'><td align=center>" + this_s_date + "</td></tr>" + blank_line;
-              $('#msg_table').append(date_tr).enhanceWithin();
-              prv_s_date = this_s_date;
-            }
-            
-            //-- Show new message seperation marker --//
-            if (is_new_msg && new_msg_start == 'W') {
-              var new_msg_tr = "<tr id='new_msg' style='background-color:#F5A8BD'><td align=center>New Message(s) Below</td></tr>" + blank_line;
-              $('#msg_table').append(new_msg_tr).enhanceWithin();
-              new_msg_start = 'S'; 
-            }
-          
-            if (this_is_my_msg) {
-              var delete_link = "<a href=\\"javascript:deleteMessage('" + this_msg_id + "');\\">Delete</a>";
-              var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
-              var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
-          
-              this_tr = "<tr id='row_" + this_msg_id + "'>" +
-                        "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
-                        "  <td width='100%'>" +
-                        "    <table width='100%' cellspacing=0 cellpadding=0 style='table-layout:fixed;'>" +
-                        "    <tr>" +
-                        "      <td width='${indentation}%'></td>" +
-                        "      <td width='${msg_width}%' style='background-color:${my_msg_colour}; word-wrap:break-word;'>" + fw_header + re_header + this_file_link + this_message + "<br>" + this_msg_time + " ${spaces} " + delete_link + " ${space3} " + reply_link + " ${space3} " + forward_link + "</td>" +
-                        "    </tr>" +
-                        "    </table>" +
-                        "  </td>" +
-                        "</tr>";            
-            }
-            else {
-              var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
-              var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
-            
-              this_tr = "<tr id='row_" + this_msg_id + "'>" +
-                        "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
-                        "  <td width='100%'>" +
-                        "    <table width='100%' cellspacing=0 cellpadding=0 style='table-layout:fixed;'>" +
-                        "    <tr>" + 
-                        "      <td width='${msg_width}%' style='background-color:${rv_msg_colour}; word-wrap:break-word;'>" + this_sender + "<br>" + fw_header + re_header + this_file_link + this_message + "<br>" + this_msg_time + " ${spaces} " + reply_link + " ${space3} " + forward_link + "</td>" +
-                        "      <td width='${indentation}%'></td>" +
-                        "    </tr>" +
-                        "    </table>" +
-                        "  </td>" +
-                        "</tr>";            
-            }
-            
-            $('#msg_table').append(this_tr).enhanceWithin();  
-            this_tr = "<tr id='blankline_" + this_msg_id + "' style='height:8px;'><td></td></tr>";
-            $('#msg_table').append(this_tr).enhanceWithin();
-          }      
-          
-          // Clear aes_key from RAM after used //
-          aes_key = '';
-          
-          //-- Seek to last message --//            
-          $('html, body').animate({scrollTop: $('#page_end').offset().top}, 500);                                      
-        }
-        
-        function getMessageIdListFromOtherSenders() {
-          var result = '';
-          var buffer = new Array();
-          var omid_list = document.querySelectorAll('[id^="omid_"]');
-          for (var i = 0; i < omid_list.length; ++i) {
-            buffer[i] = omid_list[i].value; 
-          }
-          result = buffer.join('|');
-          
-          return result;
-        }
-        
-        function informGroupMembersToRefresh(group_id, user_id) {
-          if (typeof(myWebSocket) != 'undefined' && myWebSocket != null) {
-            var packet = {type: 'msg', content: {op: 'msg_refresh', group_id: group_id, user_id: user_id}};
-            myWebSocket.send(JSON.stringify(packet));
-          }
-          else {
-            console.log("Websocket handler is lost!");
-          }
-        }
-        
-        function loadNewMessages(group_id, user_id, last_sent_msg_only) {
-          var omid_list = getMessageIdListFromOtherSenders();
-          
-          //-- Note: Boolean value sent to back-end application will be changed to string automatically. Therefore, don't send --//
-          //--       boolean value to back-end directly, but rather convert it to different type of value which can be sent to --//
-          //--       back-end safely, such as numeric value. For example, 0 for the false, and 1 for the true.                 --//                                                               --//  
-          
-          $.ajax({
-            type: 'POST',
-            url: '/pull_new_message',
-            dataType: 'json',
-            data: {group_id: group_id, receiver_id: user_id, last_sent_msg_only: last_sent_msg_only, omid_list: omid_list},
-            success: function(ret_data) {              
-              var valid_ret_data = false;
-              if (Array.isArray(ret_data)) {
-                if (ret_data.length > 0) {
-                  valid_ret_data = true;
-                } 
-              } 
-              
-              if (valid_ret_data) {            
-                if (ret_data[0].msg_status == "error") {
-                  alert(ret_data[0].message);
-                }               
-                else {
-                  if (ret_data[0].msg_status == "deleted") {
-                    hideMessageDeletedByOtherSender(ret_data);
-                  }
-                  else {
-                    addMessageRow(ret_data, last_sent_msg_only);
-                  }
-                  
-                  //-- Inform other group members to refresh message via WebSocket --//
-                  informGroupMembersToRefresh(group_id, user_id);
-                }
-              }
-            },
-            error: function(xhr, ajaxOptions, thrownError) {
-              alert("Unable to draw new message(s). Error " + xhr.status + ": " + thrownError);
-            }             
-          });      
-        }
-        
-        function hideMessageDeletedByOtherSender(ret_data) {
-          for (var i = 0; i < ret_data.length; i++) {
-            var rec = ret_data[i];          
-            var this_msg_id = rec.msg_id;
-    
-            $('#row_' + this_msg_id).hide();
-            $('#blankline_' + this_msg_id).hide();
-            $('#omid_' + this_msg_id).remove();
-          }      
-        }
-        
-        async function addMessageRow(ret_data, last_sent_msg_only) {
-          last_sent_msg_only = parseInt(last_sent_msg_only, 10);
-        
-          aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
-        
-          for (var i = 0; i < ret_data.length; i++) {
-            var rec = ret_data[i];          
-            var this_msg_id = rec.msg_id;
-            var this_is_my_msg = rec.is_my_msg;
-            var this_user_color = '#8B0909';
-            if (allTrim(rec.user_status) != "A") {this_user_color = '#A4A5A5';}
-            var is_member = '';
-            if (parseInt(rec.is_member, 10) == 0) {is_member = "(Non member)";}
-            var this_sender_id = rec.sender_id;
-            var this_sender = "<font color='" + this_user_color + "' size='2px'><b>" + rec.sender + " " + is_member + "</b></font>";
-            var this_s_date = rec.s_date;
-            var this_s_time_12 = rec.s_time_12;
-            var this_from_now = rec.from_now;
-            var this_week_day = rec.week_day;
-            var this_message = await aesDecryptBase64(rec.algorithm, aes_key, rec.iv, rec.message);      // Defined on crypto-lib.js
-            var this_fileloc = rec.fileloc;
-            var this_file_link = (rec.file_link != '' && rec.message != '')? rec.file_link + '<br>' : rec.file_link;
-            var this_op_flag = rec.op_flag;
-            var this_op_user = rec.op_user;            
-            var this_op_msg = await aesDecryptBase64(rec.algorithm, aes_key, rec.op_iv, rec.op_msg); 
-            var show_time = this_s_time_12;
-            //if (this_from_now != "") {show_time = this_from_now;}
-            var this_msg_time = "<font color='#31B404' size='2px'>" + show_time + "</font>";
-            var is_new_msg = rec.is_new_msg;
-            // Process " and ' characters on 'this_msg_30' to avoid syntax error //
-            var this_msg_30 = processQuotationMarks(await aesDecryptBase64(rec.algorithm, aes_key, rec.msg_30_iv, rec.msg_30));   // Used for message replying
-            var this_tr = '';
-            var re_header = "";
-            var fw_header = "";
-            
-            if (this_file_link.match(/audio controls/gi)) {
-              this_file_link = this_file_link + "<br>";
-            }
-            
-            //-- If it is reply or forward message, process it here. --//
-            if (this_op_flag == 'R') {
-              re_header = "<table width='100%' cellspacing=2 cellpadding=6>" +
-                          "<tr>" +
-                          "  <td style='border-left: 5px solid #0180FF;'>" +
-                          "    <font color='#0081FE' size='2px'><b>" + this_op_user + "</b></font><br>" + this_op_msg +
-                          "  </td>" +
-                          "</tr>" +
-                          "</table>";
-            }
-            else if (this_op_flag == 'F') {
-              fw_header = "<font color='#298A09' size='2px'>Forwarded message<br>From <b>" + this_op_user + "</b><br></font>";
-            }
-                    
-            if (last_msg_date != this_s_date) {
-              var date_tr = "<tr style='background-color:#D9D9D8'><td align=center>" + this_s_date + "</td></tr>";
-              $('#msg_table').append(date_tr).enhanceWithin();
-              if (last_sent_msg_only == 1) {
-                var blank_tr = "<tr style='height:8px;'><td></td></tr>";
-                $('#msg_table').append(blank_tr).enhanceWithin(); 
-              }
-              last_msg_date = this_s_date
-            }
-                
-            if (this_is_my_msg) {
-              var delete_link = "<a href=\\"javascript:deleteMessage('" + this_msg_id + "');\\">Delete</a>";
-              var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
-              var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
-          
-              this_tr = "<tr id='row_" + this_msg_id + "'>" +
-                        "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
-                        "  <td width='100%'>" +
-                        "    <table width='100%' cellspacing=0 cellpadding=0 style='table-layout:fixed;'>" +
-                        "    <tr>" +
-                        "      <td width='${indentation}%'></td>" +
-                        "      <td width='${msg_width}%' style='background-color:${my_msg_colour}; word-wrap:break-word;'>" + fw_header + re_header + this_file_link + this_message + "<br>" + this_msg_time + " ${spaces} " + delete_link + " ${space3} " + reply_link + " ${space3} " + forward_link + "</td>" +
-                        "    </tr>" +
-                        "    </table>" +
-                        "  </td>" +
-                        "</tr>";
-            }
-            else {
-              var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
-              var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
-            
-              this_tr = "<tr id='row_" + this_msg_id + "'>" +
-                        "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
-                        "  <td width='100%'>" +
-                        "    <table width='100%' cellspacing=0 cellpadding=0 style='table-layout:fixed;'>" +
-                        "    <tr>" + 
-                        "      <td width='${msg_width}%' style='background-color:${rv_msg_colour}; word-wrap:break-word;'>" + this_sender + "<br>" + fw_header + re_header + this_file_link + this_message + "<br>" + this_msg_time + " ${spaces} " + reply_link + " ${space3} " + forward_link + "</td>" +
-                        "      <td width='${indentation}%'></td>" +
-                        "    </tr>" +
-                        "    </table>" +
-                        "  </td>" +
-                        "</tr>";
-            }
-        
-            $('#msg_table').append(this_tr).enhanceWithin();  
-            this_tr = "<tr id='blankline_" + this_msg_id + "' style='height:8px;'><td></td></tr>";
-            $('#msg_table').append(this_tr).enhanceWithin();
-    
-            //-- Seek to last message --//            
-            $('html, body').animate({scrollTop: $('#page_end').offset().top}, 500);
-          }
-          
-          // Clear session AES key from RAM after used //
-          aes_key = "";      
-        }
-            
-        function deleteMessage(msg_id) {
-          if (msg_id != '') {
-            $.ajax({
-              type: 'POST',
-              url: '/delete_message',
-              dataType: 'html',
-              data: {group_id: group_id, msg_id: msg_id},
-              success: function(ret_data) {
-                //-- If message is deleted successfully, hide the row contained the deleted message, and update the value of --//
-                //-- 'update_token' on do_sms.pl to avoid page refreshing.                                                   --//
-                //var result = eval('(' + ret_data + ')');      // Note: Return data in JSON format, so that 'evel' is required.
-                var result = JSON.parse(ret_data);              // Note: Return data is in JSON format.
-                var mg_status = result.mg_status;
-                var new_token = allTrim(mg_status.update_token);
-                
-                switch (new_token) {
-                  case 'error':
-                    alert("Error is found when delete this message");
-                    break;
-                    
-                  case 'sess_expired':
-                    alert("Session expired!");
-                    logoutSMS();
-                    break;
-                    
-                  default:    
-                    parent.update_token = new_token;            
-                    $('#row_' + msg_id).hide();
-                    $('#blankline_' + msg_id).hide();
-                    $('#omid_' + msg_id).remove();
-                    //-- Inform other group members to refresh message via WebSocket --//
-                    informGroupMembersToRefresh(group_id, user_id);                
-                }
-              },
-              error: function(xhr, ajaxOptions, thrownError) {
-                alert("Unable to delete message. Error " + xhr.status + ": " + thrownError);
-              }
-            });
-          }
-        }
-        
-        function loadPrevMessages(group_id, user_id) {
-          var button_status = $('#btn_load_more').attr("disabled");
-          if (button_status == "disabled") {
-            return false;
-          }
-    
-          //-- Change button image from 'readmore.png' to 'files_uploading.gif' --//
-          $('#btn_load_more').attr('src', '/images/files_uploading.gif');
-          //-- Then disable it to prevent load more than one message block --//
-          $('#btn_load_more').attr("disabled", "disabled");
-                      
-          //-- Note: 'first_msg_id' means the ID of the first message which has already loaded --//
-          $.ajax({
-            type: 'POST',
-            url: '/pull_prev_message',
-            dataType: 'json',
-            data: {group_id: group_id, receiver_id: user_id, first_msg_id: first_msg_id, rows_limit: rows_limit},
-            success: function(ret_data) {                     
-              if (ret_data.msg_status == "error") {
-                alert(ret_data.message);
-              }               
-              else {                       
-                first_msg_id = addPrevMessageRow(JSON.parse(ret_data.message));
-                if (is_iOS) {
-                  Cookies.set("m_id", first_msg_id, {expires: 1});      // Defined on js.cookies.min.js
-                }
-                else {
-                  setLocalStoredItem("m_id", first_msg_id);             // Defined on common_lib.js
-                }
-              }
-              
-              $('#btn_load_more').removeAttr("disabled");
-              $('#btn_load_more').attr('src', '/images/readmore.png');          
-            },
-            error: function(xhr, ajaxOptions, thrownError) {
-              alert("Unable to get previous message(s). Error " + xhr.status + ": " + thrownError);
-              $('#btn_load_more').removeAttr("disabled");
-              $('#btn_load_more').attr('src', '/images/readmore.png');                    
-            }             
-          });            
-        }
-            
-        async function addPrevMessageRow(ret_data) {
-          var the_msg_id = '';
-          
-          //-- Get the AES key to decrypt received messages --//
-          aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
-                    
-          for (var i = 0; i < ret_data.length; i++) {
-            var rec = ret_data[i];          
-            var this_msg_id = rec.msg_id;
-            var this_is_my_msg = rec.is_my_msg;
-            var this_user_color = (allTrim(rec.user_status) == "A")? '#8B0909' : '#A4A5A5';
-            var is_member = (parseInt(rec.is_member, 10) == 0)? "(Non member)" : '';
-            var this_sender_id = rec.sender_id;
-            var this_sender = "<font color='" + this_user_color + "' size='2px'><b>" + rec.sender + " " + is_member + "</b></font>";
-            var this_s_date = rec.s_date;
-            var this_s_time_12 = rec.s_time_12;
-            var this_from_now = rec.from_now;
-            var this_week_day = rec.week_day;
-            var this_message = await aesDecryptBase64(rec.algorithm, aes_key, rec.iv, rec.message);
-            var this_fileloc = rec.fileloc;
-            var this_file_link = rec.file_link;
-            var this_op_flag = rec.op_flag;
-            var this_op_user = rec.op_user;            
-            var this_op_msg = await aesDecryptBase64(rec.algorithm, aes_key, rec.op_iv, rec.op_msg);        
-            var show_time = this_s_time_12;
-            var this_msg_time = "<font color='#31B404' size='2px'>" + show_time + "</font>";
-            var is_new_msg = rec.is_new_msg;
-            // Process " and ' characters on 'this_msg_30' to avoid syntax error //
-            var this_msg_30 = processQuotationMarks(await aesDecryptBase64(rec.algorithm, aes_key, rec.msg_30_iv, rec.msg_30));
-            // Process " and ' characters on 'this_msg_30' to avoid syntax error //
-            this_msg_30 = this_msg_30.replace(/"/g, '“'); 
-            this_msg_30 = this_msg_30.replace(/'/g, '‘');           
-            var this_tr = '';
-            var re_header = "";
-            var fw_header = "";
-    
-            //-- With reason still unknown, extra garbage record(s) may be embedded in the return data, so it needs to --//
-            //-- take this checking for returned records.                                                              --//
-            if (typeof(this_msg_id) != 'undefined' && this_msg_id != null) {        
-              if (this_file_link.match(/audio controls/gi)) {
-                this_file_link = this_file_link + "<br>";
-              }
-            
-              //-- If it is replied or forward message, process it here. --//
-              if (this_op_flag == 'R') {
-                re_header = "<table width='100%' cellspacing=2 cellpadding=6>" +
-                            "<tr>" +
-                            "  <td style='border-left: 5px solid #0180FF;'>" +
-                            "    <font color='#0081FE' size='2px'><b>" + this_op_user + "</b></font><br>" + this_op_msg +
-                            "  </td>" +
-                            "</tr>" +
-                            "</table>";
-              }
-              else if (this_op_flag == 'F') {
-                fw_header = "<font color='#298A09' size='2px'>Forwarded message<br>From <b>" + this_op_user + "</b><br></font>";
-              }
-                    
-              if (first_msg_date != this_s_date) {
-                var blank_tr = "<tr style='height:8px;'><td></td></tr>";
-                $('#msg_table > tbody > tr').eq(0).before(blank_tr).enhanceWithin();                                  
-                var date_tr = "<tr style='background-color:#D9D9D8'><td align=center>" + this_s_date + "</td></tr>";
-                $('#msg_table > tbody > tr').eq(0).before(date_tr).enhanceWithin();
-                first_msg_date = this_s_date
-              }
-                                    
-              if (this_is_my_msg) {
-                var delete_link = "<a href=\\"javascript:deleteMessage('" + this_msg_id + "');\\">Delete</a>";
-                var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
-                var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
-          
-                this_tr = "<tr id='row_" + this_msg_id + "'>" +
-                          "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
-                          "  <td width='100%'>" +
-                          "    <table width='100%' cellspacing=0 cellpadding=0 style='table-layout:fixed;'>" +
-                          "    <tr>" +
-                          "      <td width='${indentation}%'></td>" +
-                          "      <td width='${msg_width}%' style='background-color:${my_msg_colour}; word-wrap:break-word;'>" + fw_header + re_header + this_file_link + this_message + "<br>" + this_msg_time + " ${spaces} " + delete_link + " ${space3} " + reply_link + " ${space3} " + forward_link + "</td>" +
-                          "    </tr>" +
-                          "    </table>" +
-                          "  </td>" +
-                          "</tr>";
-              }
-              else {
-                var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
-                var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
-            
-                this_tr = "<tr id='row_" + this_msg_id + "'>" +
-                          "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
-                          "  <td width='100%'>" +
-                          "    <table width='100%' cellspacing=0 cellpadding=0 style='table-layout:fixed;'>" +
-                          "    <tr>" + 
-                          "      <td width='${msg_width}%' style='background-color:${rv_msg_colour}; word-wrap:break-word;'>" + this_sender + "<br>" + fw_header + re_header + this_file_link + this_message + "<br>" + this_msg_time + " ${spaces} " + reply_link + " ${space3} " + forward_link + "</td>" +
-                          "      <td width='${indentation}%'></td>" +
-                          "    </tr>" +
-                          "    </table>" +
-                          "  </td>" +
-                          "</tr>";
-              }
-        
-              $('#msg_table > tbody > tr').eq(0).after(this_tr).enhanceWithin();
-              this_tr = "<tr id='blankline_" + this_msg_id + "' style='height:8px;'><td></td></tr>";
-              $('#msg_table > tbody > tr').eq(0).after(this_tr).enhanceWithin();            
-            
-              the_msg_id = this_msg_id;
-            }
-          }
-          
-          // Clear aes_key from RAM after used //
-          aes_key = '';
-          
-          //-- Try to retrieve the first message id of this group of this user (Note: It may not exist) --//
-          var top_msg_id = (is_iOS)? Cookies.get("top_id") : getLocalStoredItem("top_id");   // Defined on js.cookie.min.js : common_lib.js
-          top_msg_id = (top_msg_id == undefined)? 0 : top_msg_id;
-          
-          if (ret_data.length < rows_limit || the_msg_id == top_msg_id) {
-            $('#read_more').hide();
-            if (the_msg_id != top_msg_id) {
-              if (is_iOS) {
-                Cookies.set("top_id", the_msg_id, {expires: 1});
-              }
-              else {
-                setLocalStoredItem("top_id", the_msg_id);
-              }
-            }
-          }
-    
-          //-- Return the most updated value of 'first_msg_id' --//      
-          return the_msg_id;
-        }
+        ${js}
       </script>
-    </head>`;    
+    </head>`;           
   }
   catch(e) {
     throw e;
