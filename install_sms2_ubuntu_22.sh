@@ -40,6 +40,7 @@
 # V1.0.13     2024-10-29      DW              Revoke change on V1.0.12, i.e. NPM package 'cookie' is required.
 # V1.0.14     2024-10-31      DW              Amend messages for FFmpeg manual installation. 
 # V1.0.15     2025-03-13      DW              Add NPM package 'terser'.
+# V1.0.16     2025-04-22      DW              Replace NPM package 'telegram-bot-api' by 'telegramsjs'.
 #=========================================================================================================
 
 setterm -blank 0
@@ -470,7 +471,8 @@ npm install -S node-forge >> /tmp/install.log
 npm install -S nodemailer >> /tmp/install.log
 npm install -S prompt-sync >> /tmp/install.log
 npm install -S simple-hashtable >> /tmp/install.log
-npm install -S telegram-bot-api >> /tmp/install.log
+#npm install -S telegram-bot-api >> /tmp/install.log
+npm install -S telegramsjs >> /tmp/install.log
 npm install -S terser >> /tmp/install.log
 npm install -S unicode-length >> /tmp/install.log
 npm install -S unicode-substring >> /tmp/install.log

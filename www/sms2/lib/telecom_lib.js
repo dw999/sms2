@@ -21,11 +21,12 @@
 // =======       ===========     ===========     ==========================================
 // V1.0.00       2019-11-22      DW              Library of all telecommunications.
 // V1.0.01       2022-08-09      DW              Rename function 'sendGmail' to 'sendEmail', and make it more generic. 
+// V1.0.02       2025-04-22      DW              Replace Telegram message sending library 'telegram-bot-api' by 'telegramsjs'.
 //#################################################################################################################################
 
 "use strict";
 const mailer = require("nodemailer");
-const telegram = require('telegram-bot-api');
+const {TelegramClient} = require("telegramsjs");
 const dbs = require('../lib/db_lib.js');
 
 
@@ -111,15 +112,21 @@ exports.getTelegramBotProfile = async function(conn) {
 
 
 exports.sendTelegramMessage = async function(http_api_token, tg_id, message) {
-  var bot = new telegram({token: http_api_token});
+  let error = '';
   
-  bot.sendMessage({
-    chat_id: tg_id,
-    text: message
-  }).catch(e => {
-    var msg = e.code + ': ' + e.description
-    console.log(`Telegram error for ID ${tg_id}: ${msg}`);
-  });
+  try {  
+    let bot = new TelegramClient(http_api_token);
+    let sent_message = await bot.sendMessage({chatId: tg_id, disableNotification: false, text: message});
+    
+    if (sent_message.content.trim() != message.trim()) {
+      error = `Something is wrong, the client ${id} may not receive your message.`;
+      console.log(error); 
+    } 
+  }
+  catch(e) {
+    error = `Telegram message sending error for ID ${tg_id}: ` + e.message;
+    console.log(error);
+  }
 }
 
 

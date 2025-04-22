@@ -37,6 +37,7 @@
 # V1.0.10     2024-10-25      DW              Remove NPM package 'cookie';
 # V1.0.11     2024-10-29      DW              Revoke change on V1.0.10, i.e. NPM package 'cookie' is required.
 # V1.0.12     2025-03-13      DW              Add NPM package 'terser'.
+# V1.0.13     2025-04-22      DW              Replace NPM package 'telegram-bot-api' by 'telegramsjs'.
 #=========================================================================================================
 
 setterm -blank 0
@@ -452,7 +453,8 @@ npm install -S node-forge >> /tmp/install.log
 npm install -S nodemailer >> /tmp/install.log
 npm install -S prompt-sync >> /tmp/install.log
 npm install -S simple-hashtable >> /tmp/install.log
-npm install -S telegram-bot-api >> /tmp/install.log
+#npm install -S telegram-bot-api >> /tmp/install.log
+npm install -S telegramsjs >> /tmp/install.log
 npm install -S terser >> /tmp/install.log
 npm install -S unicode-length >> /tmp/install.log
 npm install -S unicode-substring >> /tmp/install.log
