@@ -51,6 +51,9 @@
 // V1.0.16       2025-03-13      DW              Amend function 'showLoginPage' by compress JavaScript code block.
 // V1.0.17       2025-03-18      DW              Compress JavaScript code block on functions 'showMessagePage', 'showDoSMSpage' and
 //                                               'printRequestToJoinForm'. 
+// V1.0.18       2025-05-30      DW              Use RSA encryption verification to check Crystals Kyber public key. It is the temporary
+//                                               way to protect Kyber public key before Kyber Dilithium is implemented later. It is applied
+//                                               on user login and request to join functions.
 //#################################################################################################################################
 
 "use strict";
@@ -457,6 +460,12 @@ exports.showLoginPage = async function(msg_pool) {
     let kyber_id = kyber_obj.key_id;
     let kyber_pkey_b64 = kyber_obj.pkey;  
     
+    // Step 6: Create signature for the Crystals Kyber public key and sign it with the same RSA signing key pair. //
+    //         Note: It will be used Crystals Dilithium later.                                                    //  
+    let kyber_pkey_signature = await cipher.digestData("SHA-256", kyber_pkey_b64);
+    let kyber_pem_signature = await cipher.createSignature(sign_algorithm, sign_key, cipher.base64StringToArrayBuffer(kyber_pkey_signature));
+    let kyber_pem_signature_b64 = cipher.arrayBufferToBase64String(kyber_pem_signature);
+    
     let kyber_module = cipher.getKyberClientModule();
     
     // Compress JavaScript code block //
@@ -470,13 +479,18 @@ exports.showLoginPage = async function(msg_pool) {
     var public_key;               // The RSA public key imported from public_pem (from public_pem_b64) 
     var pub_pem_signature_b64 = "${pub_pem_signature_b64}";			  
     var pub_pem_signature;        // The sha256sum signature (encrypted) of the public key pem (i.e. public_pem)
+    var kyber_pkey_b64 = "${kyber_pkey_b64}";     // The Crystals Kyber public key
+    var kyber_pem_signature_b64 = "${kyber_pem_signature_b64}";  // The signature of the Crystals Kyber public key (base64 format)
+    var kyber_pem_signature;                                     // The signature of the Crystals Kyber public key (binary format)
+    var cs_kyber_pkey_signature;                                 // Client side generated SHA256SUM of the received Crystals Kyber public key pem
     var sign_algorithm_b64 = "${sign_algorithm_b64}";       // The algorithm used by the RSA public key signature verification 
-    var sign_algorithm;
+    var sign_algorithm;            
     var verify_key_pem_b64 = "${verify_key_pem_b64}";
     var verify_key_pem;
     var verify_key;               // The key used to verify the RSA public key signature
     var cs_public_sha256sum;      // Client side generated SHA256SUM of the received public key pem (i.e. public_pem)                       
-    var is_valid = false;         // true: public key is valid, false otherwise.
+    var is_valid = false;         // true: RSA public key is valid, false otherwise.
+    var is_ck_valid = false;      // true: Crystals Kyber public key is valid, false otherwise.
     var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
   
     $(document).ready(function() {
@@ -495,12 +509,22 @@ exports.showLoginPage = async function(msg_pool) {
         verify_key_pem = convertObjectToBase64Str(verify_key_pem_b64);
         verify_key = await importKeyFromPem('public', verify_key_pem, sign_algorithm, true, ['verify']);    // Defined on crypto-lib.js
         
+        // Verify RSA public key // 
         pub_pem_signature = base64StringToArrayBuffer(pub_pem_signature_b64);
         cs_public_sha256sum = await digestData('SHA-256', public_pem_b64);                      // In base64 format
         is_valid = await verifySignature(sign_algorithm, verify_key, pub_pem_signature, base64StringToArrayBuffer(cs_public_sha256sum));
         
+        // Verify Crystals Kyber public key //
+        kyber_pem_signature = base64StringToArrayBuffer(kyber_pem_signature_b64);
+        cs_kyber_pkey_signature = await digestData('SHA-256', kyber_pkey_b64);
+        is_ck_valid = await verifySignature(sign_algorithm, verify_key, kyber_pem_signature, base64StringToArrayBuffer(cs_kyber_pkey_signature));
+        
         if (!is_valid) {
-          throw new Error("Warning: The received public key is invalid, login process cannot proceed! You may be under Man-In-The-Middle attack!");
+          throw new Error("Warning: The received RSA public key is invalid, login process cannot proceed! You may be under Man-In-The-Middle attack!");
+        }
+        
+        if (!is_ck_valid) {
+          throw new Error("Warning: The received Crystals Kyber public key is invalid, login process cannot proceed! You may be under Man-In-The-Middle attack!");
         }
       }
       catch(e) {
@@ -525,7 +549,7 @@ exports.showLoginPage = async function(msg_pool) {
         // Step 3: Use the secret key of the Kyber object to encrypt the RSA encrypted session key by AES-256 encryption. //
         //         i.e. Use AES-256 with Kyber secret key as encryption key to encrypt the RSA encrypted session key once //
         //         more.                                                                                                  //
-        let secret = await generateSharedCipherKey("${kyber_pkey_b64}");
+        let secret = await generateSharedCipherKey(kyber_pkey_b64);
         let ct = secret.ct;
         let skey = base64Decode(secret.sk);
         
@@ -7572,6 +7596,12 @@ async function _printJoinUsJavascriptSection(conn) {
     let kyber_obj = await _getKyberKeyData(conn);
     let kyber_id = kyber_obj.key_id;
     let kyber_pkey_b64 = kyber_obj.pkey;  
+
+    // Step 6: Create signature for the Crystals Kyber public key and sign it with the same RSA signing key pair. //
+    //         Note: It will be used Crystals Dilithium later.                                                    //  
+    let kyber_pkey_signature = await cipher.digestData("SHA-256", kyber_pkey_b64);
+    let kyber_pem_signature = await cipher.createSignature(sign_algorithm, sign_key, cipher.base64StringToArrayBuffer(kyber_pkey_signature));
+    let kyber_pem_signature_b64 = cipher.arrayBufferToBase64String(kyber_pem_signature);
 		
     let kyber_module = cipher.getKyberClientModule();
     
@@ -7586,13 +7616,18 @@ async function _printJoinUsJavascriptSection(conn) {
     var public_key;               // The RSA public key imported from public_pem (from public_pem_b64) 
     var pub_pem_signature_b64 = "${pub_pem_signature_b64}";			  
     var pub_pem_signature;        // The sha256sum signature (encrypted) of the public key pem (i.e. public_pem)
+    var kyber_pkey_b64 = "${kyber_pkey_b64}";     // The Crystals Kyber public key
+    var kyber_pem_signature_b64 = "${kyber_pem_signature_b64}";  // The signature of the Crystals Kyber public key (base64 format)
+    var kyber_pem_signature;                                     // The signature of the Crystals Kyber public key (binary format)
+    var cs_kyber_pkey_signature;                                 // Client side generated SHA256SUM of the received Crystals Kyber public key pem    
     var sign_algorithm_b64 = "${sign_algorithm_b64}";       // The algorithm used by the RSA public key signature verification 
     var sign_algorithm;
     var verify_key_pem_b64 = "${verify_key_pem_b64}";
     var verify_key_pem;
     var verify_key;               // The key used to verify the RSA public key signature
-    var cs_public_sha256sum;      // Client side generated SHA256SUM of the received public key pem (i.e. public_pem)                       
+    var cs_public_sha256sum;      // Client side generated SHA256SUM of the received public key pem (i.e. public_pem)      
     var is_valid = false;         // true: public key is valid, false otherwise.
+    var is_ck_valid = false;      // true: Crystals Kyber public key is valid, false otherwise.
 
     async function prepareAESkey() {
       try {
@@ -7605,14 +7640,24 @@ async function _printJoinUsJavascriptSection(conn) {
         sign_algorithm = convertBase64StrToObject(sign_algorithm_b64);
         verify_key_pem = convertObjectToBase64Str(verify_key_pem_b64);
         verify_key = await importKeyFromPem('public', verify_key_pem, sign_algorithm, true, ['verify']);    // Defined on crypto-lib.js
-        
+ 
+        // Verify RSA public key //       
         pub_pem_signature = base64StringToArrayBuffer(pub_pem_signature_b64);
         cs_public_sha256sum = await digestData('SHA-256', public_pem_b64);                      // In base64 format
         is_valid = await verifySignature(sign_algorithm, verify_key, pub_pem_signature, base64StringToArrayBuffer(cs_public_sha256sum));
+
+        // Verify Crystals Kyber public key //
+        kyber_pem_signature = base64StringToArrayBuffer(kyber_pem_signature_b64);
+        cs_kyber_pkey_signature = await digestData('SHA-256', kyber_pkey_b64);
+        is_ck_valid = await verifySignature(sign_algorithm, verify_key, kyber_pem_signature, base64StringToArrayBuffer(cs_kyber_pkey_signature));
         
         if (!is_valid) {
-          throw new Error("Warning: The received public key is invalid, request-to-join cannot proceed! You may be under Man-In-The-Middle attack!");
+          throw new Error("Warning: The received RSA public key is invalid, request-to-join cannot proceed! You may be under Man-In-The-Middle attack!");
         }
+        
+        if (!is_ck_valid) {
+          throw new Error("Warning: The received Crystals Kyber public key is invalid, request-to-join cannot proceed! You may be under Man-In-The-Middle attack!");
+        }        
       }
       catch(e) {
         throw e;
@@ -7675,7 +7720,7 @@ async function _printJoinUsJavascriptSection(conn) {
         // Step 3: Use the secret key of the Kyber object to encrypt the RSA encrypted session key by AES-256 encryption. //
         //         i.e. Use AES-256 with Kyber secret key as encryption key to encrypt the RSA encrypted session key once //
         //         more.                                                                                                  //
-        let secret = await generateSharedCipherKey("${kyber_pkey_b64}");
+        let secret = await generateSharedCipherKey(kyber_pkey_b64);
         let ct = secret.ct;
         let skey = base64Decode(secret.sk);
           
