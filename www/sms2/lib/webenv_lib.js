@@ -27,6 +27,7 @@
 //                                               coding and highlight it with red colour.
 // V1.0.04       2024-03-20      DW              Add functions "base64Encode" and "base64Decode".
 // V1.0.05       2025-03-13      DW              Add function "minifyJS" which is used to compress JavaScript code block.
+// V1.0.06       2025-06-09      DW              Fix a syntax error on function '_isLeapYear'.
 //#################################################################################################################################
 
 "use strict";
@@ -456,7 +457,7 @@ function _isLeapYear(year) {
 		}
 		else {
 			//-- Normal system: every 4th year is leap --//
-			if (($Year % 4) == 0) {
+			if ((year % 4) == 0) {
 				return true;
 			}
 			else {
