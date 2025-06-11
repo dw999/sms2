@@ -54,6 +54,8 @@
 // V1.0.18       2025-05-30      DW              Use RSA encryption verification to check Crystals Kyber public key. It is the temporary
 //                                               way to protect Kyber public key before Kyber Dilithium is implemented later. It is applied
 //                                               on user login and request to join functions.
+// V1.0.19       2025-06-11      DW              Disable the feature for swiping right in a message group will go to previous page, because
+//                                               it is very annoying, and let message selection opeation on group page nearly impossible.
 //#################################################################################################################################
 
 "use strict";
@@ -4893,6 +4895,8 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
     });
     
     //-- Swipe right in a message group will go to previous page, i.e. the message group(s) landing page. --//
+    //-- 2025-06-11 DW: Disable it because it is very annoying --//
+    /*
     $(function() {
       $('#dosms').on("swiperight", swiperightHandler);
       
@@ -4900,6 +4904,7 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
         goHome();
       }
     });
+    */
             
     //-- Store initial values on local storage of the web browser --//
     if (is_iOS) {
