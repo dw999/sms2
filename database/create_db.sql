@@ -39,6 +39,8 @@
 -- V1.0.10       2024-10-22      DW              Update happy password and unhappy password hash strings for
 --                                               user 'smsadmin' on table 'user_list', since the library used 
 --                                               for user password encryption and verification is changed.
+-- V1.0.11       2025-06-12      DW              Add three more system settings. They are 'use_email_gateway',
+--                                               'email_gateway' and 'master_passwd'.  
 --
 -- Remark: It is part of SMS installation program.
 -----------------------------------------------------------------------------------------------------
@@ -296,7 +298,7 @@ CREATE OR REPLACE TABLE sys_settings
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 LOCK TABLES `sys_settings` WRITE;
-INSERT INTO `sys_settings` VALUES ('audio_converter',"/usr/bin/ffmpeg -i '{input_file}' '{output_file}'"),('connection_mode','0'),('decoy_company_name','PDA Tools'),('msg_block_size','30'),('session_period','02:00:00'),('old_msg_delete_days','14');
+INSERT INTO `sys_settings` VALUES ('audio_converter',"/usr/bin/ffmpeg -i '{input_file}' '{output_file}'"),('connection_mode','0'),('decoy_company_name','PDA Tools'),('msg_block_size','30'),('session_period','02:00:00'),('old_msg_delete_days','14',('use_email_gateway','FALSE'),('email_gateway',''),('master_passwd',''));
 UNLOCK TABLES;
 
 CREATE OR REPLACE TABLE rsa_keypair
@@ -328,7 +330,7 @@ CREATE OR REPLACE TABLE sms_version
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 LOCK TABLES `sms_version` WRITE;
-INSERT INTO `sms_version` VALUES ("2.0.17", "2.0", "17", "20250422", "2025-04-22 23:59:59");
+INSERT INTO `sms_version` VALUES ("2.0.18", "2.0", "18", "20250612", "2025-06-12 23:59:59");
 UNLOCK TABLES;
 
 --=========================================================================================================================================================--

@@ -22,12 +22,18 @@
 // V1.0.00       2019-11-22      DW              Library of all telecommunications.
 // V1.0.01       2022-08-09      DW              Rename function 'sendGmail' to 'sendEmail', and make it more generic. 
 // V1.0.02       2025-04-22      DW              Replace Telegram message sending library 'telegram-bot-api' by 'telegramsjs'.
+// V1.0.03       2025-06-03      DW              If system setting 'use_email_gateway' is 'TRUE', then use a remote SMTP gateway to 
+//                                               send out email, in order to work around the situation where the SMS server is blocked
+//                                               by the worker email server. 
 //#################################################################################################################################
 
 "use strict";
 const mailer = require("nodemailer");
 const {TelegramClient} = require("telegramsjs");
+const execSync = require('node:child_process').execSync;
 const dbs = require('../lib/db_lib.js');
+const wev = require('../lib/webenv_lib.js');
+const cipher = require('../lib/cipher_lib.js');
 
 
 exports.telegramBotDefined = async function(conn) {
@@ -200,10 +206,10 @@ exports.getMailWorker = async function(conn) {
 }
 
 
-exports.sendEmail = async function(smtp_server, port, from, to, user, pass, subject, mail_body) {
-  var secure = (port == 465)? true : false; 
+async function _justSendEmail(smtp_server, port, from, to, user, pass, subject, mail_body) {
+  let secure = (port == 465)? true : false; 
   
-  var transporter = mailer.createTransport({
+  let transporter = mailer.createTransport({
     //service: 'gmail',
     host: smtp_server,
     port: port,
@@ -214,7 +220,7 @@ exports.sendEmail = async function(smtp_server, port, from, to, user, pass, subj
     }
   });
 
-  var mailOptions = {
+  let mailOptions = {
     from: from, // sender address
     to: to, // list of receivers
     subject: subject, // Subject line
@@ -227,7 +233,118 @@ exports.sendEmail = async function(smtp_server, port, from, to, user, pass, subj
       console.log(`Unable to send email to ${to}:`);
       console.log(err);
     }
-  });
+  });  
+}
+
+
+async function _sendEmailViaGateway(email_gateway, master_passwd, smtp_server, port, from, to, user, pass, subject, mail_body) {
+  let key, algorithm, enc_object, command, token, tk_iv, receiver, receiver_iv, m_subject, m_subject_iv, m_body, m_body_iv;  
+  let smtp, smtp_iv, sender, sender_iv, m_user, m_user_iv, m_pass, m_pass_iv;
+  
+  try {
+    algorithm = "AES-GCM"; 
+    
+    // Step 1: Generate a temporary key //   
+    key = cipher.generateTrueRandomStr('A', 128);
+
+    // Step 2: Encrypt the temporary key with 'master_passwd' and put it into 'token' //
+    enc_object = await cipher.aesEncrypt(algorithm, master_passwd, key);
+    token = wev.base64Encode(new Uint8Array(enc_object.encrypted));
+    tk_iv = wev.base64Encode(enc_object.iv);
+    
+    // Step 3: Encrypt 'from', 'to', 'subject', 'mail_body', 'user', 'pass' and 'smtp_server' with 'key' //
+    enc_object = await cipher.aesEncrypt(algorithm, key, from);
+    sender = wev.base64Encode(new Uint8Array(enc_object.encrypted));
+    sender_iv = wev.base64Encode(enc_object.iv);
+    
+    enc_object = await cipher.aesEncrypt(algorithm, key, to);
+    receiver = wev.base64Encode(new Uint8Array(enc_object.encrypted));
+    receiver_iv = wev.base64Encode(enc_object.iv);
+    
+    enc_object = await cipher.aesEncrypt(algorithm, key, subject);
+    m_subject = wev.base64Encode(new Uint8Array(enc_object.encrypted));
+    m_subject_iv = wev.base64Encode(enc_object.iv);
+    
+    enc_object = await cipher.aesEncrypt(algorithm, key, mail_body);
+    m_body = wev.base64Encode(new Uint8Array(enc_object.encrypted));
+    m_body_iv = wev.base64Encode(enc_object.iv);
+    
+    enc_object = await cipher.aesEncrypt(algorithm, key, user);
+    m_user = wev.base64Encode(new Uint8Array(enc_object.encrypted));
+    m_user_iv = wev.base64Encode(enc_object.iv);
+    
+    enc_object = await cipher.aesEncrypt(algorithm, key, pass);
+    m_pass = wev.base64Encode(new Uint8Array(enc_object.encrypted));
+    m_pass_iv = wev.base64Encode(enc_object.iv);
+
+    enc_object = await cipher.aesEncrypt(algorithm, key, smtp_server);
+    smtp = wev.base64Encode(new Uint8Array(enc_object.encrypted));
+    smtp_iv = wev.base64Encode(enc_object.iv);
+    
+    // Note: 'port' doesn't need to be encrypted and become string after transfer to remote site // 
+    command = `curl -X POST -H 'Content-Type: application/json' -d '{"token":"${token}","tk_iv":"${tk_iv}","from":"${sender}",` + 
+              `"from_iv":"${sender_iv}","to":"${receiver}","to_iv":"${receiver_iv}","subject":"${m_subject}","subject_iv":"${m_subject_iv}",`+
+              `"mail_body":"${m_body}","mail_body_iv":"${m_body_iv}","m_user":"${m_user}","m_user_iv":"${m_user_iv}","m_pass":"${m_pass}",` +
+              `"m_pass_iv":"${m_pass_iv}","smtp":"${smtp}","smtp_iv":"${smtp_iv}","port":"${port}"}' ${email_gateway}`;
+    
+    let exec_result = JSON.parse(execSync(command, {timeout:120000, stdio:'pipe', encoding:'utf8'}));
+
+    if (parseInt(exec_result.status, 10) != 1) {
+      // Something is wrong, print the error message. //
+      console.log(exec_result.message);      
+    }        
+  }
+  catch(e) {
+    throw e; 
+  }
+}
+
+
+async function _updateMasterPasswd(conn, sys_key, sys_value) {
+  var sql, param;
+  
+  try {
+    sql = `UPDATE sys_settings ` +
+          `  SET sys_value = ? ` +
+          `  WHERE sys_key = ?`;
+    
+    param = [sys_value, sys_key];
+    await dbs.sqlExec(conn, sql, param);
+  }
+  catch(e) {
+    throw e;
+  }
+}
+
+
+exports.sendEmail = async function(smtp_server, port, from, to, user, pass, subject, mail_body) {
+  let conn, use_email_gateway, email_gateway, master_passwd;
+  
+  try {
+    conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
+    
+    use_email_gateway = await wev.getSysSettingValue(conn, 'use_email_gateway');
+    email_gateway = await wev.getSysSettingValue(conn, 'email_gateway');
+    master_passwd = await wev.getSysSettingValue(conn, 'master_passwd');
+    
+    if (use_email_gateway.toUpperCase() == "TRUE" && email_gateway.trim() != "") {
+      if (master_passwd.trim() == "") {
+        master_passwd = "K5QO6zfF2H8XUYZz";
+        await _updateMasterPasswd(conn, 'master_passwd', master_passwd); 
+      }
+    
+      await _sendEmailViaGateway(email_gateway, master_passwd, smtp_server, port, from, to, user, pass, subject, mail_body);      
+    } 
+    else {
+      await _justSendEmail(smtp_server, port, from, to, user, pass, subject, mail_body);
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+  finally {
+    await dbs.dbClose(conn);
+  }    
 }
 
 
