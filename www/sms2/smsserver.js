@@ -69,6 +69,8 @@
 //
 // V2.0.14       2024-04-30      DW              Fix a bug on route '/add_private_group', which show message deletion period as message
 //                                               deletion option is 'off'. Now, I set deletion option to 'on' by default.
+//
+// V2.0.15       2025-06-24      DW              Include 'user_id' into session validation checking.
 //#################################################################################################################################
   
 "use strict";
@@ -223,7 +225,7 @@ app.get('/', (req, res) => {
 			res.send(html);       			
 		}); 
 	}	
-	else {  
+	else {
 	  let result = smslib.showLoginPage(msg_pool);
 	    
 	  result.then((html) => {
@@ -1139,7 +1141,7 @@ app.get('/select_tools', (req, res) => {
   var ip_addr = req.ip;
 
   if (user_id > 0 && sess_code != "") {
-    var sess_checker = smslib.isSessionValid(pda_pool, sess_code, true, 'PDA');
+    var sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = smslib.printSelectToolsForm(pda_pool, msg_pool, user_id);
@@ -1192,7 +1194,7 @@ app.get('/tools/notes', (req, res) => {
   var ip_addr = req.ip;
 
   if (user_id > 0 && sess_code != "") {
-    var sess_checker = smslib.isSessionValid(pda_pool, sess_code, true, 'PDA');
+    var sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = smslib.printNotesList(pda_pool, user_id, list_filter);
@@ -1249,7 +1251,7 @@ app.post('/tools/notes', (req, res) => {
   var ip_addr = req.ip;
 
   if (user_id > 0 && sess_code != "") {
-    var sess_checker = smslib.isSessionValid(pda_pool, sess_code, true, 'PDA');
+    var sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (op == 'A' || op == 'E' || op == 'D' || op == 'R') {        
@@ -1311,7 +1313,7 @@ app.get('/tools/scheduler', (req, res) => {
   var ip_addr = req.ip;
 
   if (user_id > 0 && sess_code != "") {
-    var sess_checker = smslib.isSessionValid(pda_pool, sess_code, true, 'PDA');
+    var sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = smslib.printCalendar(pda_pool, user_id, what_year, what_month, op, event_id, call_by);
@@ -1403,7 +1405,7 @@ app.post('/tools/scheduler', (req, res) => {
   var ip_addr = req.ip;
 
   if (user_id > 0 && sess_code != "") {
-    var sess_checker = smslib.isSessionValid(pda_pool, sess_code, true, 'PDA');
+    var sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (op == "A") {
@@ -1690,7 +1692,7 @@ app.get('/message', (req, res) => {
   let sess_code = wev.getSessionCode(cookie);
 
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         let result = smslib.showMessagePage(msg_pool, sess_code);
@@ -1747,7 +1749,7 @@ app.post('/get_profile_data', (req, res) => {
   let sess_code = wev.getSessionCode(cookie);  
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
 				let result = smslib.getProfileData(msg_pool, user_id, sess_code, option);
@@ -1785,7 +1787,7 @@ app.get('/edit_alias', (req, res) => {
   let ip_addr = req.ip;
   
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (user_id == u_id) {
@@ -1848,7 +1850,7 @@ app.post('/edit_alias', (req, res) => {
   let ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (oper_mode == 'S') {
@@ -1961,7 +1963,7 @@ app.get('/edit_email', (req, res) => {
   let ip_addr = req.ip;
   
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (user_id == u_id) {
@@ -2024,7 +2026,7 @@ app.post('/edit_email', (req, res) => {
   let ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (oper_mode == 'S') {
@@ -2137,7 +2139,7 @@ app.get('/edit_tg_id', (req, res) => {
   let client_device_info = req.device;                 // Defined in the client device detection middleware
   
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (user_id == u_id) {
@@ -2201,7 +2203,7 @@ app.post('/edit_tg_id', (req, res) => {
   let tg_id = '';
 
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (oper_mode == 'S') {
@@ -2313,7 +2315,7 @@ app.get('/edit_happy_passwd', (req, res) => {
   let ip_addr = req.ip;
   
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (user_id == u_id) {
@@ -2376,7 +2378,7 @@ app.post('/edit_happy_passwd', (req, res) => {
   let ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (oper_mode == 'S') {
@@ -2488,7 +2490,7 @@ app.get('/edit_unhappy_passwd', (req, res) => {
   let ip_addr = req.ip;
   
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (user_id == u_id) {
@@ -2551,7 +2553,7 @@ app.post('/edit_unhappy_passwd', (req, res) => {
   let ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (oper_mode == 'S') {
@@ -2664,7 +2666,7 @@ app.get('/add_group', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = smslib.printAddGroupForm(user_id, group_name, sess_code);        
@@ -2724,7 +2726,7 @@ app.post('/add_group', (req, res) => {
   }
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (oper_mode == 'S') {
@@ -2814,7 +2816,7 @@ app.get('/add_private_group', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = smslib.printAddPrivateGroupForm(user_id, group_name, auto_delete, member, sess_code);        
@@ -2863,7 +2865,7 @@ app.post('/add_private_group', (req, res) => {
   var ip_addr = req.ip;
   
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (oper_mode == 'S') {
@@ -2950,7 +2952,7 @@ app.get('/delete_group_by_admin', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -3038,7 +3040,7 @@ app.post('/delete_group_by_admin', (req, res) => {
   }
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (oper_mode == 'S') {
@@ -3120,7 +3122,7 @@ app.get('/promote_user', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -3195,7 +3197,7 @@ app.post('/promote_select_user', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -3295,7 +3297,7 @@ app.post('/promote_confirm_user', (req, res) => {
   }
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -3401,7 +3403,7 @@ app.get('/demote_user', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -3476,7 +3478,7 @@ app.post('/demote_select_user', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -3576,7 +3578,7 @@ app.post('/demote_confirm_user', (req, res) => {
   }
   
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -3694,7 +3696,7 @@ app.get('/lock_user', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -3769,7 +3771,7 @@ app.post('/lock_select_user', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -3869,7 +3871,7 @@ app.post('/lock_confirm_user', (req, res) => {
   }
   
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -3999,7 +4001,7 @@ app.get('/system_setup', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -4073,7 +4075,7 @@ app.get('/admin/maintain_main_sites', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -4150,7 +4152,7 @@ app.post('/admin/save_main_sites', (req, res) => {
   var ip_addr = req.ip;
   
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -4255,7 +4257,7 @@ app.get('/admin/maintain_email_senders', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -4330,7 +4332,7 @@ app.post('/admin/new_email_senders', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -4404,7 +4406,7 @@ app.post('/get_email_sender_data', (req, res) => {
   let sess_code = wev.getSessionCode(cookie);
 
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         let checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -4480,7 +4482,7 @@ app.post('/admin/edit_email_senders', (req, res) => {
   var ip_addr = req.ip;
     
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -4580,7 +4582,7 @@ app.post('/admin/save_email_senders', (req, res) => {
   let email, m_user, m_pass, smtp_server;  
   
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         let checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -4766,7 +4768,7 @@ app.get('/admin/maintain_decoy_sites', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -4841,7 +4843,7 @@ app.post('/admin/add_new_decoy_site', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -4917,7 +4919,7 @@ app.post('/admin/modify_decoy_site', (req, res) => {
   var ip_addr = req.ip;
     
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -5008,7 +5010,7 @@ app.post('/admin/save_decoy_site', (req, res) => {
   var ip_addr = req.ip;
   
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -5120,7 +5122,7 @@ app.get('/admin/maintain_file_types', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -5195,7 +5197,7 @@ app.post('/admin/add_new_file_type', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -5271,7 +5273,7 @@ app.post('/admin/modify_file_type', (req, res) => {
   var ip_addr = req.ip;
     
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -5362,7 +5364,7 @@ app.post('/admin/save_file_type', (req, res) => {
   var ip_addr = req.ip;
   
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -5474,7 +5476,7 @@ app.get('/admin/maintain_sys_settings', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -5550,7 +5552,7 @@ app.post('/admin/modify_sys_setting', (req, res) => {
   var ip_addr = req.ip;
     
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -5641,7 +5643,7 @@ app.post('/admin/save_sys_setting', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -5753,7 +5755,7 @@ app.get('/admin/telegram_bot_maintain', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -5825,7 +5827,7 @@ app.post('/get_telegram_bot_profile', (req, res) => {
   let sess_code = wev.getSessionCode(cookie);
 
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         let checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -5897,7 +5899,7 @@ app.post('/admin/save_telegram_bot', (req, res) => {
   let ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         let checker = msglib.isSystemAdmin(msg_pool, user_id);
@@ -6037,7 +6039,7 @@ app.get('/create_msg_user', (req, res) => {
   let ip_addr = req.ip;
       
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         let checker = msglib.isTrustedUser(msg_pool, user_id);
@@ -6131,7 +6133,7 @@ app.post('/create_msg_user', (req, res) => {
   let unhappy_passwd = ''; 
   
   if (sess_code != '' && user_id > 0) {
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (oper_mode == 'S') {
@@ -6322,7 +6324,7 @@ app.get('/do_sms', (req, res) => {
   var http_user_agent = req.useragent;                 // Defined in the client device detection middleware
 
   if (sess_code != '' && user_id > 0 && group_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isUserGroupMember(msg_pool, user_id, group_id);
@@ -6416,7 +6418,7 @@ app.post('/push_aes_key', (req, res) => {
   let sess_code = wev.getSessionCode(cookie);
     
   if (sess_code != '' && user_id > 0) { 
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, false, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, false, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (curr_user_id == user_id) {
@@ -6470,7 +6472,7 @@ app.post('/load_message', (req, res) => {
   var ip_addr = req.ip;
       
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, false, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, false, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (curr_user_id == user_id) {        
@@ -6525,7 +6527,7 @@ app.post('/check_message_update_token', (req, res) => {
   user_id = (typeof(user_id) == 'undefined' || user_id == null)? 0 : parseInt(user_id, 10);
   
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, false, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, false, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (curr_user_id == user_id) {
@@ -6583,7 +6585,7 @@ app.post('/pull_new_message', (req, res) => {
 
   if (sess_code != '' && user_id > 0) {  
     if (user_id == receiver_id) {    
-      var sess_checker = smslib.isSessionValid(msg_pool, sess_code, false, 'MSG');
+      var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, false, 'MSG');
       sess_checker.then((sess_valid) => {
         if (sess_valid) {
           if (last_sent_msg_only) {
@@ -6684,7 +6686,7 @@ app.post('/pull_prev_message', (req, res) => {
 
   if (sess_code != '' && user_id > 0) {  
     if (receiver_id == user_id) {
-      var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+      var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
       sess_checker.then((sess_valid) => {
         if (sess_valid) {
           var result = msglib.getPrevGroupMessage(msg_pool, group_id, user_id, first_msg_id, rows_limit, sess_code, client_device_info, http_user_agent, ip_addr);
@@ -6768,7 +6770,7 @@ app.post('/send_message', (req, res) => {
   sender_id = (typeof(sender_id) == 'undefined' || sender_id == null)? 0 : parseInt(sender_id, 10);
   
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
 				let result = msglib.getSessionSecureKey(msg_pool, user_id, sess_code);
@@ -6863,7 +6865,7 @@ app.post('/change_group_name', (req, res) => {
   var ip_addr = req.ip;
   
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (parseInt(group_id, 10) > 0 && wev.allTrim(group_name) != '') {         
@@ -6919,7 +6921,7 @@ app.get('/change_group_name', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -6969,7 +6971,7 @@ app.get('/list_group_member', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -7020,7 +7022,7 @@ app.get('/exit_group', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {        
         if (member_id == user_id) {     // Only you can make yourself to quit a message group via this function.
@@ -7107,7 +7109,7 @@ app.post('/add_group_member', (req, res) => {
   }
   
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -7180,7 +7182,7 @@ app.get('/add_group_member', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -7266,7 +7268,7 @@ app.post('/delete_group_member', (req, res) => {
   }
   
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -7339,7 +7341,7 @@ app.get('/delete_group_member', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -7425,7 +7427,7 @@ app.post('/promote_group_member', (req, res) => {
   }
   
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -7498,7 +7500,7 @@ app.get('/promote_group_member', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -7584,7 +7586,7 @@ app.post('/demote_group_admin', (req, res) => {
   }
   
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -7657,7 +7659,7 @@ app.get('/demote_group_admin', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -7730,7 +7732,7 @@ app.post('/inform_member', (req, res) => {
   var ip_addr = req.ip;  
       
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -7802,7 +7804,7 @@ app.get('/inform_member', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -7875,7 +7877,7 @@ app.get('/delete_group', (req, res) => {
   var members = [];
 
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -7975,7 +7977,7 @@ app.post('/auto_delete_setup', (req, res) => {
   var ip_addr = req.ip;  
   
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -8047,7 +8049,7 @@ app.get('/auto_delete_setup', (req, res) => {
   var ip_addr = req.ip;
 
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -8122,7 +8124,7 @@ app.get('/forward_message', (req, res) => {
   from_group_id = (typeof(from_group_id) == 'undefined' || from_group_id == null)? 0 : parseInt(from_group_id, 10);
 
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, from_group_id);
@@ -8216,7 +8218,7 @@ app.post('/forward_message', (req, res) => {
   let ip_addr = req.ip;  
   
   if (sess_code != '' && user_id > 0) {  
-    let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (oper_mode == 'S') {
@@ -8396,7 +8398,7 @@ app.post('/upload_files', (req, res) => {
       res.send('error');  
     }
     else {  
-      let sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+      let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
       sess_checker.then((sess_valid) => {
         if (sess_valid) {
           let result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -8491,7 +8493,7 @@ app.post('/delete_message', (req, res) => {
   group_id = (typeof(group_id) == 'undefined' || group_id == null)? 0 : parseInt(group_id, 10);
 
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var result = msglib.isGroupMember(msg_pool, user_id, group_id);
@@ -8564,7 +8566,7 @@ app.post('/check_new_message_count', (req, res) => {
   var sess_code = wev.getSessionCode(cookie);
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, false, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, false, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (curr_user_id == user_id) {          
@@ -8710,7 +8712,7 @@ app.get('/destroy_entire_system', (req, res) => {
   var sess_code = wev.getSessionCode(cookie);
 
   if (sess_code != '' && user_id > 0) {
-    var sess_checker = smslib.isSessionValid(msg_pool, sess_code, true, 'MSG');
+    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, true, 'MSG');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         var checker = msglib.isSystemAdmin(msg_pool, user_id);

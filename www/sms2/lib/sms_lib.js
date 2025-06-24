@@ -56,6 +56,7 @@
 //                                               on user login and request to join functions.
 // V1.0.19       2025-06-11      DW              Disable the feature for swiping right in a message group will go to previous page, because
 //                                               it is very annoying, and let message selection opeation on group page nearly impossible.
+// V1.0.20       2025-06-24      DW              Include 'user_id' into session validation checking.
 //#################################################################################################################################
 
 "use strict";
@@ -2383,7 +2384,7 @@ async function _deleteSession(conn, sess_code) {
 }
 
 
-exports.isSessionValid = async function(db_pool, sess_code, extend_session, conn_option) {
+exports.isSessionValid = async function(db_pool, user_id, sess_code, extend_session, conn_option) {
   var conn, sqlcmd, param, data, sess_until, sess_valid;
   
   sess_valid = false;
@@ -2399,10 +2400,11 @@ exports.isSessionValid = async function(db_pool, sess_code, extend_session, conn
     
     sqlcmd = `SELECT TIMESTAMPDIFF(second, CURRENT_TIMESTAMP(), sess_until) AS timediff ` +
              `  FROM web_session ` +
-             `  WHERE sess_code = ? ` + 
+             `  WHERE user_id = ? ` +
+             `    AND sess_code = ? ` + 
              `    AND status = 'A'`;
                  
-    param = [sess_code];
+    param = [user_id, sess_code];
     data = await dbs.sqlQuery(conn, sqlcmd, param);
     data = JSON.parse(data);
     
