@@ -29,6 +29,7 @@
 //                                               notification.
 // V2.0.02       2023-06-07      DW              Change new message notification period from
 //                                               1 minute to 15 minutes.
+// V2.0.03       2025-06-27      DW              Show timestamp on error message.
 //##########################################################################################
 
 "use strict";
@@ -224,7 +225,7 @@ async function informUserHasNewMessage(interval) {
       }
     }
     catch(e) {
-      console.log(e.message);
+      console.log(wev.sayCurrentTime() + ' : ' + e.message);
     }
     finally {
       await dbs.dbClose(conn);

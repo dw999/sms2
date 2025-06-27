@@ -27,6 +27,7 @@
 //                                                 module.
 // V2.0.01       2023-11-03      DW              - Add function to remove expired RSA key pair records. 
 // V2.0.02       2024-03-22      DW              - Add function to remove expired Kyber key pair records.
+// V2.0.03       2025-06-27      DW              Show timestamp on error message.
 //##########################################################################################
 
 "use strict";
@@ -174,7 +175,7 @@ async function deleteExpiredSession(interval) {
       await _delete_applicant_record(conn);      
     }
     catch(e) {
-      console.log(e.message);
+      console.log(wev.sayCurrentTime() + " : " + e.message);
     }
     finally {
       await dbs.dbClose(conn);
@@ -192,7 +193,7 @@ async function deleteExpiredSession(interval) {
       await _deleteExpiredWebSession(conn);      
     }
     catch(e) {
-      console.log(e.message);
+      console.log(wev.sayCurrentTime() + " : " + e.message);
     }
     finally {
       await dbs.dbClose(conn);
@@ -209,7 +210,7 @@ async function deleteExpiredSession(interval) {
 			await _deleteExpiredRsaKeyPair(conn);
 		}
 		catch(e) {
-			console.log(e.message);
+			console.log(wev.sayCurrentTime() + " : " + e.message);
 		}
 		finally {
 			await dbs.dbClose(conn);
@@ -228,7 +229,7 @@ async function deleteExpiredSession(interval) {
       console.log(wev.sayCurrentTime() + " Cycle is finished \n");			      
     }
     catch(e) {
-      console.log(e.message);
+      console.log(wev.sayCurrentTime() + " : " + e.message);
     }
     finally {
       await dbs.dbClose(conn);

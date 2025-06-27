@@ -27,6 +27,7 @@
 // V2.0.00       2022-12-08      DW              - Rewrite it from Perl to Node.js (javascript).
 //                                               - Install a scheduler to operate this service
 //                                                 periodically.
+// V2.0.01       2025-06-27      DW              Show timestamp on error message.                                                
 //#########################################################################################
 
 "use strict";
@@ -154,7 +155,7 @@ async function deleteOldMessages(interval) {
       }      
     }   
     catch(e) {
-      console.log(e.message);
+      console.log(wev.sayCurrentTime() + " : " + e.message);
     }
     finally {
       await dbs.dbClose(conn);
