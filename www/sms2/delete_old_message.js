@@ -27,7 +27,8 @@
 // V2.0.00       2022-12-08      DW              - Rewrite it from Perl to Node.js (javascript).
 //                                               - Install a scheduler to operate this service
 //                                                 periodically.
-// V2.0.01       2025-06-27      DW              Show timestamp on error message.                                                
+// V2.0.01       2025-06-27      DW              Show timestamp on error message.              
+// V2.0.02       2025-07-07      DW              Use database connection pool to avoid database connection timeout issue.                                  
 //#########################################################################################
 
 "use strict";
@@ -39,6 +40,10 @@ const msglib = require('./lib/msg_lib.js');
 const notificator = require('./lib/notificatorSingleton');
 
 var interval = 3600000;        // Repeat every hour
+
+//-- Open database pool --//
+var msg_pool = dbs.createConnectionPool('COOKIE_MSG', 1);
+
 
 async function runNotificator() {
   await notificator.init();
@@ -132,7 +137,8 @@ async function deleteOldMessages(interval) {
     var msg_groups = [];
   
     try {
-      conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
+      //conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
+      conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
       
       cutoff_days = await wev.getSysSettingValue(conn, 'old_msg_delete_days');
       cutoff_days = (parseInt(cutoff_days, 10) > 0)? parseInt(cutoff_days, 10): 14;  
@@ -158,7 +164,8 @@ async function deleteOldMessages(interval) {
       console.log(wev.sayCurrentTime() + " : " + e.message);
     }
     finally {
-      await dbs.dbClose(conn);
+      //await dbs.dbClose(conn);
+      dbs.releasePoolConn(conn);
     }
   }
 }

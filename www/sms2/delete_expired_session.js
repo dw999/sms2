@@ -28,6 +28,7 @@
 // V2.0.01       2023-11-03      DW              - Add function to remove expired RSA key pair records. 
 // V2.0.02       2024-03-22      DW              - Add function to remove expired Kyber key pair records.
 // V2.0.03       2025-06-27      DW              Show timestamp on error message.
+// V2.0.04       2025-07-07      DW              Use database connection pool to avoid database connection timeout issue.
 //##########################################################################################
 
 "use strict";
@@ -36,6 +37,11 @@ const dbs = require('./lib/db_lib.js');
 
 const interval = 3600000;        // Repeat every hour
 const key_rec_expired_days = 7;  // RSA and Kyber key pair records expired days
+
+//-- Open database pool --//
+var msg_pool = dbs.createConnectionPool('COOKIE_MSG', 3);
+var pda_pool = dbs.createConnectionPool('COOKIE_PDA', 1);
+
 
 async function _deleteExpiredWebSession(conn) {
   let sql;
@@ -165,7 +171,8 @@ async function deleteExpiredSession(interval) {
     let conn;
     
     try {
-      conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
+      //conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
+      conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
       
       console.log(wev.sayCurrentTime() + " Clear MSG site expired web session");
       await _deleteExpiredWebSession(conn);
@@ -178,7 +185,8 @@ async function deleteExpiredSession(interval) {
       console.log(wev.sayCurrentTime() + " : " + e.message);
     }
     finally {
-      await dbs.dbClose(conn);
+      //await dbs.dbClose(conn);
+      dbs.releasePoolConn(conn);
     }
   }  
   
@@ -187,7 +195,8 @@ async function deleteExpiredSession(interval) {
     let conn;
     
     try {
-      conn = await dbs.dbConnect(dbs.selectCookie('PDA'));
+      //conn = await dbs.dbConnect(dbs.selectCookie('PDA'));
+      conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('PDA'));
       
       console.log(wev.sayCurrentTime() + " Clear decoy site expired web session");
       await _deleteExpiredWebSession(conn);      
@@ -196,7 +205,8 @@ async function deleteExpiredSession(interval) {
       console.log(wev.sayCurrentTime() + " : " + e.message);
     }
     finally {
-      await dbs.dbClose(conn);
+      //await dbs.dbClose(conn);
+      dbs.releasePoolConn(conn);
     }
   }    
   
@@ -204,7 +214,8 @@ async function deleteExpiredSession(interval) {
 		let conn;
 		
 		try {
-      conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
+      //conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
+      conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
       
       console.log(wev.sayCurrentTime() + " Delete expired RSA key pair records");
 			await _deleteExpiredRsaKeyPair(conn);
@@ -213,7 +224,8 @@ async function deleteExpiredSession(interval) {
 			console.log(wev.sayCurrentTime() + " : " + e.message);
 		}
 		finally {
-			await dbs.dbClose(conn);
+			//await dbs.dbClose(conn);
+      dbs.releasePoolConn(conn);
 		}		
 	}
   
@@ -221,7 +233,8 @@ async function deleteExpiredSession(interval) {
     let conn;
     
     try {
-      conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
+      //conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
+      conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
       
       console.log(wev.sayCurrentTime() + " Delete expired Kyber key pair records");
 			await _deleteExpiredKyberKeyPair(conn);
@@ -232,7 +245,8 @@ async function deleteExpiredSession(interval) {
       console.log(wev.sayCurrentTime() + " : " + e.message);
     }
     finally {
-      await dbs.dbClose(conn);
+      //await dbs.dbClose(conn);
+      dbs.releasePoolConn(conn);
     }
   }
 }
