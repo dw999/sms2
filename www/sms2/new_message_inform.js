@@ -30,6 +30,8 @@
 // V2.0.02       2023-06-07      DW              Change new message notification period from
 //                                               1 minute to 15 minutes.
 // V2.0.03       2025-06-27      DW              Show timestamp on error message.
+// V2.0.04       2025-07-08      DW              Use database connection pool to avoid database 
+//                                               connection timeout issue.
 //##########################################################################################
 
 "use strict";
@@ -38,6 +40,8 @@ const dbs = require('./lib/db_lib.js');
 const telecom = require('./lib/telecom_lib.js');
 
 var interval = 60000 * 15;        // Repeat every 15 minutes
+//-- Open database pool --//
+var msg_pool = dbs.createConnectionPool('COOKIE_MSG', 1);
 
 
 async function _deleteInformRecordWithError(conn, error_limit) {
@@ -164,7 +168,8 @@ async function informUserHasNewMessage(interval) {
     var informed_users = [];
     
     try {
-      conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
+      //conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
+      conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
       
       //-- Gather require data in here --//
       url = await wev.getSiteDNS(conn, "D");
@@ -228,7 +233,8 @@ async function informUserHasNewMessage(interval) {
       console.log(wev.sayCurrentTime() + ' : ' + e.message);
     }
     finally {
-      await dbs.dbClose(conn);
+      //await dbs.dbClose(conn);
+      dbs.releasePoolConn(conn);
     }
   }
 }

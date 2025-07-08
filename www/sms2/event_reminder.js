@@ -22,6 +22,7 @@
 // V1.0.00       2018-07-18      DW              Remind users for scheduled event(s).
 // V2.0.00       2023-01-26      DW              - Rewrite it from Perl to Node.js (javascript).
 //                                               - Install a scheduler to operate this service periodically. 
+// V2.0.01       2025-07-08      DW              Use database connection pool to avoid database connection timeout issue.
 //#################################################################################################################################
 
 "use strict";
@@ -31,6 +32,9 @@ const msglib = require('./lib/msg_lib.js');
 const telecom = require('./lib/telecom_lib.js');
 
 var interval = 60000;     // Repeat every 60 seconds
+//-- Open database pool --//
+var msg_pool = dbs.createConnectionPool('COOKIE_MSG', 1);
+var pda_pool = dbs.createConnectionPool('COOKIE_PDA', 1);
 
 
 async function _getEventReminders(conn_pda) {
@@ -150,8 +154,10 @@ async function runEventReminder(interval) {
     var tg_profile = {};
     
     try {
-      conn_pda = await dbs.dbConnect(dbs.selectCookie('PDA'));
-      conn_msg = await dbs.dbConnect(dbs.selectCookie('MSG'));
+      //conn_pda = await dbs.dbConnect(dbs.selectCookie('PDA'));
+      //conn_msg = await dbs.dbConnect(dbs.selectCookie('MSG'));
+      conn_pda = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
+      conn_msg = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
       
       event_reminders = await _getEventReminders(conn_pda);
             
@@ -194,15 +200,15 @@ async function runEventReminder(interval) {
                 
                 if (remainder_delivered) {
                   await _setReminderOff(conn_pda, this_reminder_id);
-                  console.log(`Reminder of event ${this_reminder_id} has been sent.`);
+                  console.log(wev.sayCurrentTime() + ` : Reminder of event ${this_reminder_id} has been sent.`);
                 }
                 else {
-                  console.log(`Unable to deliver event reminder for event ${this_reminder_id}.`);
+                  console.log(wev.sayCurrentTime() + ` : Unable to deliver event reminder for event ${this_reminder_id}.`);
                 }
               }
               else {
                 await _setReminderOff(conn_pda, this_reminder_id);
-                console.log(`User ${this_user_id} has no any contact information, so that no any event reminder for event ${this_event_title} can be delivered.`);                
+                console.log(wev.sayCurrentTime() + ` : User ${this_user_id} has no any contact information, so that no any event reminder for event ${this_event_title} can be delivered.`);                
               }
             }            
           }                      
@@ -210,11 +216,13 @@ async function runEventReminder(interval) {
       }
     }
     catch(e) {
-      console.log(`Unable to remind schedule events. Error: ${e.message}`);
+      console.log(wev.sayCurrentTime() + ` : Unable to remind schedule events. Error: ${e.message}`);
     }
     finally {
-      await dbs.dbClose(conn_pda);
-      await dbs.dbClose(conn_msg);
+      //await dbs.dbClose(conn_pda);
+      //await dbs.dbClose(conn_msg);
+      dbs.releasePoolConn(conn_pda);
+      dbs.releasePoolConn(conn_msg);
     }
   }
 }

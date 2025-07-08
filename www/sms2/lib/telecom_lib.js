@@ -25,6 +25,8 @@
 // V1.0.03       2025-06-03      DW              If system setting 'use_email_gateway' is 'TRUE', then use a remote SMTP gateway to 
 //                                               send out email, in order to work around the situation where the SMS server is blocked
 //                                               by the worker email server. 
+// V1.0.04       2025-07-07      DW              Include DNS name of SMS server on the data set as using remote email gateway to send
+//                                               out email.  
 //#################################################################################################################################
 
 "use strict";
@@ -237,9 +239,9 @@ async function _justSendEmail(smtp_server, port, from, to, user, pass, subject, 
 }
 
 
-async function _sendEmailViaGateway(email_gateway, master_passwd, smtp_server, port, from, to, user, pass, subject, mail_body) {
+async function _sendEmailViaGateway(email_gateway, master_passwd, site_dns, smtp_server, port, from, to, user, pass, subject, mail_body) {
   let key, algorithm, enc_object, command, token, tk_iv, receiver, receiver_iv, m_subject, m_subject_iv, m_body, m_body_iv;  
-  let smtp, smtp_iv, sender, sender_iv, m_user, m_user_iv, m_pass, m_pass_iv;
+  let site, site_iv, smtp, smtp_iv, sender, sender_iv, m_user, m_user_iv, m_pass, m_pass_iv;
   
   try {
     algorithm = "AES-GCM"; 
@@ -281,11 +283,13 @@ async function _sendEmailViaGateway(email_gateway, master_passwd, smtp_server, p
     smtp = wev.base64Encode(new Uint8Array(enc_object.encrypted));
     smtp_iv = wev.base64Encode(enc_object.iv);
     
-    // Note: 'port' doesn't need to be encrypted and become string after transfer to remote site // 
+    // Note: 1. 'port' doesn't need to be encrypted and become string after transfer to remote site.                         //
+    //       2. 'site_dns' is a string and can't be encoded to base64 string by using function wev.base64Encode, since it is //
+    //          designed for Unit8Array objects.                                                                             // 
     command = `curl -X POST -H 'Content-Type: application/json' -d '{"token":"${token}","tk_iv":"${tk_iv}","from":"${sender}",` + 
               `"from_iv":"${sender_iv}","to":"${receiver}","to_iv":"${receiver_iv}","subject":"${m_subject}","subject_iv":"${m_subject_iv}",`+
               `"mail_body":"${m_body}","mail_body_iv":"${m_body_iv}","m_user":"${m_user}","m_user_iv":"${m_user_iv}","m_pass":"${m_pass}",` +
-              `"m_pass_iv":"${m_pass_iv}","smtp":"${smtp}","smtp_iv":"${smtp_iv}","port":"${port}"}' ${email_gateway}`;
+              `"m_pass_iv":"${m_pass_iv}","smtp":"${smtp}","smtp_iv":"${smtp_iv}","site":"${site_dns}","port":"${port}"}' ${email_gateway}`;
     
     let exec_result = JSON.parse(execSync(command, {timeout:120000, stdio:'pipe', encoding:'utf8'}));
 
@@ -318,22 +322,24 @@ async function _updateMasterPasswd(conn, sys_key, sys_value) {
 
 
 exports.sendEmail = async function(smtp_server, port, from, to, user, pass, subject, mail_body) {
-  let conn, use_email_gateway, email_gateway, master_passwd;
+  let conn, use_email_gateway, email_gateway, master_passwd, site_dns;
   
   try {
     conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
     
     use_email_gateway = await wev.getSysSettingValue(conn, 'use_email_gateway');
     email_gateway = await wev.getSysSettingValue(conn, 'email_gateway');
-    master_passwd = await wev.getSysSettingValue(conn, 'master_passwd');
     
     if (use_email_gateway.toUpperCase() == "TRUE" && email_gateway.trim() != "") {
+      site_dns = await wev.getSiteDNS(conn, 'M');      
+      master_passwd = await wev.getSysSettingValue(conn, 'master_passwd');
+            
       if (master_passwd.trim() == "") {
         master_passwd = "K5QO6zfF2H8XUYZz";
         await _updateMasterPasswd(conn, 'master_passwd', master_passwd); 
       }
     
-      await _sendEmailViaGateway(email_gateway, master_passwd, smtp_server, port, from, to, user, pass, subject, mail_body);      
+      await _sendEmailViaGateway(email_gateway, master_passwd, site_dns, smtp_server, port, from, to, user, pass, subject, mail_body);      
     } 
     else {
       await _justSendEmail(smtp_server, port, from, to, user, pass, subject, mail_body);
