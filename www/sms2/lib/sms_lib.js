@@ -57,6 +57,8 @@
 // V1.0.19       2025-06-11      DW              Disable the feature for swiping right in a message group will go to previous page, because
 //                                               it is very annoying, and let message selection opeation on group page nearly impossible.
 // V1.0.20       2025-06-24      DW              Include 'user_id' into session validation checking.
+// V1.0.21       2025-08-19      DW              Fix a bug on javascript function 'sendSound' of Node.js function '_printMessagesDoSMSpage'. 
+//                                               The error is caused by forgetting to load secure key before send out audio file.  
 //#################################################################################################################################
 
 "use strict";
@@ -5402,80 +5404,101 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       
       var file_name = allTrim($('#sound').val());   
       if (file_name != "") {
-        var sound = $('#sound').prop('files')[0];
-        //-- Encode uploaded file name to handle Chinese characters --// 
-        sound.name = unescape(encodeURIComponent(sound.name));    
-                                        
-        //-- Encrypt 'caption' and 'op_msg' before send the data set to the server, even 'caption' --//
-        //-- is blank in this case.                                                                --//  
-        var algorithm = "AES-GCM";                   
-        op_msg = (typeof(op_msg) == "string")? op_msg : '';              
-        var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, '');
-        var caption_iv = enc_caption_obj.iv;
-        var enc_caption = enc_caption_obj.encrypted;
-        var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
-        var op_iv = enc_op_msg_obj.iv;
-        var enc_op_msg = enc_op_msg_obj.encrypted;
-                                     
-        var form_data = new FormData();
-        form_data.append('group_id', group_id);
-        form_data.append('sender_id', user_id);
-        form_data.append('ul_ftype', 'sound');
-        form_data.append('ul_file', sound);              
-        form_data.append('algorithm', algorithm);
-        form_data.append('caption_iv', caption_iv);
-        form_data.append('caption', enc_caption);
-        form_data.append('op_flag', op_flag);
-        form_data.append('op_user_id', op_user_id);
-        form_data.append('op_iv', op_iv);
-        form_data.append('op_msg', enc_op_msg);
-        //-- Change button image from 'send.png' to 'files_uploading.gif' --//
-        $('#btn_send_sound').attr('src', '/images/files_uploading.gif');
-        //-- Then disable it to prevent upload a file twice --//
-        $('#btn_send_sound').attr("disabled", "disabled");
+        let key_ready = true;
+        aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");				  
+        if (typeof(aes_key) != "string") {
+          key_ready = false;
+        }            
+        else {
+          aes_key = aes_key.trim();
+          if (aes_key.length < ${_key_len}) {
+            key_ready = false;
+          }
+        }
       
-        $.ajax({
-          type: 'POST',
-          url: '/upload_files',
-          dataType: 'text',
-          cache: false,
-          contentType: false,
-          processData: false,
-          data: form_data,
-          success: function(response) {
-            var new_token = response;
-            
-            switch (new_token) {
-              case 'error': 
-                alert("Error is found as file upload.");
-                $('#btn_send_sound').removeAttr("disabled");
-                $('#btn_send_sound').attr('src', '/images/send.png');
-                break;
-                
-              case 'sess_expired':
-                alert("Session expired");
-                logoutSMS();
-                break;
-                
-              default:    
-                //-- Refresh message section (just load the last sent message only) --//
-                //-- '0' means get all unread messages, '1' means to get the last sent message. --//
-                loadNewMessages(${group_id}, ${user_id}, 1);
-                update_token = new_token;                        
-                $('#btn_send_sound').removeAttr("disabled");
-                $('#btn_send_sound').attr('src', '/images/send.png');
-                showTextInputPanel();
-                noReply();                
-                //-- Inform other group members to refresh message via WebSocket --//
-                informGroupMembersToRefresh(group_id, user_id);                                
-            }
-          },
-          error: function(xhr, ajaxOptions, thrownError) {
-            alert("Unable to upload sound file. Error " + xhr.status + ": " + thrownError);
-            $('#btn_send_sound').removeAttr("disabled");
-            $('#btn_send_sound').attr('src', '/images/send.png');
-          }                    
-        });      
+        if (key_ready) {       
+          var sound = $('#sound').prop('files')[0];
+          //-- Encode uploaded file name to handle Chinese characters --// 
+          sound.name = unescape(encodeURIComponent(sound.name));    
+                                          
+          //-- Encrypt 'caption' and 'op_msg' before send the data set to the server, even 'caption' --//
+          //-- is blank in this case.                                                                --//  
+          var algorithm = "AES-GCM";                   
+          op_msg = (typeof(op_msg) == "string")? op_msg : '';              
+          var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, '');
+          var caption_iv = enc_caption_obj.iv;
+          var enc_caption = enc_caption_obj.encrypted;
+          var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
+          var op_iv = enc_op_msg_obj.iv;
+          var enc_op_msg = enc_op_msg_obj.encrypted;
+          
+          // Clear aes_key from RAM after used //
+          aes_key = '';
+                                       
+          var form_data = new FormData();
+          form_data.append('group_id', group_id);
+          form_data.append('sender_id', user_id);
+          form_data.append('ul_ftype', 'sound');
+          form_data.append('ul_file', sound);              
+          form_data.append('algorithm', algorithm);
+          form_data.append('caption_iv', caption_iv);
+          form_data.append('caption', enc_caption);
+          form_data.append('op_flag', op_flag);
+          form_data.append('op_user_id', op_user_id);
+          form_data.append('op_iv', op_iv);
+          form_data.append('op_msg', enc_op_msg);
+          //-- Change button image from 'send.png' to 'files_uploading.gif' --//
+          $('#btn_send_sound').attr('src', '/images/files_uploading.gif');
+          //-- Then disable it to prevent upload a file twice --//
+          $('#btn_send_sound').attr("disabled", "disabled");
+        
+          $.ajax({
+            type: 'POST',
+            url: '/upload_files',
+            dataType: 'text',
+            cache: false,
+            contentType: false,
+            processData: false,
+            data: form_data,
+            success: function(response) {
+              var new_token = response;
+              
+              switch (new_token) {
+                case 'error': 
+                  alert("Error is found as file upload.");
+                  $('#btn_send_sound').removeAttr("disabled");
+                  $('#btn_send_sound').attr('src', '/images/send.png');
+                  break;
+                  
+                case 'sess_expired':
+                  alert("Session expired");
+                  logoutSMS();
+                  break;
+                  
+                default:    
+                  //-- Refresh message section (just load the last sent message only) --//
+                  //-- '0' means get all unread messages, '1' means to get the last sent message. --//
+                  loadNewMessages(${group_id}, ${user_id}, 1);
+                  update_token = new_token;                        
+                  $('#btn_send_sound').removeAttr("disabled");
+                  $('#btn_send_sound').attr('src', '/images/send.png');
+                  showTextInputPanel();
+                  noReply();                
+                  //-- Inform other group members to refresh message via WebSocket --//
+                  informGroupMembersToRefresh(group_id, user_id);                                
+              }
+            },
+            error: function(xhr, ajaxOptions, thrownError) {
+              alert("Unable to upload sound file. Error " + xhr.status + ": " + thrownError);
+              $('#btn_send_sound').removeAttr("disabled");
+              $('#btn_send_sound').attr('src', '/images/send.png');
+            }                    
+          });
+        }
+        else {
+          alert("The secure key is lost, the system is going to log you out.");
+          logoutSMS();                                
+        }      
       }
       else {
         alert("Please record a sound file before click the send button");
