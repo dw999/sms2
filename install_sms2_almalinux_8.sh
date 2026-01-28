@@ -27,6 +27,7 @@
 # V1.0.11     2024-10-29      DW              Revoke change on V1.0.10, i.e. NPM package 'cookie' is required.
 # V1.0.12     2025-03-13      DW              Add NPM package 'terser'.
 # V1.0.13     2025-04-22      DW              Replace NPM package 'telegram-bot-api' by 'telegramsjs'.
+# V1.0.14     2026-01-28      DW              Let 'mlkem' library is called locally by clients.
 #=========================================================================================================
 
 setterm -blank 0
@@ -420,6 +421,11 @@ npm install -S terser >> /tmp/install.log
 npm install -S unicode-length >> /tmp/install.log
 npm install -S unicode-substring >> /tmp/install.log
 npm install -S ws >> /tmp/install.log
+
+#-- Let mlkem library is called locally by clients --#
+mkdir -p /www/sms2/js/mlkem
+cd /www/sms2/js/mlkem
+cp -R -f /www/sms2/node_modules/mlkem/* .  
 
 #-- Copy those libraries used on front end to '/www/sms2/js' --#
 #cp -f /www/sms2/node_modules/crypto-js/crypto-js.js /www/sms2/js

@@ -1605,7 +1605,9 @@ exports.getKyberClientModule = function() {
   try {
     js = `
     <script type="module">
-      import { MlKem1024 } from "https://esm.sh/mlkem";
+      // Start from mlkem 2.5.0, it can be called locally. //
+      import { MlKem1024 } from "/js/mlkem/esm/mod.js";    
+      //import { MlKem1024 } from "https://esm.sh/mlkem";
 
       function base64Encode(u8) {
         return btoa(String.fromCharCode.apply(null, u8))
