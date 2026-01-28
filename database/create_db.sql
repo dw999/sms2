@@ -118,6 +118,7 @@ CREATE OR REPLACE TABLE login_token_queue
   token_iv varchar(512),
   token_seed varchar(256),
   aes_key varchar(128),
+  rolling_key varchar(128),
   status varchar(6),
   user_id bigint
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -132,11 +133,21 @@ CREATE OR REPLACE TABLE web_session
   ip_address varchar(256),
   http_user_agent varchar(384),
   secure_key varchar(128),
+  rolling_key varchar(128),
   status varchar(2),
   PRIMARY KEY (sess_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX idx_usr_id ON web_session(user_id);
+
+CREATE TABLE sess_roll_key
+(
+  sess_code varchar(128),
+  rolling_key varchar(128),
+  counter int
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE INDEX idx_sess_roll_key ON sess_roll_key(sess_code, rolling_key);
 
 CREATE OR REPLACE TABLE hack_history
 (
@@ -330,7 +341,7 @@ CREATE OR REPLACE TABLE sms_version
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 LOCK TABLES `sms_version` WRITE;
-INSERT INTO `sms_version` VALUES ("2.0.18", "2.0", "18", "20250612", "2025-06-12 23:59:59");
+INSERT INTO `sms_version` VALUES ("2.0.18", "2.0", "18", "20260128", "2026-01-28 23:59:59");
 UNLOCK TABLES;
 
 --=========================================================================================================================================================--
@@ -354,6 +365,7 @@ CREATE OR REPLACE TABLE web_session
   ip_address varchar(256),
   http_user_agent varchar(384),
   secure_key varchar(128),
+  rolling_key varchar(128),
   status varchar(2),
   PRIMARY KEY (sess_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -370,7 +382,7 @@ CREATE OR REPLACE TABLE feature_store
 
 LOCK TABLES `feature_store` WRITE;
 ALTER TABLE `feature_store` DISABLE KEYS;
-INSERT INTO `feature_store` VALUES (1,'/cgi-pl/tools/notes.pl','/images/notes.png'),(2,'/cgi-pl/tools/scheduler.pl','/images/scheduler.png');
+INSERT INTO `feature_store` VALUES (1,'/tools/notes','/images/notes.png'),(2,'/tools/scheduler','/images/scheduler.png');
 ALTER TABLE `feature_store` ENABLE KEYS;
 UNLOCK TABLES;
 

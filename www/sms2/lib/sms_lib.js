@@ -59,6 +59,8 @@
 // V1.0.20       2025-06-24      DW              Include 'user_id' into session validation checking.
 // V1.0.21       2025-08-19      DW              Fix a bug on javascript function 'sendSound' of Node.js function '_printMessagesDoSMSpage'. 
 //                                               The error is caused by forgetting to load secure key before send out audio file.  
+// V1.0.22       2025-12-04      DW              Add function 'isSessionValidEx'. It is the key part of a rolling key mechanism to prevent
+//                                               and detect MITM attacking.
 //#################################################################################################################################
 
 "use strict";
@@ -73,7 +75,8 @@ const telecom = require('../lib/telecom_lib.js');
 const msglib = require('../lib/msg_lib.js');
 //-- Define constants --//
 const _decoy_company_name = (wev.getGlobalValue('COMP_NAME') != '')? wev.getGlobalValue('COMP_NAME') : "PDA Tools Corp.";
-const _key_len = 128;                   // AES-256 passphase length
+const _key_len = wev.getGlobalValue('AES_KEY_LEN');                   // AES-256 passphase length
+
 
 async function _logSystemError(conn, user_id, detail_msg, brief_msg, browser_signature) {
   var sqlcmd, param, data, result;
@@ -477,6 +480,7 @@ exports.showLoginPage = async function(msg_pool) {
     let js = `
     var aes_algorithm = "AES-GCM";
     var key = "";                 // AES-256 key generated at client side 
+    var rolling_key = "";         // A rolling key generated at client side (it will be changed everytime it makes a new request to back-end server)     
     var algorithm_b64 = "${algorithm_b64}";    // The algorithm used by the RSA key pair generation
     var algorithm;
     var public_pem_b64 = "${public_pem_b64}";
@@ -505,6 +509,7 @@ exports.showLoginPage = async function(msg_pool) {
     async function prepareAESkey() {
       try {
         key = generateTrueRandomStr('A', ${_key_len});      // Defined on crypto-lib.js
+        rolling_key = generateTrueRandomStr('A', getRandomInt(32, 64));      // Defined on crypto-lib.js
         
         algorithm = convertBase64StrToObject(algorithm_b64);
         public_pem = convertObjectToBase64Str(public_pem_b64);
@@ -545,6 +550,8 @@ exports.showLoginPage = async function(msg_pool) {
   
         let enc_user = await aesEncryptJSON(aes_algorithm, key, $('#username').val());
         let enc_pass = await aesEncryptJSON(aes_algorithm, key, $('#password').val()); 
+        let enc_roll = await aesEncryptJSON(aes_algorithm, key, rolling_key);
+
         
         let enc_key = await rsaEncrypt(algorithm, public_key, key);                       // Defined on crypto-lib.js
         // Step 1: Convert encrypted key from ArrayBuffer to Uint8Array //
@@ -566,16 +573,19 @@ exports.showLoginPage = async function(msg_pool) {
         if (is_iOS) {
           // iOS behavior is different from other platforms, so that it needs to put cross pages data to cookie as work-around. //
           Cookies.set("aes_key", key, {expires: 1});              // Defined on js.cookie.min.js    
+          Cookies.set("rolling_key", rolling_key, {expires: 1});          
         }
         else {
           setLocalStoredItem("aes_key", key);                     // Defined on common_lib.js
+          setLocalStoredItem("rolling_key", rolling_key);
         }
         
-        // Clear the Kyber secret key and session AES key in RAM after used (for precaution only) //
-        skey = '';
+        // Clear the Kyber secret key and session AES key in RAM after used (precaution only) //
+        skey = null;
         secret.sk = null;
-        secret = {};
-        aes_key = '';
+        secret = null;
+        aes_key = null;
+        rolling_key = null;
         
         $('#kyber_ct').val(ct);  
         $('#keycode_iv').val(keycode_iv);                            
@@ -586,6 +596,8 @@ exports.showLoginPage = async function(msg_pool) {
         $('#iv_user').val(enc_user.iv);
         $('#e_pass').val(enc_pass.encrypted);
         $('#iv_pass').val(enc_pass.iv);
+        $('#e_roll').val(enc_roll.encrypted);
+        $('#iv_roll').val(enc_roll.iv);                        
         $('#username').val('');
         $('#password').val('');																																																														 																	
         $('#oper_mode').val('S');
@@ -639,6 +651,9 @@ exports.showLoginPage = async function(msg_pool) {
       <input type=hidden id='iv_user' name='iv_user' value=''>
       <input type=hidden id='e_pass' name='e_pass' value=''>
       <input type=hidden id='iv_pass' name='iv_pass' value=''>
+      <input type=hidden id='e_roll' name='e_roll' value=''>
+      <input type=hidden id='iv_roll' name='iv_roll' value=''>                  
+      
 
       <div data-role='page'>
         <div data-role='header' style='overflow:hidden;' data-position='fixed' data-ajax='false'>
@@ -835,18 +850,18 @@ async function _getCurrentTimestamp(conn) {
 }
 
 
-async function _writeToLoginQueue(conn, algorithm, token_iv, token, add_time, seed, user_id, aes_key) {
+async function _writeToLoginQueue(conn, algorithm, token_iv, token, add_time, seed, user_id, aes_key, rolling_key) {
   let sqlcmd, param, data, result;
     
   result = {ok: true, msg: ''};
 
   try {  
     sqlcmd = `INSERT INTO login_token_queue ` +
-             `(algorithm, token_iv, token, token_addtime, token_seed, aes_key, status, user_id) ` +
+             `(algorithm, token_iv, token, token_addtime, token_seed, aes_key, rolling_key, status, user_id) ` +
              `VALUES ` +
-             `(?, ?, ?, ?, ?, ?, ?, ?)`;
+             `(?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-    param = [algorithm, token_iv, token, add_time, seed, aes_key, 'A', user_id];
+    param = [algorithm, token_iv, token, add_time, seed, aes_key, rolling_key, 'A', user_id];
     
     data = await dbs.sqlExec(conn, sqlcmd, param);
   }
@@ -898,7 +913,7 @@ async function _sendLoginMail(conn, user_id, to_mail, token, add_time) {
 }
 
 
-async function _sendMessageAccessLinkMail(conn, user_id, email, aes_key) {
+async function _sendMessageAccessLinkMail(conn, user_id, email, aes_key, rolling_key) {
   let login_status, message, algorithm, plaintext, token, token_iv, key, add_time, seed, result;
   
   login_status = 1;
@@ -929,7 +944,7 @@ async function _sendMessageAccessLinkMail(conn, user_id, email, aes_key) {
 			//--       '%20' phases on the escaped token to '+' character(s) before perform any operation.                 --//        
 			token = escape(token);
 
-			let this_result = await _writeToLoginQueue(conn, algorithm, token_iv, token, add_time, seed, user_id, aes_key);
+			let this_result = await _writeToLoginQueue(conn, algorithm, token_iv, token, add_time, seed, user_id, aes_key, rolling_key);
 			let ok = this_result.ok;
 			let msg = this_result.msg;
 		
@@ -997,7 +1012,7 @@ async function _buildLoginLink(conn, token) {
 }
 
 
-async function _buildMessageAccessLink(conn, user_id, aes_key) {
+async function _buildMessageAccessLink(conn, user_id, aes_key, rolling_key) {
   var message, algorithm, plaintext, token_iv, token, key, add_time, seed, login_url, result;
   
   message = '';
@@ -1010,14 +1025,10 @@ async function _buildMessageAccessLink(conn, user_id, aes_key) {
   
   try {
     add_time = await _getCurrentTimestamp(conn);            
-    //seed = wev.generateRandomStr('A', 32);  
     seed = cipher.generateTrueRandomStr('A', 32);             
     key = wev.allTrim(seed);
     
     plaintext = 'user_id=' + user_id + '&seed=' + seed;
-    //var encrypted_obj = cipher.encrypt_str(plaintext, key);
-    //ok = encrypted_obj.ok;
-    //token = encrypted_obj.encrypted;  
     let enc_obj = await cipher.aesEncryptBase64(algorithm, key, plaintext);
     // Note: token_iv and token are in base64 format //
     token_iv = enc_obj.iv;               
@@ -1032,7 +1043,7 @@ async function _buildMessageAccessLink(conn, user_id, aes_key) {
 			//--       '%20' phases on the escaped token to '+' character(s) before perform any operation.                 --//  
 			token = escape(token);
 
-			let this_result = await _writeToLoginQueue(conn, algorithm, token_iv, token, add_time, seed, user_id, aes_key);
+			let this_result = await _writeToLoginQueue(conn, algorithm, token_iv, token, add_time, seed, user_id, aes_key, rolling_key);
 			let ok = this_result.ok;
 			let msg = this_result.msg;
 
@@ -1730,7 +1741,7 @@ async function _logHackingHistory(conn, user_id, ip_addr) {
 }
 
 
-exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, password, aes_key, http_user_agent, ip_addr) {
+exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, password, rolling_key, aes_key, http_user_agent, ip_addr) {
   var connh, connp, sqlcmd, param, data, user_id, happy_passwd, unhappy_passwd, email, status, connection_mode, login_status, message, redirect_url, result;
   var private_key;
   
@@ -1766,12 +1777,12 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
             // Normal user //
             if (connection_mode == 0) {
               //-- Login in via email --//
-              var sent_mail_result = await _sendMessageAccessLinkMail(connh, user_id, email, aes_key);
+              var sent_mail_result = await _sendMessageAccessLinkMail(connh, user_id, email, aes_key, rolling_key);
               login_status = sent_mail_result.login_status;
               message = sent_mail_result.message;
               
               if (login_status == 1) {
-                var sess_object = await wev.createSessionRecord(connp, user_id, null, http_user_agent, ip_addr);
+                var sess_object = await wev.createSessionRecord(connp, user_id, null, null, http_user_agent, ip_addr);
                 redirect_url = '/pdatools?user=' + username + '&sess_code=' + sess_object.sess_code;
               }
               else {
@@ -1782,7 +1793,7 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
             }
             else if (connection_mode == 1) {
               //-- Login directly --//
-              var login_object = await _buildMessageAccessLink(connh, user_id, aes_key);
+              var login_object = await _buildMessageAccessLink(connh, user_id, aes_key, rolling_key);
               login_status = login_object.login_status;
               message = login_object.message;
               redirect_url = login_object.redirect_url;
@@ -1790,7 +1801,7 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
             }
             else if (connection_mode == 2) {
               //-- Login directly --//
-              var login_object = await _buildMessageAccessLink(connh, user_id, aes_key);
+              var login_object = await _buildMessageAccessLink(connh, user_id, aes_key, rolling_key);
               login_status = login_object.login_status;
               message = login_object.message;
               redirect_url = login_object.redirect_url;               
@@ -1798,12 +1809,12 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
             }
             else if (connection_mode == 3) {
               //-- Login in via email --//
-              var sent_mail_result = await _sendMessageAccessLinkMail(connh, user_id, email, aes_key);
+              var sent_mail_result = await _sendMessageAccessLinkMail(connh, user_id, email, aes_key, rolling_key);
               login_status = sent_mail_result.login_status;
               message = sent_mail_result.message;
               
               if (login_status == 1) {
-                var sess_object = await wev.createSessionRecord(connp, user_id, null, http_user_agent, ip_addr);
+                var sess_object = await wev.createSessionRecord(connp, user_id, null, null, http_user_agent, ip_addr);
                 redirect_url = '/pdatools?user=' + username + '&sess_code=' + sess_object.sess_code;
               }
               else {
@@ -1844,7 +1855,7 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
             await _logUnhappyLoginTime(connh, user_id, http_user_agent);
             
             login_status = 1;
-            var sess_object = await wev.createSessionRecord(connp, user_id, null, http_user_agent, ip_addr);
+            var sess_object = await wev.createSessionRecord(connp, user_id, null, null, http_user_agent, ip_addr);
             redirect_url = '/pdatools?user=' + username + '&sess_code=' + sess_object.sess_code;
             result = {ok: login_status, msg: message, url: redirect_url};            
             break;  
@@ -1882,7 +1893,7 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
         
         await _logUnhappyLoginTime(connh, user_id, http_user_agent);
         login_status = 1;
-        var sess_object = await wev.createSessionRecord(connp, user_id, http_user_agent, ip_addr, null);         
+        var sess_object = await wev.createSessionRecord(connp, user_id, null, null, http_user_agent, ip_addr);         
         redirect_url = '/pdatools?user=' + username + '&sess_code=' + sess_object.sess_code;             
         result = {ok: login_status, msg: message, url: redirect_url};     
       }
@@ -2211,11 +2222,11 @@ async function _getUserIdFromToken(conn, token) {
 
 
 async function _getAESkeyFromToken(conn, token) {
-  let sqlcmd, param, data, aes_key;
+  let sqlcmd, param, data, aes_key, rolling_key, result;
   
   try {
     //-- Note: Only status 'R' token will be extracted for security measure (Prevent attacker use old token to login to the system) --//
-    sqlcmd = `SELECT aes_key ` +
+    sqlcmd = `SELECT aes_key, rolling_key ` +
              `  FROM login_token_queue ` +
              `  WHERE token = ? ` +
              `    AND status = 'R'`;
@@ -2225,16 +2236,23 @@ async function _getAESkeyFromToken(conn, token) {
     
     if (data.length > 0) {
       aes_key = wev.allTrim(data[0].aes_key);
+      rolling_key = wev.allTrim(data[0].rolling_key);
     }
     else {
 			aes_key = '';
+      rolling_key = '';
 		}
+    
+    result = {
+			aes_key: aes_key,
+      rolling_key: rolling_key      
+    };
   }
   catch(e) {
     throw e;
   }
   
-  return aes_key;  	
+  return result;  	
 }
 
 
@@ -2291,19 +2309,56 @@ async function _deleteUserInformRecord(conn, user_id) {
 }
 
 
-async function _goLogonProcess(conn, user_id, aes_key, http_user_agent, ip_addr) {
-  let ok, msg, sess_code, site_dns, url, result;
+async function _goLogonProcess(conn, user_id, aes_key, rolling_key, http_user_agent, ip_addr) {
+  let ok, msg, sess_code, url, result;
 
   result = {ok: false, msg: '', user_id: 0, sess_code: '', url: ''};
   
   try {
-    let sess_object = await wev.createSessionRecord(conn, user_id, aes_key, http_user_agent, ip_addr);
+    let sess_object = await wev.createSessionRecord(conn, user_id, aes_key, rolling_key, http_user_agent, ip_addr);
     sess_code = sess_object.sess_code;
     ok = sess_object.ok
     msg = sess_object.msg;
     
     if (ok) {
-      result = {ok: true, msg: '', user_id: user_id, sess_code: sess_code, url: '/message'};
+      url = `
+      <!doctype html>
+      <html>
+        <head>
+          <script type="text/javascript" src='/js/jquery.min.js'></script>
+          <script type="text/javascript" src="/js/js.cookie.min.js"></script>
+          <script type="text/javascript" src='/js/crypto-lib.js'></script>               
+          <script type="text/javascript" src='/js/common_lib.js'></script>
+                          
+          <script>
+            $(document).ready(function() {
+              // -----------------------------------------------------------------------------------------------------//
+              // Important Note:                                                                                      //
+              // jQuery v2.1.4 can't handle async functions and the await syntax introduced in ECMAScript 2017 (ES8). // 
+              // This is because that version of jQuery was released before async/await was a standard feature in     //
+              // JavaScript environments. Here is a work-around method to encapsulate async/await logic within the    //
+              // async function 'switchToLandingPage' and call it. This avoids top-level await issues.                //
+              // -----------------------------------------------------------------------------------------------------//              
+              switchToLandingPage();
+            });
+            
+            async function switchToLandingPage() {
+              await prepareRollingKey(${_key_len});     // Defined on crypto-lib.js              
+              $("#frmLeap").submit();            
+            }
+          </script>
+        </head>
+        
+        <body>
+          <form id='frmLeap' name='frmLeap' action='/message' method='POST'>
+            <input type=hidden id="roll_rec" name="roll_rec" value="">
+            <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+            <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">   
+          </form>        
+        </body>        
+      </html>`;
+      
+      result = {ok: true, msg: '', user_id: user_id, sess_code: sess_code, url: url};
     }
     else {
       result = {ok: false, msg: 'Unable to create session, please login again', user_id: 0, sess_code: '', url: '/'};
@@ -2318,7 +2373,7 @@ async function _goLogonProcess(conn, user_id, aes_key, http_user_agent, ip_addr)
 
 
 exports.finalizeLoginProcess = async function(msg_pool, token, http_user_agent, ip_addr) {
-  var conn, user_id, aes_key, url, result;
+  var conn, user_id, keys, url, result;
   
   result = {ok: false, msg: '', user_id: 0, sess_code: '', url: ''};
   
@@ -2329,11 +2384,11 @@ exports.finalizeLoginProcess = async function(msg_pool, token, http_user_agent, 
     user_id = await _getUserIdFromToken(conn, token);          
     
     if (user_id > 0) {
-			aes_key = await _getAESkeyFromToken(conn, token);
+			keys = await _getAESkeyFromToken(conn, token);
       await _setLoginTokenUsed(conn, token);                      // Set token status to 'U' (used) now.
       await _setUserInformFlag(conn, user_id, 1);                 // Reset new message inform flag to 1. i.e. Accept new message inform.  
       await _deleteUserInformRecord(conn, user_id);
-      result = await _goLogonProcess(conn, user_id, aes_key, http_user_agent, ip_addr);      
+      result = await _goLogonProcess(conn, user_id, keys.aes_key, keys.rolling_key, http_user_agent, ip_addr);      
     }
     else {
       url = await _selectSiteForVisitor(conn);
@@ -2386,6 +2441,7 @@ async function _deleteSession(conn, sess_code) {
 }
 
 
+// 2025-12-04: This function will be phased out after rolling key mechanism is implemented and deplyed // 
 exports.isSessionValid = async function(db_pool, user_id, sess_code, extend_session, conn_option) {
   var conn, sqlcmd, param, data, sess_until, sess_valid;
   
@@ -2428,6 +2484,203 @@ exports.isSessionValid = async function(db_pool, user_id, sess_code, extend_sess
       await _deleteSession(conn, sess_code);     // Session record may still exist.
       sess_valid = false;
     }    
+  }
+  catch(e) {
+    throw e;
+  }
+  finally {
+    dbs.releasePoolConn(conn);
+  }
+  
+  return sess_valid;
+}
+
+
+async function _isActiveSession(conn, user_id, sess_code) {
+  let sql, param, data, result;
+  
+  try {
+    sql = `SELECT TIMESTAMPDIFF(second, CURRENT_TIMESTAMP(), sess_until) AS timediff ` +
+          `  FROM web_session ` +
+          `  WHERE user_id = ? ` +
+          `    AND sess_code = ? ` + 
+          `    AND status = 'A'`;
+                 
+    param = [user_id, sess_code];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    
+    if (data.length > 0) {
+      result = (parseInt(data[0].timediff, 10) > 0)? true : false;
+    }
+    else {
+      result = false;
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;
+}
+
+
+async function _getSessionKeys(conn, user_id, sess_code) {
+  let sql, param, data, result = {aes_key: '', rolling_key: ''};
+  
+  try {
+    sql = `SELECT secure_key, rolling_key ` +
+          `  FROM web_session ` +
+          `  WHERE user_id = ? ` +
+          `    AND sess_code = ? ` + 
+          `    AND status = 'A'`;
+
+    param = [user_id, sess_code];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    
+    if (data.length > 0) {
+      let aes_key = data[0].secure_key;
+      let rolling_key = data[0].rolling_key;
+      
+      result = {aes_key: aes_key, rolling_key: rolling_key};
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;
+}
+
+
+async function _sessionRollingKeyExist(conn, sess_code, rolling_key) {
+  let sql, param, data, result;
+  
+  try {
+    sql = `SELECT COUNT(*) AS cnt ` +
+          `  FROM sess_roll_key ` +
+          `  WHERE sess_code = ? ` + 
+          `    AND rolling_key = ?`;      
+
+    param = [sess_code, rolling_key];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    result = (parseInt(data[0].cnt, 10) > 0)? true : false; 
+  }
+  catch(e) {
+    throw e;
+  }
+   
+  return result; 
+}
+
+
+async function _saveNewRollingKey(conn, sess_code, rolling_key) {
+  let sql, param;
+  
+  try {
+    if (await _sessionRollingKeyExist(conn, sess_code, rolling_key)) {
+      sql = `UPDATE sess_roll_key ` + 
+            `  SET counter = counter + 1 ` +
+            `  WHERE sess_code = ? ` + 
+            `    AND rolling_key = ?`;      
+    }
+    else {
+      sql = `INSERT INTO sess_roll_key ` +
+            `(sess_code, rolling_key, counter) ` +
+            `VALUES ` +
+            `(?, ?, 1)`;
+    }
+
+    param = [sess_code, rolling_key];
+    await dbs.sqlExec(conn, sql, param);          
+  }
+  catch(e) {
+    throw e;
+  }
+}
+
+
+async function _getNewRollingKeyCount(conn, sess_code, rolling_key) {
+  let sql, param, data, result;
+  
+  try {
+    sql = `SELECT counter ` +
+          `  FROM sess_roll_key ` +
+          `  WHERE sess_code = ? ` + 
+          `    AND rolling_key = ?`;      
+
+    param = [sess_code, rolling_key];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    result = (data.length > 0)? parseInt(data[0].counter, 10) : 0; 
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;
+}
+
+
+exports.isSessionValidEx = async function(db_pool, user_id, sess_code, enc_roll_rec, extend_session, conn_option) {
+  let conn, aes_key, cur_rolling_key, new_rolling_key, sess_valid;
+    
+  try {
+    //-- Notes: 1. This function will be used to check session located on database 'msgdb' or 'pdadb'. Therefore, if --//
+    //--           'conn_option' is blank or undefined, then that would be no last resort to be provided as database --//
+    //--           pool connection is failure.                                                                       --//
+    //--        2. 'conn_option' is used as last resort as this function can't get a connection from the pool, and   --//
+    //--           valid values of 'conn_option' are 'MSG' and 'PDA', others may cause runtime error.                --//           
+    conn_option = (typeof(conn_option) != "string")? "" : dbs.selectCookie(conn_option);         
+    conn = await dbs.getPoolConn(db_pool, dbs.selectCookie(conn_option));
+    
+    if (user_id > 0 && sess_code != "") {
+      if (await _isActiveSession(conn, user_id, sess_code)) {
+        let keys = await _getSessionKeys(conn, user_id, sess_code);
+        
+        if (keys.aes_key != "" && keys.rolling_key != "") {
+          aes_key = keys.aes_key;
+          cur_rolling_key = keys.rolling_key;
+                    
+          let roll_rec_json = await cipher.aesDecryptJSON("AES-GCM", aes_key, enc_roll_rec.iv, enc_roll_rec.encrypted);                    
+          let roll_rec = JSON.parse(roll_rec_json);
+          let cs_sum = enc_roll_rec.digest;
+          let ss_sum = await cipher.digestData("SHA-256", roll_rec_json);
+          
+          if (cur_rolling_key.trim() == roll_rec.cur_rolling_key.trim() && cs_sum.trim() == ss_sum.trim()) {
+            new_rolling_key = roll_rec.new_rolling_key.trim();
+            await _saveNewRollingKey(conn, sess_code, new_rolling_key);
+            
+            if (await _getNewRollingKeyCount(conn, sess_code, new_rolling_key) == 1) {    
+              if (extend_session) { await _extendSessionValidTime(conn, sess_code); }
+              sess_valid = true;
+            }
+            else {
+              // Duplicated rolling key is found. May be the user session has been intercepted and the hacker try to use  //
+              // old rolling key to infiltrate the system. The other possibility is the user clicking the browser refresh //
+              // button. Either way, the session should be force ended due to security.                                   //   
+              await _deleteSession(conn, sess_code); 
+              sess_valid = false;                          
+            }
+          }  
+          else {
+            // Invalid rolling key is given. Hacker try to use invalid rolling key to infiltrate the system. The other //
+            // possibility is network transmission error to corrupt rolling key, but the chance is quite low.          //  
+            await _deleteSession(conn, sess_code);  
+            sess_valid = false;
+          }
+        }
+        else {
+          await _deleteSession(conn, sess_code);   // Someting is wrong, delete session and let user login again.
+          sess_valid = false;
+        }
+      }
+      else {
+        await _deleteSession(conn, sess_code);     // Session record may still exist.
+        sess_valid = false;
+      }
+    }
+    else {
+      sess_valid = false;
+    }
   }
   catch(e) {
     throw e;
@@ -2603,8 +2856,8 @@ async function getUserRole(conn, user_id) {
 
 
 exports.showMessagePage = async function(msg_pool, sess_code) {
-  var conn, user_id, user_role, wspath, private_group_marker, telegram_id_input, connect_mode, create_user_account, panel, js, html;
-  var msgrp = [];
+  let conn, user_id, user_role, wspath, private_group_marker, telegram_id_input, connect_mode, create_user_account, panel, js, html;
+  let msgrp = [];
     
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -2625,9 +2878,9 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
 
     //-- Define web page components based on system settings and user role --//
     private_group_marker = `<img src='/images/lock.png' height='15px'>`;    
-    telegram_id_input = (await telecom.telegramBotDefined(conn))? `<li><a href="/edit_tg_id?u_id=${user_id}" data-ajax="false">Telegram ID</a></li>` : ``;
+    telegram_id_input = (await telecom.telegramBotDefined(conn))? `<li><a href="javascript:editTelegramId(${user_id});" data-ajax="false">Telegram ID</a></li>` : ``;
     connect_mode = parseInt(await wev.getSysSettingValue(conn, 'connection_mode'), 10);
-    create_user_account = (connect_mode == 1 || connect_mode == 3)? `<li><a href="/create_msg_user" data-ajax="false">Create User</a></li>` : ``;
+    create_user_account = (connect_mode == 1 || connect_mode == 3)? `<li><a href="javascript:createMsgUser();" data-ajax="false">Create User</a></li>` : ``;
 
     if (user_role < 2) {
       //-- Note: As panel is opened, it will scroll page content to top. To stop this default behavior, we set data-position-fixed="true" and --//
@@ -2639,14 +2892,14 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
         <div data-role="main" class="ui-content">
           <ul data-role="listview">
             <li data-role="list-divider" style="color:darkgreen;">Maintain Your Profile</li>
-            <li><a href="/edit_alias?u_id=${user_id}" data-ajax="false">Alias</a></li>
-					  <li><a href="/edit_email?u_id=${user_id}" data-ajax="false">Email</a></li>
+            <li><a href="javascript:editAlias(${user_id});" data-ajax="false">Alias</a></li>
+					  <li><a href="javascript:editEmail(${user_id});" data-ajax="false">Email</a></li>
             ${telegram_id_input}
-            <li><a href="/edit_happy_passwd?u_id=${user_id}" data-ajax="false">Happy Password</a></li>
-					  <li><a href="/edit_unhappy_passwd?u_id=${user_id}" data-ajax="false">Unhappy Password</a></li>
+            <li><a href="javascript:editHappyPasswd(${user_id});" data-ajax="false">Happy Password</a></li>
+					  <li><a href="javascript:editUnhappyPasswd(${user_id});" data-ajax="false">Unhappy Password</a></li>
             <li data-role="list-divider" style="color:darkgreen;">Message Group</li>
-            <li><a href="/add_group" data-ajax="false">Add Group</a></li>
-            <li><a href="/add_private_group" data-ajax="false">Add Private Group</a></li>
+            <li><a href="javascript:addGroup();" data-ajax="false">Add Group</a></li>
+            <li><a href="javascript:addPrivateGroup();" data-ajax="false">Add Private Group</a></li>
 				  </ul>	
 			  </div>
       </div>`;
@@ -2657,21 +2910,21 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
         <div data-role="main" class="ui-content">
           <ul data-role="listview">
             <li data-role="list-divider" style="color:darkgreen;">Maintain Your Profile</li>
-            <li><a href="/edit_alias?u_id=${user_id}" data-ajax="false">Alias</a></li>
-					  <li><a href="/edit_email?u_id=${user_id}" data-ajax="false">Email</a></li>
+            <li><a href="javascript:editAlias(${user_id});" data-ajax="false">Alias</a></li>
+					  <li><a href="javascript:editEmail(${user_id});" data-ajax="false">Email</a></li>
             ${telegram_id_input}
-            <li><a href="/edit_happy_passwd?u_id=${user_id}" data-ajax="false">Happy Password</a></li>
-					  <li><a href="/edit_unhappy_passwd?u_id=${user_id}" data-ajax="false">Unhappy Password</a></li>
+            <li><a href="javascript:editHappyPasswd(${user_id});" data-ajax="false">Happy Password</a></li>
+					  <li><a href="javascript:editUnhappyPasswd(${user_id});" data-ajax="false">Unhappy Password</a></li>
             <li data-role="list-divider" style="color:darkgreen;">Message Group</li>
-            <li><a href="/add_group" data-ajax="false">Add Group</a></li>
-            <li><a href="/add_private_group" data-ajax="false">Add Private Group</a></li>
-					  <li><a href="/delete_group_by_admin" data-ajax="false">Delete Group</a></li>
+            <li><a href="javascript:addGroup();" data-ajax="false">Add Group</a></li>
+            <li><a href="javascript:addPrivateGroup();" data-ajax="false">Add Private Group</a></li>
+					  <li><a href="javascript:deleteGroupByAdmin();" data-ajax="false">Delete Group</a></li>
 					  <li data-role="list-divider" style="color:darkgreen;">System Administration</li>
             ${create_user_account}
-            <li><a href="/promote_user" data-ajax="false">Promote User</a></li>
-            <li><a href="/demote_user" data-ajax="false">Demote User</a></li>
-            <li><a href="/lock_user" data-ajax="false">Lock/Unlock User</a></li>
-            <li><a href="/system_setup" data-ajax="false">System Settings</a></li>
+            <li><a href="javascript:promoteUser();" data-ajax="false">Promote User</a></li>
+            <li><a href="javascript:demoteUser();" data-ajax="false">Demote User</a></li>
+            <li><a href="javascript:lockUser();" data-ajax="false">Lock/Unlock User</a></li>
+            <li><a href="javascript:systemSetup();" data-ajax="false">System Settings</a></li>
 					  <li><a href="javascript:doomEntireSystem();" data-ajax="false">Destroy System</a></li>
 				  </ul>	
 			  </div>
@@ -2716,9 +2969,6 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
         //-- need to send something to the server to keep the connection open within this time interval continuously.                --//
         wsPingServer = setInterval(ping, 50000);                 // Ping the server every 50 seconds                    
         wsCheckTimeout = setInterval(checkTimeout, 300000);      // Check session timeout every 5 minutes
-        //********************
-        //console.log('Websocket connection opened');
-        //********************
         
         if (is_reopen) {                                        
           //-- Refresh page as websocket is reconnected --//      
@@ -2732,11 +2982,6 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
         var type = packet.type;            // Possible values are 'cmd' (command) and 'msg' (message).
         var content = packet.content;      // Note: 'content' is highly possible an object, not just plain text.
 
-        //**********
-        //console.log(type);
-        //console.log(content);
-        //**********
-        
         if (type == 'msg') {
           if (content.op == 'msg_refresh') {
             refreshPage();
@@ -2748,9 +2993,6 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
       }
       
       ws.onclose = function(e) {
-        //****************
-        //console.log('Websocket connection closed');
-        //****************
         clearInterval(wsPingServer);
         //-- Reopen websocket automatically within 100ms --//
         wsOpenSocket = setTimeout(reopenWebSocket, 100);
@@ -2768,14 +3010,44 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
       myWebSocket = connectWebServer();                         
     });
 
-    function refreshPage() {
+    async function refreshPage() {
+      await prepareRollingKey(${_key_len});
+      let roll_rec = document.getElementById("roll_rec").value;
+      let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+      let roll_rec_sum = document.getElementById("roll_rec_sum").value;          
+          
       $.ajax({
         type: 'POST',
         url: '/check_new_message_count',
         dataType: 'json',
-        data: {user_id: ${user_id}},
+        data: {
+          user_id: ${user_id},
+          roll_rec: roll_rec,
+          iv_roll_rec: iv_roll_rec,
+          roll_rec_sum: roll_rec_sum
+        },
         success: function(ret_data) {
-          refreshMessageCount(ret_data);
+          if (ret_data.length == 1 && typeof(ret_data[0].cmd) == "string") {
+            let cmd = ret_data[0].cmd;
+            
+            if (cmd == "force_logout") {
+              logout();
+            }
+            else if (cmd == "sess_expired") {
+              alert("Session expired!");
+              logout();
+            }
+            else if (cmd == "sess_verify_fail") {
+              alert("Unable to verify your session status, please login again.");
+              logout();
+            }
+            else if (cmd == "no_cookie") {
+              window.location.href = "/";
+            }
+          }   
+          else {
+            refreshMessageCount(ret_data);
+          }
         },
         error: function(xhr, ajaxOptions, thrownError) {
           //alert("Unable to refresh message home page. Error " + xhr.status + ": " + thrownError);
@@ -2888,7 +3160,7 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
 
         case 'group_deleted':
           //-- A message group has been deleted, refresh whole page. --//
-          window.location.href = "/message";
+          goMessagePage();
           break; 
           
         case 'force_logout':
@@ -2899,17 +3171,194 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
           //-- do nothing --//   
       }                             
     }
+    
+    async function readGroupMessage(group_id) {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("g_id").value = group_id;
+        document.getElementById("main_page").action = "/do_sms";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }
+    }
+    
+    async function editAlias(user_id) {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("u_id").value = user_id;
+        document.getElementById("main_page").action = "/edit_alias";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }
+    }
+    
+    async function editEmail(user_id) {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("u_id").value = user_id;
+        document.getElementById("main_page").action = "/edit_email";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }    
+    }
+
+    async function editTelegramId(user_id) {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("u_id").value = user_id;
+        document.getElementById("main_page").action = "/edit_tg_id";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }        
+    }
+    
+    async function editHappyPasswd(user_id) {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("u_id").value = user_id;
+        document.getElementById("main_page").action = "/edit_happy_passwd";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }            
+    }
+
+    async function editUnhappyPasswd(user_id) {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("u_id").value = user_id;
+        document.getElementById("main_page").action = "/edit_unhappy_passwd";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }                
+    }
+    
+    async function addGroup() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("main_page").action = "/add_group";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }                    
+    }
+    
+    async function addPrivateGroup() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("main_page").action = "/add_private_group";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }                        
+    }
+    
+    async function createMsgUser() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("main_page").action = "/create_msg_user";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }                                
+    }
+    
+    async function deleteGroupByAdmin() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("main_page").action = "/delete_group_by_admin";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }                            
+    }
+    
+    async function promoteUser() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("main_page").action = "/promote_user";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }                                
+    }
+    
+    async function demoteUser() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("main_page").action = "/demote_user";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }                                    
+    }
+    
+    async function lockUser() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("main_page").action = "/lock_user";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }                                        
+    }
+    
+    async function systemSetup() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("main_page").action = "/system_setup";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }                                            
+    }
+    
+    async function goMessagePage() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("main_page").action = "/message";
+        document.getElementById("main_page").submit();      
+      }
+      catch(e) {
+        alert(e.message);
+      }
+    }
 
     function logout() {
       window.location.href = '/logout_msg';
     }
 
-    function doomEntireSystem() {
+    async function doomEntireSystem() {
       //-- It will nuke the site and destroy all data, use it with great care. --//
       if (confirm("Do you really want to destroy entire system?")) {
         if (confirm("Last chance! Really want to go?")) {
-          var url = "/destroy_entire_system";
-          window.location.href = url;
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("main_page").action = "/destroy_entire_system";
+            document.getElementById("main_page").submit();          
+          }
+          catch(e) {
+            alert(e.message);
+          }
         }
       }
     }`;
@@ -2966,33 +3415,43 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
 			            <a href="javascript:logout()" data-icon="power" class="ui-btn-right" data-ajax="false">Quit</a>					
 		            </div>	
 
-		            <div data-role="main" class="ui-body-d ui-content">`; 
+		            <div data-role="main" class="ui-body-d ui-content">
+                  <form id="main_page" name="main_page" action="" method="POST">
+                    <input type=hidden id="roll_rec", name="roll_rec", value="">
+                    <input type=hidden id="iv_roll_rec", name="iv_roll_rec", value="">   
+                    <input type=hidden id="roll_rec_sum", name="roll_rec_sum", value="">
+                    <input type=hidden id="g_id", name="g_id", value="">
+                    <input type=hidden id="u_id", name="u_id", value="">
+                  </form>                  
+                  
+                `; 
      
     if (msgrp.length > 0) {
-      for (var i = 0; i < msgrp.length; i++) {
-        var group_id = msgrp[i].group_id; 
-        var group_name = msgrp[i].group_name;
-        var group_type = parseInt(msgrp[i].group_type, 10);
-        var group_role = msgrp[i].group_role;
-        var unread_cnt = parseInt(msgrp[i].unread_cnt, 10);
-        var this_link = `/do_sms?g_id=` + group_id;
-        var this_marker = (group_type == 1)? private_group_marker : ``;
+      for (let i = 0; i < msgrp.length; i++) {
+        let group_id = msgrp[i].group_id; 
+        let group_name = msgrp[i].group_name;
+        let group_type = parseInt(msgrp[i].group_type, 10);
+        let group_role = msgrp[i].group_role;
+        let unread_cnt = parseInt(msgrp[i].unread_cnt, 10);
+        //let this_link = `/do_sms?g_id=` + group_id;
+        let this_marker = (group_type == 1)? private_group_marker : ``;
         
-        html += `<a href="` + this_link + `" id="grp_` + group_id + `" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">` + this_marker + group_name + `<br><font size="2pt">New message: ` + unread_cnt + `</font></a>`;        
+        //html += `<a href="` + this_link + `" id="grp_` + group_id + `" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">` + this_marker + group_name + `<br><font size="2pt">New message: ` + unread_cnt + `</font></a>`;     
+        // Note: it will turn HTTP method of '/do_sms' from 'GET' to 'POST' //   
+        html += `<a href="" onClick="readGroupMessage(${group_id});" id="grp_${group_id}" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">${this_marker}${group_name}<br><font size="2pt">New message: ${unread_cnt}</font></a>`;  
       }
       
       html += `</div>`;
     }
     else {
-      html += `<p><a href="/add_group" data-role="button" data-ajax="false">Add Group</a></p>
-               <p><a href="/add_private_group" data-role="button" data-ajax="false">Add Private Group</a></p>`;
+      html += `<p><a href="javascript:addGroup();" data-role="button" data-ajax="false">Add Group</a></p>
+               <p><a href="javascript:addPrivateGroup();" data-role="button" data-ajax="false">Add Private Group</a></p>`;
     }           
                               
     html += `	  </div>
               </div>
             </body>
-            </html>`; 
-    
+            </html>`;     
   }
   catch(e) {
     throw e;
@@ -3080,7 +3539,7 @@ async function _printUserProfileJavascriptSection(conn, sess_code, option) {
 	  <!doctype html>
 	  <html>  
 	  <head>
-	    <title>Message</title>
+	    <title>${option}</title>
 	    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
 	    <meta http-equiv='Content-Type' content='text/html; charset=utf-8'> 
 	  </head>
@@ -3124,11 +3583,11 @@ async function _printUserProfileJavascriptSection(conn, sess_code, option) {
 			  catch(e) {
 			    console.log(e);
 			    alert("Error is found, operation is aborted. Error: " + e);
-			    window.location.href = "/message";
+			    goHome();
 			  }	    
 		  }
 	    	    
-	    function getUserProfileData(option) {
+	    async function getUserProfileData(option) {
 				var key_ready = true;
 				aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
 				if (typeof(aes_key) != "string") {
@@ -3142,12 +3601,15 @@ async function _printUserProfileJavascriptSection(conn, sess_code, option) {
 			  }
 										
 				if (!key_ready) {
-					alert("Secure key is lost, operation is aborted."); 
-					var url = window.location.href;
-					var host = url.split('/');
-					window.location.href = host[0] + '//' + host[2] + '/message';
+					alert("Secure key is lost, operation is aborted.");
+          goHome(); 
 			  }
-			  else {					
+			  else {
+          await prepareRollingKey(${_key_len});
+          let roll_rec = document.getElementById("roll_rec").value;
+          let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+          let roll_rec_sum = document.getElementById("roll_rec_sum").value;          
+        					
 			    if (option == "alias" || option == "email" || option == "tg_id") {	
 						//-- Note: Due to asynchronous nature of javascript execution, it needs to use a  --//
 						//--       promise to ensure the data is received from the server before the form --//
@@ -3157,32 +3619,58 @@ async function _printUserProfileJavascriptSection(conn, sess_code, option) {
 					      type: 'POST',
 					      url: '/get_profile_data',
 					      dataType: 'html',
-					      data: {option: option},
+					      data: {
+                  option: option, 
+                  roll_rec: roll_rec,
+                  iv_roll_rec: iv_roll_rec,
+                  roll_rec_sum: roll_rec_sum
+                },
 					      success: function(ret_data) {
 					        let result = JSON.parse(ret_data);
-					        
+                  
 					        if (result.ok == '1') {						
 					          resolve(result);         // Note: 'result.data' is encrypted by 'aes_key' on server side.
 								  }
 					        else {
-					          let err_msg = "Unable to get data. Error: " + result.msg;
-					          console.log(err_msg);
-					          reject(err_msg);
+					          let err_msg = "";
+                    
+                    if (result.msg == "session_expired" || result.msg == "session_check_failure" || result.msg == "invalid_session") {
+                      err_msg = result.msg;
+                    }
+                    else {
+                      err_msg = "Unable to get data. Error: " + result.msg;
+                    } 
+                    
+					          console.log(err_msg);   
+					          reject(new Error(err_msg));
 								  }
 							  },
 							  error: function(xhr, ajaxOptions, thrownError) {
 							    let err_msg = "Unable to get data. Error " + xhr.status + ": " + thrownError
 							    console.log(err_msg);
-		              reject(err_msg);
+		              reject(new Error(err_msg));
 		            }
 						  });
 					  });
 					  
 					  this_promise.then((rec) => {
 							showProfileDataInForm(option, rec.algorithm, rec.iv, rec.data);
-					  }).catch((error) => {
-					    alert(error);
-					    window.location.href = "/message";							  
+					  }).catch((error) => {            
+              if (error.message.match(/session_expired/g)) {
+                alert("Session expired!");
+                window.location.href = "/logout_msg";
+              } 
+              else if (error.message.match(/session_check_failure/g)) {
+                alert("Session checking failure, please login again.");
+                window.location.href = "/logout_msg";
+              } 
+              else if (error.message.match(/invalid_session/g)) {
+                window.location.href = "/";
+              }
+              else {
+					      alert(error.message);
+					      goHome();
+              }							  
 					  });
 				  }
 				}	    
@@ -3193,90 +3681,102 @@ async function _printUserProfileJavascriptSection(conn, sess_code, option) {
 			});	    
 	    	    	    	    
 	    async function saveAlias() {
-	      var new_alias = $('#alias').val();
+	      let new_alias = $('#alias').val();
 	      
 	      if (new_alias.trim() == '') {
 	        alert("Alias should not be blank");
 	        document.getElementById("alias").focus();
 	      } 
 	      else {
-	        var key_ready = true;
-	        aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
-	        if (typeof(aes_key) != "string") {
-	          key_ready = false;
-				  }
-				  else {
-				    aes_key = aes_key.trim();
-				    if (aes_key.length < ${_key_len}) {
-				      key_ready = false;
-						}
-				  }
-	        
-	        if (key_ready) {	        
-		        var enc_obj = await aesEncryptJSON(algorithm, aes_key, new_alias);		        
-		        $('#algorithm').val(algorithm);
-		        $('#iv').val(enc_obj.iv);
-		        $('#e_alias').val(enc_obj.encrypted);
-		        $('#alias').val('');
-		      
-            // Clear aes_key from RAM after used //
-            aes_key = '';
-          
-		        document.getElementById("oper_mode").value = 'S';
-		        document.getElementById("frmEditProfile").action = '/edit_alias';
-		        document.getElementById("frmEditProfile").submit();
-				  }
-				  else {
-				    alert("Secure key is lost, operation is aborted");
-				    window.location.href = "/message";
-				  }
+          try {
+            let key_ready = true;
+            aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+            if (typeof(aes_key) != "string") {
+              key_ready = false;
+            }
+            else {
+              aes_key = aes_key.trim();
+              if (aes_key.length < ${_key_len}) {
+                key_ready = false;
+              }
+            }
+            
+            if (key_ready) {	        
+              let enc_obj = await aesEncryptJSON(algorithm, aes_key, new_alias);		        
+              $('#algorithm').val(algorithm);
+              $('#iv').val(enc_obj.iv);
+              $('#e_alias').val(enc_obj.encrypted);
+              $('#alias').val('');
+            
+              // Clear aes_key from RAM after used //
+              aes_key = null;
+
+              await prepareRollingKey(${_key_len});            
+              document.getElementById("oper_mode").value = 'S';
+              document.getElementById("frmEditProfile").action = '/confirm_edit_alias';
+              document.getElementById("frmEditProfile").submit();
+            }
+            else {
+              alert("Secure key is lost, operation is aborted");
+              goHome();
+            }
+          }
+          catch(e) {
+            alert(e.message);
+          }
 	      }
 	    }
 	    
 	    async function saveEmail() {
-	      var this_email = $('#email').val();        
+	      let this_email = $('#email').val();        
 	      
 	      if (this_email.trim() == "") {
 	        alert("Email is a compulsory data which must be given");
 	        document.getElementById("email").focus();
 	      }
 	      else {
-	        var key_ready = true;
-	        aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
-	        if (typeof(aes_key) != "string") {
-	          key_ready = false;
-				  }
-				  else {
-				    aes_key = aes_key.trim();
-				    if (aes_key.length < ${_key_len}) {
-				      key_ready = false;
-						}
-				  }
-	        
-	        if (key_ready) {	        
-		        var enc_obj = await aesEncryptJSON(algorithm, aes_key, this_email);		        
-		        $('#algorithm').val(algorithm);
-		        $('#iv').val(enc_obj.iv);
-		        $('#e_email').val(enc_obj.encrypted);
-		        $('#email').val('');
-
-            // Clear aes_key from RAM after used //
-            aes_key = '';
-		            
-		        document.getElementById("oper_mode").value = 'S';
-		        document.getElementById("frmEditProfile").action = '/edit_email';
-		        document.getElementById("frmEditProfile").submit();
-				  }
-				  else {
-				    alert("Secure key is lost, operation is aborted");
-				    window.location.href = "/message";				  
-				  }        
+          try {
+            let key_ready = true;
+            aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+            if (typeof(aes_key) != "string") {
+              key_ready = false;
+            }
+            else {
+              aes_key = aes_key.trim();
+              if (aes_key.length < ${_key_len}) {
+                key_ready = false;
+              }
+            }
+            
+            if (key_ready) {	        
+              let enc_obj = await aesEncryptJSON(algorithm, aes_key, this_email);		        
+              $('#algorithm').val(algorithm);
+              $('#iv').val(enc_obj.iv);
+              $('#e_email').val(enc_obj.encrypted);
+              $('#email').val('');
+  
+              // Clear aes_key from RAM after used //
+              aes_key = null;
+              
+              await prepareRollingKey(${_key_len});    
+              document.getElementById("oper_mode").value = 'S';
+              document.getElementById("frmEditProfile").action = '/confirm_edit_email';
+              document.getElementById("frmEditProfile").submit();
+            }
+            else {
+              alert("Secure key is lost, operation is aborted");
+              goHome();				  
+            }    
+          }
+          catch(e) {
+            alert(e.message);
+          }    
 	      }
 	    }
 	    
 	    async function saveHappyPasswd() {
-	      var this_passwd = allTrim(document.getElementById("happy_passwd").value);
-	      var this_passwd_rt = allTrim(document.getElementById("happy_passwd_rt").value);
+	      let this_passwd = allTrim(document.getElementById("happy_passwd").value);
+	      let this_passwd_rt = allTrim(document.getElementById("happy_passwd_rt").value);
 	      
 	      if (this_passwd.length < 8) {
 	        alert("Password length is too short");
@@ -3290,43 +3790,49 @@ async function _printUserProfileJavascriptSection(conn, sess_code, option) {
 	        return false;
 	      }
 	      else {
-	        var key_ready = true;
-	        aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
-	        if (typeof(aes_key) != "string") {
-	          key_ready = false;
-				  }
-				  else {
-				    aes_key = aes_key.trim();
-				    if (aes_key.length < ${_key_len}) {
-				      key_ready = false;
-						}
-				  }
-	        
-	        if (key_ready) {	        
-		        var enc_obj = await aesEncryptJSON(algorithm, aes_key, this_passwd);		        
-		        $('#algorithm').val(algorithm);
-		        $('#iv').val(enc_obj.iv);
-		        $('#e_happy_passwd').val(enc_obj.encrypted);
-		        $('#happy_passwd').val('');
-		        $('#happy_passwd_rt').val('');
-
-            // Clear aes_key from RAM after used //
-            aes_key = '';
-		      
-		        document.getElementById("oper_mode").value = 'S';
-		        document.getElementById("frmEditProfile").action = "/edit_happy_passwd";
-		        document.getElementById("frmEditProfile").submit();   
-				  }
-				  else {
-				    alert("Secure key is lost, operation is aborted");
-				    window.location.href = "/message";				  				  
-				  }             
+          try {
+            let key_ready = true;
+            aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+            if (typeof(aes_key) != "string") {
+              key_ready = false;
+            }
+            else {
+              aes_key = aes_key.trim();
+              if (aes_key.length < ${_key_len}) {
+                key_ready = false;
+              }
+            }
+            
+            if (key_ready) {	        
+              let enc_obj = await aesEncryptJSON(algorithm, aes_key, this_passwd);		        
+              $('#algorithm').val(algorithm);
+              $('#iv').val(enc_obj.iv);
+              $('#e_happy_passwd').val(enc_obj.encrypted);
+              $('#happy_passwd').val('');
+              $('#happy_passwd_rt').val('');
+  
+              // Clear aes_key from RAM after used //
+              aes_key = null;
+            
+              await prepareRollingKey(${_key_len});
+              document.getElementById("oper_mode").value = 'S';
+              document.getElementById("frmEditProfile").action = "/confirm_edit_happy_passwd";
+              document.getElementById("frmEditProfile").submit();   
+            }
+            else {
+              alert("Secure key is lost, operation is aborted");
+              goHome();				  				  
+            }    
+          }
+          catch(e) {
+            alert(e.message);
+          }         
 	      }      
 	    }
 	    
 	    async function saveUnhappyPasswd() {
-	      var this_passwd = allTrim(document.getElementById("unhappy_passwd").value);
-	      var this_passwd_rt = allTrim(document.getElementById("unhappy_passwd_rt").value);
+	      let this_passwd = allTrim(document.getElementById("unhappy_passwd").value);
+	      let this_passwd_rt = allTrim(document.getElementById("unhappy_passwd_rt").value);
 	      
 	      if (this_passwd.length < 8) {
 	        alert("Password length is too short");
@@ -3340,43 +3846,49 @@ async function _printUserProfileJavascriptSection(conn, sess_code, option) {
 	        return false;
 	      }
 	      else {
-	        var key_ready = true;
-	        aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
-	        if (typeof(aes_key) != "string") {
-	          key_ready = false;
-				  }
-				  else {
-				    aes_key = aes_key.trim();
-				    if (aes_key.length < ${_key_len}) {
-				      key_ready = false;
-						}
-				  }
-	        
-	        if (key_ready) {	        
-		        var enc_obj = await aesEncryptJSON(algorithm, aes_key, this_passwd);		        
-		        $('#algorithm').val(algorithm);
-		        $('#iv').val(enc_obj.iv);
-		        $('#e_unhappy_passwd').val(enc_obj.encrypted);
-		        $('#unhappy_passwd').val('');
-		        $('#unhappy_passwd_rt').val('');
-
-            // Clear aes_key from RAM after used //
-            aes_key = '';
-		            
-		        document.getElementById("oper_mode").value = 'S';
-		        document.getElementById("frmEditProfile").action = "/edit_unhappy_passwd";
-		        document.getElementById("frmEditProfile").submit();   
-				  }
-				  else {
-				    alert("Secure key is lost, operation is aborted");
-				    window.location.href = "/message";				  				  
-				  }             
+          try {
+            let key_ready = true;
+            aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+            if (typeof(aes_key) != "string") {
+              key_ready = false;
+            }
+            else {
+              aes_key = aes_key.trim();
+              if (aes_key.length < ${_key_len}) {
+                key_ready = false;
+              }
+            }
+            
+            if (key_ready) {	        
+              let enc_obj = await aesEncryptJSON(algorithm, aes_key, this_passwd);		        
+              $('#algorithm').val(algorithm);
+              $('#iv').val(enc_obj.iv);
+              $('#e_unhappy_passwd').val(enc_obj.encrypted);
+              $('#unhappy_passwd').val('');
+              $('#unhappy_passwd_rt').val('');
+  
+              // Clear aes_key from RAM after used //
+              aes_key = null;
+              
+              await prepareRollingKey(${_key_len});    
+              document.getElementById("oper_mode").value = 'S';
+              document.getElementById("frmEditProfile").action = "/confirm_edit_unhappy_passwd";
+              document.getElementById("frmEditProfile").submit();   
+            }
+            else {
+              alert("Secure key is lost, operation is aborted");
+              goHome();				  				  
+            }    
+          }
+          catch(e) {
+            alert(e.message);
+          }         
 	      }            
 	    }
 	    
 	    async function saveTelegramID() {
-	      var this_tg_id = allTrim(document.getElementById("tg_id").value);
-	      var ok = true;
+	      let this_tg_id = allTrim(document.getElementById("tg_id").value);
+	      let ok = true;
 	      
 	      if (this_tg_id != "") {
 	        if (isNaN(this_tg_id)) {
@@ -3387,7 +3899,7 @@ async function _printUserProfileJavascriptSection(conn, sess_code, option) {
 	      }
 	
 	      if (ok) {
-	        var key_ready = true;
+	        let key_ready = true;
 	        aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
 	        if (typeof(aes_key) != "string") {
 	          key_ready = false;
@@ -3400,25 +3912,37 @@ async function _printUserProfileJavascriptSection(conn, sess_code, option) {
 				  }
 	        
 	        if (key_ready) {	        
-		        var enc_obj = await aesEncryptJSON(algorithm, aes_key, this_tg_id);		        
+		        let enc_obj = await aesEncryptJSON(algorithm, aes_key, this_tg_id);		        
 		        $('#algorithm').val(algorithm);
 		        $('#iv').val(enc_obj.iv);
 		        $('#e_tg_id').val(enc_obj.encrypted);
 		        $('#tg_id').val('');
 
             // Clear aes_key from RAM after used //
-            aes_key = '';
-		            
+            aes_key = null;
+		        
+            await prepareRollingKey(${_key_len});    
 		        document.getElementById("oper_mode").value = 'S';
-		        document.getElementById("frmEditProfile").action = '/edit_tg_id';
+		        document.getElementById("frmEditProfile").action = '/confirm_edit_tg_id';
 		        document.getElementById("frmEditProfile").submit();
 				  }
 				  else {
 				    alert("Secure key is lost, operation is aborted");
-				    window.location.href = "/message";				  				  
+				    goHome();				  				  
 				  }        
 	      }      
 	    }
+      
+      async function goHome() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frmEditProfile").action = '/message';
+          document.getElementById("frmEditProfile").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }
+      }
 	  </script>    
 	  `;
   }
@@ -3440,10 +3964,13 @@ function _editUserAliasForm(user_id) {
   <input type=hidden id="e_alias" name="e_alias" value="">
   <input type=hidden id="u_id" name="u_id" value="${user_id}">
   <input type=hidden id="oper_mode" name="oper_mode" value="">    
-  
+  <input type=hidden id="roll_rec" name="roll_rec" value="">
+  <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+  <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    
   <div data-role="page" id="config_page">
     <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-			<a href="/message" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
+			<a href="javascript:goHome();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
 			<h1>Alias</h1>
     </div>
     
@@ -3516,10 +4043,13 @@ function _editEmailForm(user_id) {
   <input type=hidden id="e_email" name="e_email" value="">
   <input type=hidden id="u_id" name="u_id" value="${user_id}">
   <input type=hidden id="oper_mode" name="oper_mode" value="">    
+  <input type=hidden id="roll_rec" name="roll_rec" value="">
+  <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+  <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
   
   <div data-role="page" id="config_page">
     <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-			<a href="/message" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
+			<a href="javascript:goHome();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
 			<h1>Email</h1>
     </div>
     
@@ -3627,11 +4157,14 @@ function _editTelegramIdForm(user_id, tg_bot, client_device_info) {
   <input type=hidden id="iv" name="iv" value="">  
   <input type=hidden id="e_tg_id" name="e_tg_id" value="">
   <input type=hidden id="u_id" name="u_id" value="${user_id}">
-  <input type=hidden id="oper_mode" name="oper_mode" value="">    
-  
+  <input type=hidden id="oper_mode" name="oper_mode" value="">   
+  <input type=hidden id="roll_rec" name="roll_rec" value="">
+  <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+  <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+     
   <div data-role="page" id="config_page">
     <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-			<a href="/message" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
+			<a href="javascript:goHome();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
 			<h1>Telegram ID</h1>
     </div>
     
@@ -3697,10 +4230,13 @@ function _editHappyPasswdForm(user_id) {
   <input type=hidden id="e_happy_passwd" name="e_happy_passwd" value="">
   <input type=hidden id="u_id" name="u_id" value="${user_id}">
   <input type=hidden id="oper_mode" name="oper_mode" value="">    
-  
+  <input type=hidden id="roll_rec" name="roll_rec" value="">
+  <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+  <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    
   <div data-role="page" id="config_page">
     <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-			<a href="/message" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
+			<a href="javascript:goHome();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
 			<h1>Happy Password</h1>
     </div>
     
@@ -3748,11 +4284,14 @@ function _editUnhappyPasswdForm(user_id) {
   <input type=hidden id="iv" name="iv" value="">  
   <input type=hidden id="e_unhappy_passwd" name="e_unhappy_passwd" value="">
   <input type=hidden id="u_id" name="u_id" value="${user_id}">
-  <input type=hidden id="oper_mode" name="oper_mode" value="">    
+  <input type=hidden id="oper_mode" name="oper_mode" value=""> 
+  <input type=hidden id="roll_rec" name="roll_rec" value="">
+  <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+  <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">     
   
   <div data-role="page" id="config_page">
     <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-			<a href="/message" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
+			<a href="javascript:goHome();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
 			<h1>Unhappy Password</h1>
     </div>
     
@@ -3799,6 +4338,7 @@ function _printAddGroupJavascriptSection(sess_code) {
 	<link rel="shortcut icon" href="/favicon.ico">
 	<script src="/js/jquery.min.js"></script>
 	<script src="/js/jquery.mobile-1.4.5.min.js"></script>
+  <script src="/js/crypto-lib.js"></script>
   <script src="/js/common_lib.js"></script>    
 
   <script>
@@ -3830,11 +4370,17 @@ function _printAddGroupJavascriptSection(sess_code) {
       }
     }
     
-    function createGroup() {
+    async function createGroup() {
       if (dataSetOk()) {
-        document.getElementById("oper_mode").value = "S";
-        document.getElementById("frmAddGrp").action = "/add_group";
-        document.getElementById("frmAddGrp").submit();
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("oper_mode").value = "S";
+          document.getElementById("frmAddGrp").action = "/confirm_add_group";
+          document.getElementById("frmAddGrp").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
     }
     
@@ -3873,6 +4419,17 @@ function _printAddGroupJavascriptSection(sess_code) {
       
       return true;
     }
+    
+    async function goHome() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("frmAddGrp").action = '/message';
+        document.getElementById("frmAddGrp").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }
+    }    
   </script>  
   `;
   
@@ -3888,10 +4445,13 @@ function _printAddGroupForm(user_id, group_name) {
   <input type=hidden id="oper_mode" name="oper_mode" value="">
   <input type=hidden id="u_id" name="u_id" value="${user_id}">
   <input type=hidden id="msg_auto_delete" name="msg_auto_delete" value="">
-  
+  <input type=hidden id="roll_rec" name="roll_rec" value="">
+  <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+  <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    
   <div data-role="page">
     <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-			<a href="/message" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
+			<a href="javascript:goHome();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
 			<h1>Add Group</h1>
     </div>
     
@@ -3957,7 +4517,8 @@ function _printAddPrivateGroupJavascriptSection(sess_code) {
 	<link rel="shortcut icon" href="/favicon.ico">
 	<script src="/js/jquery.min.js"></script>
 	<script src="/js/jquery.mobile-1.4.5.min.js"></script>
-  <script src="/js/common_lib.js"></script>    
+  <script src="/js/common_lib.js"></script>
+  <script src="/js/crypto-lib.js"></script>    
 
   <script>
     $(document).on("pagecreate", function() {
@@ -3977,38 +4538,56 @@ function _printAddPrivateGroupJavascriptSection(sess_code) {
       })      
     });    
 
-    function createGroup() {
-      var this_group_name = allTrim(document.getElementById("group_name").value);
-      if (this_group_name == "") {
-        alert("Group name is compulsory");
-        document.getElementById("group_name").focus();
+    async function createGroup() {
+      try {
+        let this_group_name = allTrim(document.getElementById("group_name").value);
+        if (this_group_name == "") {
+          alert("Group name is compulsory");
+          document.getElementById("group_name").focus();
+          return false;
+        }
+        
+        let this_member = allTrim(document.getElementById("member").value);
+        if (this_member == "") {
+          alert("Person to be invited is compulsory");
+          document.getElementById("member").focus();
+          return false;        
+        }
+        
+        let is_checked = document.getElementById("auto_delete").checked;
+        if (is_checked == false) {
+          document.getElementById("auto_delete").value = 0;
+          document.getElementById("delete_after").value = 0;
+        }
+        else {
+          document.getElementById("auto_delete").value = 1;
+          let da = parseInt(document.getElementById("delete_after").value, 10);
+          if (isNaN(da) || (da < 1 || da > 30)) {
+            document.getElementById("delete_after").value = 1;
+          }
+        }
+
+        await prepareRollingKey(${_key_len});        
+        document.getElementById("oper_mode").value = "S";
+        document.getElementById("frmAddPgrp").action = "/confirm_add_private_group";
+        document.getElementById("frmAddPgrp").submit();
+      }
+      catch(e) {
+        alert(e.message);
         return false;
       }
-      
-      var this_member = allTrim(document.getElementById("member").value);
-      if (this_member == "") {
-        alert("Person to be invited is compulsory");
-        document.getElementById("member").focus();
-        return false;        
-      }
-      
-      var is_checked = document.getElementById("auto_delete").checked;
-      if (is_checked == false) {
-        document.getElementById("auto_delete").value = 0;
-        document.getElementById("delete_after").value = 0;
-      }
-      else {
-        document.getElementById("auto_delete").value = 1;
-        var da = parseInt(document.getElementById("delete_after").value, 10);
-        if (isNaN(da) || (da < 1 || da > 30)) {
-          document.getElementById("delete_after").value = 1;
-        }
-      }
-      
-      document.getElementById("oper_mode").value = "S";
-      document.getElementById("frmAddPgrp").action = "/add_private_group";
-      document.getElementById("frmAddPgrp").submit();
     }    
+    
+    async function goHome() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("frmAddPgrp").action = '/message';
+        document.getElementById("frmAddPgrp").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }
+    }        
   </script>  
   `;
   
@@ -4025,10 +4604,13 @@ function _printAddPrivateGroupForm(user_id, group_name, auto_delete, member) {
   <form id="frmAddPgrp" name="frmAddPgrp" action="" method="post">
   <input type=hidden id="u_id" name="u_id" value="${user_id}">
   <input type=hidden id="oper_mode" name="oper_mode" value="">
-  
+  <input type=hidden id="roll_rec" name="roll_rec" value="">
+  <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+  <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    
   <div data-role="page">
     <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-			<a href="/message" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
+			<a href="javascript:goHome();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
 			<h1>Add Private Group</h1>
     </div>
     
@@ -4056,7 +4638,7 @@ function _printAddPrivateGroupForm(user_id, group_name, auto_delete, member) {
 
 
 exports.printAddPrivateGroupForm = async function(user_id, group_name, auto_delete, member, sess_code) {
-  var html;
+  let html;
   
   try {
     html = wev.printHeader('Add Private Group');
@@ -4072,7 +4654,7 @@ exports.printAddPrivateGroupForm = async function(user_id, group_name, auto_dele
 
 
 function _printDeleteGroupByAdminJavascriptSection() {
-  var html;
+  let html;
   
   html = `
 	<link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
@@ -4080,9 +4662,10 @@ function _printDeleteGroupByAdminJavascriptSection() {
 	<script src="/js/jquery.min.js"></script>
 	<script src="/js/jquery.mobile-1.4.5.min.js"></script>
   <script src="/js/common_lib.js"></script>    
+  <script src="/js/crypto-lib.js"></script>
 
   <script>
-    function deleteGroups(cnt) {
+    async function deleteGroups(cnt) {
       var select_cnt = 0;
     
       for (idx = 1; idx <= cnt; idx++) {
@@ -4106,12 +4689,24 @@ function _printDeleteGroupByAdminJavascriptSection() {
         }
         
         if (confirm(question)) {
+          await prepareRollingKey(${_key_len});
           document.getElementById("oper_mode").value = "S";
-          document.getElementById("frm_delete_group").action = '/delete_group_by_admin';
+          document.getElementById("frm_delete_group").action = '/confirm_delete_group_by_admin';
           document.getElementById("frm_delete_group").submit();
         }
       }      
     }    
+    
+    async function goHome() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("frm_delete_group").action = '/message';
+        document.getElementById("frm_delete_group").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }
+    }            
   </script>  
   `;
   
@@ -4120,16 +4715,19 @@ function _printDeleteGroupByAdminJavascriptSection() {
 
 
 function _printDeleteGroupByAdminForm(user_id, groups) {
-  var html, cnt;
+  let html, cnt;
   
   html = `
   <form id="frm_delete_group" name="frm_delete_group" action="" method="post">
   <input type=hidden id="u_id" name="u_id" value="${user_id}">
   <input type=hidden id="oper_mode" name="oper_mode" value="">
-  
+  <input type=hidden id="roll_rec" name="roll_rec" value="">
+  <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+  <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    
   <div data-role="page">
     <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-			<a href="/message" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
+			<a href="javascript:goHome();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
 			<h1>Delete Group</h1>
     </div>
   
@@ -4144,9 +4742,9 @@ function _printDeleteGroupByAdminForm(user_id, groups) {
   `;
 
   cnt = 0;
-  for (var i = 0; i < groups.length; i++) {
-    var this_group_id = groups[i].group_id;
-    var this_group_name = groups[i].group_name;
+  for (let i = 0; i < groups.length; i++) {
+    let this_group_id = groups[i].group_id;
+    let this_group_name = groups[i].group_name;
     
     cnt++;
     html += `
@@ -4173,7 +4771,8 @@ function _printDeleteGroupByAdminForm(user_id, groups) {
           <tr><td align=center><input type="button" id="save" name="save" value="Delete" onClick="deleteGroups(${cnt});"></td></tr>
         </tbody>  
       </div>  
-    </div>    
+    </div>
+    </form>    
     `;
   }
   else {
@@ -4184,7 +4783,8 @@ function _printDeleteGroupByAdminForm(user_id, groups) {
         </tbody>  
         </table>
       </div>  
-    </div>    
+    </div> 
+    </form>   
     `;
   }
   
@@ -4193,8 +4793,8 @@ function _printDeleteGroupByAdminForm(user_id, groups) {
 
 
 exports.printDeleteGroupByAdminForm = async function(msg_pool, user_id) {
-  var conn, html;
-  var groups = [];
+  let conn, html;
+  let groups = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -4216,7 +4816,7 @@ exports.printDeleteGroupByAdminForm = async function(msg_pool, user_id) {
 
 
 function _printCreateUserJavascriptSesction() {
-  var html;
+  let html;
   
   html = `
 	<link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
@@ -4247,61 +4847,72 @@ function _printCreateUserJavascriptSesction() {
 				  }
         }
                 
-        if (key_ready) {       
-	        //-- Encrypt data before send to the back-end server --//
-	        $('#algorithm').val(algorithm);
-	         
-	        enc_obj = await aesEncryptJSON(algorithm, aes_key, $('#name').val());
-	        $('#iv_name').val(enc_obj.iv);
-	        $('#e_name').val(enc_obj.encrypted);
-	        
-	        enc_obj = await aesEncryptJSON(algorithm, aes_key, $('#user').val());
-	        $('#iv_user').val(enc_obj.iv);
-	        $('#e_user').val(enc_obj.encrypted);
-
-	        enc_obj = await aesEncryptJSON(algorithm, aes_key, $('#alias').val());
-	        $('#iv_alias').val(enc_obj.iv);
-	        $('#e_alias').val(enc_obj.encrypted);
-	        
-	        enc_obj = await aesEncryptJSON(algorithm, aes_key, $('#email').val());
-	        $('#iv_email').val(enc_obj.iv);
-	        $('#e_email').val(enc_obj.encrypted);
-	        
-	        enc_obj = await aesEncryptJSON(algorithm, aes_key, $('#happy_passwd1').val());
-	        $('#iv_happy_passwd').val(enc_obj.iv);
-	        $('#e_happy_passwd').val(enc_obj.encrypted);
-	        
-	        enc_obj = await aesEncryptJSON(algorithm, aes_key, $('#unhappy_passwd1').val());
-	        $('#iv_unhappy_passwd').val(enc_obj.iv);
-	        $('#e_unhappy_passwd').val(enc_obj.encrypted);
-
-          // Clear aes_key from RAM after used //
-          aes_key = '';
-          	        
-	        //-- Remove content of all clear text data --//
-	        $('#name').val('');
-	        $('#user').val('');
-	        $('#alias').val('');
-	        $('#email').val('');
-	        $('#happy_passwd1').val('');
-	        $('#happy_passwd2').val('');
-	        $('#unhappy_passwd1').val('');
-	        $('#unhappy_passwd2').val('');
-	      
-	        //-- Note: DON'T use JQuery '$' symbol to refer the form 'frm_add_user'. Otherwise, abnormal behavior  --//
-	        //--       will be obtained after form is submitted. The weird behavior is that the form seems to be   --//
-	        //--       submitted successfully, i.e. The back-end server receive all the emitted data successfully, --//
-	        //--       however, the web browser still stuck on the form before submission. Therefore, it can't     --//
-	        //--       response the resultant web page return from the server. The cause of this issue is still    --//
-	        //--       unknown, and it seems to relate to back-end technology used. It is OK if Perl CGI is used   --//
-	        //--       on the back-end server, but it has problem if back-end server use Express.js.               --//      
-	        document.getElementById("oper_mode").value = 'S';
-	        document.getElementById("frm_add_user").action = '/create_msg_user';
-	        document.getElementById("frm_add_user").submit();         
+        if (key_ready) { 
+          try {      
+            //-- Generate new rolling key --//
+            await prepareRollingKey(${_key_len});
+          
+            //-- Encrypt data before send to the back-end server --//
+            $('#algorithm').val(algorithm);
+             
+            enc_obj = await aesEncryptJSON(algorithm, aes_key, $('#name').val());
+            $('#iv_name').val(enc_obj.iv);
+            $('#e_name').val(enc_obj.encrypted);
+            
+            enc_obj = await aesEncryptJSON(algorithm, aes_key, $('#user').val());
+            $('#iv_user').val(enc_obj.iv);
+            $('#e_user').val(enc_obj.encrypted);
+  
+            enc_obj = await aesEncryptJSON(algorithm, aes_key, $('#alias').val());
+            $('#iv_alias').val(enc_obj.iv);
+            $('#e_alias').val(enc_obj.encrypted);
+            
+            enc_obj = await aesEncryptJSON(algorithm, aes_key, $('#email').val());
+            $('#iv_email').val(enc_obj.iv);
+            $('#e_email').val(enc_obj.encrypted);
+            
+            enc_obj = await aesEncryptJSON(algorithm, aes_key, $('#happy_passwd1').val());
+            $('#iv_happy_passwd').val(enc_obj.iv);
+            $('#e_happy_passwd').val(enc_obj.encrypted);
+            
+            enc_obj = await aesEncryptJSON(algorithm, aes_key, $('#unhappy_passwd1').val());
+            $('#iv_unhappy_passwd').val(enc_obj.iv);
+            $('#e_unhappy_passwd').val(enc_obj.encrypted);
+  
+            // Clear aes_key from RAM after used //
+            aes_key = null;
+                      
+            //-- Remove content of all clear text data --//
+            $('#name').val('');
+            $('#user').val('');
+            $('#alias').val('');
+            $('#email').val('');
+            $('#happy_passwd1').val('');
+            $('#happy_passwd2').val('');
+            $('#unhappy_passwd1').val('');
+            $('#unhappy_passwd2').val('');
+          
+            //-- Note: DON'T use JQuery '$' symbol to refer the form 'frm_add_user'. Otherwise, abnormal behavior  --//
+            //--       will be obtained after form is submitted. The weird behavior is that the form seems to be   --//
+            //--       submitted successfully, i.e. The back-end server receive all the emitted data successfully, --//
+            //--       however, the web browser still stuck on the form before submission. Therefore, it can't     --//
+            //--       response the resultant web page return from the server. The cause of this issue is still    --//
+            //--       unknown, and it seems to relate to back-end technology used. It is OK if Perl CGI is used   --//
+            //--       on the back-end server, but it has problem if back-end server use Express.js.               --//  
+            //--                                                                                                   --//
+            //--       Finally, the reason of the above problem is found. It is due to the old jQuery library, it  --//
+            //--       is too old to understand 'async/await' syntax, and so the error.                            --//            
+            document.getElementById("oper_mode").value = 'S';
+            document.getElementById("frm_add_user").action = '/confirm_create_msg_user';
+            document.getElementById("frm_add_user").submit();
+          }
+          catch(e) {
+            alert(e.message);
+          }         
 			  }
 			  else {
 			    alert("Secure key is lost, operation cannot proceed.");
-			    window.location.href = "/message";
+			    goHome();
 			  }       
       }
     }
@@ -4367,6 +4978,28 @@ function _printCreateUserJavascriptSesction() {
             
       return true;
     }
+    
+    async function goHome() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("frm_add_user").action = '/message';
+        document.getElementById("frm_add_user").submit();                 
+      }
+      catch(e) {
+        alert(e.message);
+      }
+    }
+    
+    async function goCreateUser() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("frm_add_user").action = '/create_msg_user';
+        document.getElementById("frm_add_user").submit();                 
+      }
+      catch(e) {
+        alert(e.message);
+      }    
+    }
   </script>  
   `;
   
@@ -4375,7 +5008,7 @@ function _printCreateUserJavascriptSesction() {
 
 
 function _printCreateUserForm() {
-  var red_dot, html;
+  let red_dot, html;
   
   red_dot = "<font color='red'>*</font>";
   
@@ -4395,10 +5028,13 @@ function _printCreateUserForm() {
   <input type=hidden id="e_happy_passwd" name="e_happy_passwd" value="">
   <input type=hidden id="iv_unhappy_passwd" name="iv_unhappy_passwd" value="">
   <input type=hidden id="e_unhappy_passwd" name="e_unhappy_passwd" value="">
-  
+  <input type=hidden id="roll_rec" name="roll_rec" value="">
+  <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+  <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    
   <div data-role="page">
     <div data-role="header" data-position="fixed" data-tap-toggle="false">
-      <a href="/message" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
+      <a href="javascript:goHome();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
       <h1>Create User</h1>
     </div>
     
@@ -4452,12 +5088,80 @@ function _printCreateUserForm() {
 
 
 exports.printCreateUserForm = async function() {
-  var html;
+  let html;
   
   try {
     html = wev.printHeader('Create User');
     html += _printCreateUserJavascriptSesction();
     html += _printCreateUserForm();
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return html;
+}
+
+
+function _printActionOptionForm(message) {
+  let html;
+  
+  try {
+    html = `
+    <form id="frm_add_user" name="frm_add_user" action="" method="post">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+
+    <div data-role="page">
+      <div data-role="header" data-position="fixed" data-tap-toggle="false">
+        <a href="javascript:goHome();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
+        <h1>Create User</h1>
+      </div>
+      
+      <div data-role="main" class="ui-body-d ui-content">
+        <table width=100% cellspacing=0 cellpadding=0>
+        <thead></thead>
+        <tbody>
+          <tr>
+            <td colspan=2><b>${message}</b></td>
+          </tr>
+          <tr>
+            <td>&nbsp;</td>
+          </tr>
+          <tr>
+            <td colspan=2>Do you want to create more account?</td>
+          </tr>
+          <tr>
+            <td width=50% align=center>
+              <input type=button id="btn_yes" name="btn_yes" value="Yes" onClick="goCreateUser();">
+            </td>  
+            <td width=50% align=center>
+              <input type=button id="btn_no" name="btn_no" value="No" onClick="goHome();">
+            </td>
+          </tr>
+        </tbody>
+        </table>
+      </div>
+    </div>
+    </form>      
+    `;
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return html;
+}
+
+
+exports.printActionOptionForm = async function(message) {
+  let html;
+  
+  try {
+    html = wev.printHeader('Create User');
+    html += _printCreateUserJavascriptSesction();
+    html += _printActionOptionForm(message);
   }
   catch(e) {
     throw e;
@@ -4608,7 +5312,7 @@ exports.updateSessionSecureKey = async function(msg_pool, user_id, sess_code, ae
 
                                         
 async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, user_id, update_token, msg_width, indentation, my_msg_colour, rv_msg_colour, rows_limit, top_id, m_params) {
-  var login_url, message_url, logout_url, d_site_dns, spaces, space3, first_msg_id, first_msg_date, last_msg_date, js, html;
+  let login_url, message_url, logout_url, d_site_dns, spaces, space3, first_msg_id, first_msg_date, last_msg_date, js, html;
   
   try {
     html = ``;
@@ -4710,9 +5414,6 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       }
       
       ws.onclose = function(e) {
-        //****************
-        //console.log('Websocket connection closed');
-        //****************
         clearInterval(wsPingServer);
         //-- Reopen websocket automatically within 100ms --//
         wsOpenSocket = setTimeout(reopenWebSocket, 100);
@@ -4736,66 +5437,23 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
           sess_code = command.content.trim();
           
           if (load_message) {   
-            //-- Check whether session AES key exist or not. If it doesn't exist, generate it --//
-            //-- and push a copy to back-end server before load up messages.                  --//
-            //--                                                                              --//
-            //-- Note: Due to asynchronous nature of javascript execution, it needs to use a  --//
-            //--       promise to ensure the AES key exists before load up messages from the  --//
-            //--       server.                                                                --//                      
+            //-- Check whether session AES key exist or not. If it doesn't exist, abort operation. --//
             let this_promise = new Promise((resolve, reject) => {                  
-              //-- Note: This situation is none ideal, but it is the last resort to handle this situation. --//
-              let renew_aes_key = false;
+              let aes_key_lost = false;
               aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
               if (typeof(aes_key) != "string" ) {
-                renew_aes_key = true;  
+                aes_key_lost = true;  
               }
               else {
                 aes_key = aes_key.trim();
                 if (aes_key.length < ${_key_len}) {
                   //-- AES passphase is too weak --//
-                  renew_aes_key = true;
+                  aes_key_lost = true;
                 }
               }
               
-              if (renew_aes_key) {
-                //-- 2023-12-01: After consider security issue, it is too risky to upload new AES passphase to the --//
-                //--             server without protection. So, if local AES passphase is lost, it should force    --//
-                //--             logout the user.                                                                  --//  
+              if (aes_key_lost) {
                 reject('0');
-              
-                //****************************************************************************************************
-                //aes_key = generateTrueRandomStr('A', ${_key_len});              // Defined on crypto-lib.js
-                //if (is_iOS) {
-                //  Cookies.set("aes_key", aes_key, {expires: 1});
-                //}
-                //else {
-                //  setLocalStoredItem("aes_key", aes_key);
-                //}
-                //
-                //-- Note: This section should be further enhance later to use RSA key exchange to protect --//
-                //--       the push AES key. The current implementation doesn't secure enough.             --//   
-                //$.ajax({
-                //  type: 'POST',
-                //  url: '/push_aes_key',
-                //  dataType: 'html',
-                //  data: {user_id: user_id, aes_key: aes_key},
-                //  success: function(ret_data) {
-                //    let result = JSON.parse(ret_data);
-                //    
-                //    if (result.ok == '1') {
-                //      resolve('1');
-                //	  }
-                //    else {
-                //      console.log("Unable to push AES key to server. Error: " + result.msg);
-                //      reject('0');
-                //	  }
-                //  },
-                //  error: function(xhr, ajaxOptions, thrownError) {
-                //    console.log("Unable to push AES key to server. Error " + xhr.status + ": " + thrownError);
-                //    reject('0');
-                //  }
-                //});
-                //****************************************************************************************************
               }
               else {
                 resolve('1');
@@ -4822,11 +5480,10 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
           break;  
         
         case 'group_deleted':
-          var deleted_group_id = command.group_id;
+          let deleted_group_id = command.group_id;
           
           if (deleted_group_id == group_id) {
-            clearLocalData();
-            window.location.href = "/message";
+            goHome();
           }
           
           break;
@@ -4940,14 +5597,12 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
     
     function logoutSMS() {
       clearLocalData();
-      //window.location.href = "/logout_msg";
       window.location.href = "${logout_url}";
     }
     
     function goHome() {
       clearLocalData();
-      //window.location.href = "/message";      
-      window.location.href = "${message_url}";
+      switchToPage("frmLeap", "${message_url}", ${_key_len});
     }
         
     //function runScheduler() {
@@ -4972,8 +5627,9 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
             }
             else if (new_token == "group_deleted") {
               //-- Message group has been deleted by someone, go to message group main page now. --//
-              clearLocalData();
-              window.location.href = "${message_url}";                                  
+              goHome();
+              //clearLocalData();
+              //window.location.href = "${message_url}";                                  
             }
             else if (new_token == "user_locked") {
               //-- User has been locked, force logout him/her immediately. --//
@@ -4981,8 +5637,9 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
             }
             else if (new_token == "not_group_member") {
               //-- User has been kicked from the group, redirect him/her to message group main page immediately. --//
-              clearLocalData();
-              window.location.href = "${message_url}"; 
+              goHome();
+              //clearLocalData();
+              //window.location.href = "${message_url}"; 
             }              
             else if (new_token == "error") {
               var err_msg = mg_status.error;
@@ -5012,9 +5669,9 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       group_id = parseInt(group_id, 10);
       user_id = parseInt(user_id, 10);
     
-      var ta = document.getElementById("s_message");
+      let ta = document.getElementById("s_message");      
+      let content = allTrim(ta.value);
       
-      var content = allTrim(ta.value);
       if (content.length > 0) {
         //-- Get the AES key to encrypt the sending message --//
         let key_ready = true;
@@ -5029,38 +5686,71 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
           }
         }
         
-        if (key_ready) {                    
+        if (key_ready) {
+          //-- Prepare a new rolling key --//                  
+          await prepareRollingKey(${_key_len});               // Defined on crypto-lib.js
+          let roll_rec = document.getElementById("roll_rec").value;
+          let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+          let roll_rec_sum = document.getElementById("roll_rec_sum").value;
+          
           //-- Encrypt the message with AES-256 before send it out --//
-          var algorithm = "AES-GCM";
-          var enc_msg_obj = await aesEncryptJSON(algorithm, aes_key, content);
-          var msg_iv = enc_msg_obj.iv;
-          var encrypted_msg = enc_msg_obj.encrypted;
-          var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
-          var op_iv = enc_op_msg_obj.iv;
-          var encrypted_op_msg = enc_op_msg_obj.encrypted;   
+          let algorithm = "AES-GCM";
+          let enc_msg_obj = await aesEncryptJSON(algorithm, aes_key, content);
+          let msg_iv = enc_msg_obj.iv;
+          let encrypted_msg = enc_msg_obj.encrypted;
+          let enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
+          let op_iv = enc_op_msg_obj.iv;
+          let encrypted_op_msg = enc_op_msg_obj.encrypted;   
                         
           //-- Change button image from 'send.png' to 'yellow_flash.jpg' --//
           $('#btn_msg_send').attr('src', '/images/yellow_flash.jpg');        
           $('#btn_msg_send').attr("disabled", "disabled");     
         
           // Clear AES key from RAM after used //
-          aes_key = "";
+          aes_key = null;
                               
           $.ajax({
             type: 'POST',
             url: '/send_message',
             dataType: 'html',
-            data: {group_id: group_id, sender_id: user_id, algorithm: algorithm, msg_iv: msg_iv, message: encrypted_msg, op_flag: op_flag, op_user_id: op_user_id, op_iv: op_iv, op_msg: encrypted_op_msg},
+            data: {
+              roll_rec: roll_rec,
+              iv_roll_rec: iv_roll_rec,
+              roll_rec_sum: roll_rec_sum,
+              group_id: group_id, 
+              sender_id: user_id, 
+              algorithm: algorithm, 
+              msg_iv: msg_iv, 
+              message: encrypted_msg, 
+              op_flag: op_flag, 
+              op_user_id: 
+              op_user_id, 
+              op_iv: op_iv, 
+              op_msg: encrypted_op_msg
+            },
             success: function(ret_data) {
-              //var result = eval('(' + ret_data + ')');      // Note: Return data in JSON format, so that 'evel' is required.
-              var result = JSON.parse(ret_data);              // Note: Return data is in JSON format.                
-              var new_token = allTrim(result.mg_status.update_token);                        
-              ta.value = "";
-              //-- Refresh message section --//
-              //-- '0' means get all unread messages, '1' means to get the last sent message. --//
-              loadNewMessages(${group_id}, ${user_id}, 1);
-              update_token = new_token;
-              noReply();
+              let result = JSON.parse(ret_data);              // Note: Return data is in JSON format.
+              let new_token = allTrim(result.mg_status.update_token);                        
+              
+              if (new_token == "error") {
+                alert("Unable to send message!");
+              }
+              else if (new_token == "expired") {
+                alert("Session expired, please login again.");
+                logoutSMS();
+              }
+              else if (new_token == "invalid") {
+                logoutSMS();
+              }
+              else {
+                ta.value = "";
+                //-- Refresh message section --//
+                //-- '0' means get all unread messages, '1' means to get the last sent message. --//
+                loadNewMessages(${group_id}, ${user_id}, 1);
+                update_token = new_token;
+                noReply();
+              }
+              
               $('#s_message').click();
               $('#btn_msg_send').hide();
               $('#btn_msg_send').removeAttr("disabled");
@@ -5086,18 +5776,139 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       }
     }
     
-    function quitMessageGroup(group_id, user_id) {
+    async function autoDeleteSetup(group_id) {
+      try {
+        await prepareRollingKey(${_key_len});        // Defined on crypto-lib.js
+        
+        document.getElementById("g_id").value = group_id;
+        document.getElementById("frmLeap").action = "/auto_delete_setup";
+        document.getElementById("frmLeap").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }    
+    }
+    
+    async function changeGroupName(group_id) {
+      try {
+        await prepareRollingKey(${_key_len});        // Defined on crypto-lib.js
+        
+        document.getElementById("g_id").value = group_id;
+        document.getElementById("frmLeap").action = "/change_group_name";
+        document.getElementById("frmLeap").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }
+    }
+
+    async function listGroupMember(group_id) {
+      try {
+        await prepareRollingKey(${_key_len});        // Defined on crypto-lib.js
+        
+        document.getElementById("g_id").value = group_id;
+        document.getElementById("frmLeap").action = "/list_group_member";
+        document.getElementById("frmLeap").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }
+    }
+        
+    async function quitMessageGroup(group_id, user_id) {
       if (confirm("Do you really want to exit?")) {
-        var url = "/exit_group?g_id=" + group_id + "&member_id=" + user_id;
-        window.location.href = url;
+        try {
+          await prepareRollingKey(${_key_len});        // Defined on crypto-lib.js
+          
+          document.getElementById("g_id").value = group_id;
+          document.getElementById("member_id").value = user_id;
+          document.getElementById("frmLeap").action = "/exit_group";
+          document.getElementById("frmLeap").submit();        
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }      
     }
     
-    function deleteThisGroup(group_id) {
+    async function addGroupMember(group_id) {
+      try {
+        await prepareRollingKey(${_key_len});        // Defined on crypto-lib.js
+        
+        document.getElementById("g_id").value = group_id;
+        document.getElementById("frmLeap").action = "/add_group_member";
+        document.getElementById("frmLeap").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }    
+    }
+    
+    async function deleteGroupMember(group_id) {
+      try {
+        await prepareRollingKey(${_key_len});        // Defined on crypto-lib.js
+        
+        document.getElementById("g_id").value = group_id;
+        document.getElementById("frmLeap").action = "/delete_group_member";
+        document.getElementById("frmLeap").submit();      
+      }
+      catch(e) {
+        alert(e.message);
+      }
+    }  
+    
+    async function promoteGroupMember(group_id) {
+      try {
+        await prepareRollingKey(${_key_len});        // Defined on crypto-lib.js
+        
+        document.getElementById("g_id").value = group_id;
+        document.getElementById("frmLeap").action = "/promote_group_member";
+        document.getElementById("frmLeap").submit();      
+      }
+      catch(e) {
+        alert(e.message);
+      }    
+    }
+    
+    async function demoteGroupAdmin(group_id) {
+      try {
+        await prepareRollingKey(${_key_len});        // Defined on crypto-lib.js
+        
+        document.getElementById("g_id").value = group_id;
+        document.getElementById("frmLeap").action = "/demote_group_admin";
+        document.getElementById("frmLeap").submit();      
+      }
+      catch(e) {
+        alert(e.message);
+      }        
+    }
+    
+    async function informMember(group_id) {
+      try {
+        await prepareRollingKey(${_key_len});        // Defined on crypto-lib.js
+        
+        document.getElementById("g_id").value = group_id;
+        document.getElementById("frmLeap").action = "/inform_member";
+        document.getElementById("frmLeap").submit();      
+      }
+      catch(e) {
+        alert(e.message);
+      }            
+    }
+    
+    async function deleteThisGroup(group_id) {
       if (confirm("Do you want to delete this message group?")) {
         if (confirm("Last chance! Really want to delete this group?")) {
-          var url = "/delete_group?group_id=" + group_id;
-          window.location.href = url;
+          try {
+            await prepareRollingKey(${_key_len});        // Defined on crypto-lib.js
+            
+            document.getElementById("g_id").value = group_id;
+            document.getElementById("frmLeap").action = "/delete_group";
+            document.getElementById("frmLeap").submit();      
+          }
+          catch(e) {
+            alert(e.message);
+          }
         }
       }
     }
@@ -5107,7 +5918,7 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       op_user_id = sender_id;
       msg_30 = msg_30.replace(/¡/g, "'");      // Note: All single quote characters on msg_30 are converted to '¡' before passed in here.
       op_msg = msg_30;
-      var html = "<font color='#0081FE' size='2px'><b>" + sender + "</b></font><br>" + op_msg;
+      let html = "<font color='#0081FE' size='2px'><b>" + sender + "</b></font><br>" + op_msg;
       $('#reply_msg_area').html(html);
       $('#reply_row').show();    
     }
@@ -5120,9 +5931,18 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       $('#reply_row').hide();          
     }
     
-    function forwardMessage(group_id, msg_id) {
-      var url = "/forward_message?from_group_id=" + group_id + "&msg_id=" + msg_id;
-      window.location.href = url;
+    async function forwardMessage(group_id, msg_id) {
+      try {
+        await prepareRollingKey(${_key_len});
+        $('#from_group_id').val(group_id);
+        $('#msg_id').val(msg_id);
+        
+        document.getElementById('frmLeap').action = "/forward_message";
+        document.getElementById('frmLeap').submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }
     }
 
     function showTextInputPanel() {
@@ -5160,12 +5980,12 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
     }
     
     async function sendPhoto(group_id, user_id) {
-      var send_button_status = $('#btn_send_photo').attr("disabled");
+      let send_button_status = $('#btn_send_photo').attr("disabled");
       if (send_button_status == "disabled") {
         return false;
       }
                       
-      var image_name = allTrim($('#photo').val());   
+      let image_name = allTrim($('#photo').val());   
       if (image_name != "") {   
         let key_ready = true;
         aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");				  
@@ -5179,23 +5999,31 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
           }
         }
         
-        if (key_ready) { 
-          var image = $('#photo').prop('files')[0];
+        if (key_ready) {
+          await prepareRollingKey(${_key_len});                   // Defined on crypto-lib.js
+          let roll_rec = document.getElementById("roll_rec").value;
+          let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+          let roll_rec_sum = document.getElementById("roll_rec_sum").value;          
+                 
+          let image = $('#photo').prop('files')[0];
           //-- Encode uploaded file name to handle Chinese characters --// 
           image.name = unescape(encodeURIComponent(image.name));               
           //-- Encrypt 'caption' and 'op_msg' before send the data set to the server --//  
-          var algorithm = "AES-GCM";                   
-          var this_caption = allTrim($('#caption').val());
+          let algorithm = "AES-GCM";                   
+          let this_caption = allTrim($('#caption').val());
           this_caption = (typeof(this_caption) == "string")? this_caption : '';
           op_msg = (typeof(op_msg) == "string")? op_msg : '';              
-          var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, this_caption);
-          var caption_iv = enc_caption_obj.iv;
-          var enc_caption = enc_caption_obj.encrypted;
-          var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
-          var op_iv = enc_op_msg_obj.iv;
-          var enc_op_msg = enc_op_msg_obj.encrypted;
+          let enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, this_caption);
+          let caption_iv = enc_caption_obj.iv;
+          let enc_caption = enc_caption_obj.encrypted;
+          let enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
+          let op_iv = enc_op_msg_obj.iv;
+          let enc_op_msg = enc_op_msg_obj.encrypted;
             
-          var form_data = new FormData();
+          let form_data = new FormData();
+          form_data.append('roll_rec', roll_rec);
+          form_data.append('iv_roll_rec', iv_roll_rec);
+          form_data.append('roll_rec_sum', roll_rec_sum);          
           form_data.append('group_id', group_id);
           form_data.append('sender_id', user_id);
           form_data.append('ul_ftype', 'photo');
@@ -5232,12 +6060,21 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
                   $('#btn_send_photo').removeAttr("disabled");
                   $('#btn_send_photo').attr('src', '/images/send.png');
                   break;
+                
+                case 'invalid':
+                  logoutSMS();
+                  break;
                   
                 case 'sess_expired':
                   alert("Session expired");
                   logoutSMS();
                   break;
                   
+                case 'hacking':
+                  alert("Don't try to hack the system, you are blacklisted!");
+                  logoutSMS();
+                  break;
+                                      
                 default:    
                   //-- Refresh message section (just load the last sent message only) --//
                   //-- '0' means get all unread messages, '1' means to get the last sent message. --//
@@ -5270,12 +6107,12 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
     }
     
     async function sendFile(group_id, user_id) {
-      var send_button_status = $('#btn_send_file').attr("disabled");
+      let send_button_status = $('#btn_send_file').attr("disabled");
       if (send_button_status == "disabled") {
         return false;
       }
       
-      var file_name = allTrim($('#ul_file').val());   
+      let file_name = allTrim($('#ul_file').val());   
       if (file_name != "") {
         let key_ready = true;
         aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");				  
@@ -5289,22 +6126,30 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
           }
         }
         
-        if (key_ready) {           
-          var ul_file = $('#ul_file').prop('files')[0];
+        if (key_ready) {
+          await prepareRollingKey(${_key_len});                   // Defined on crypto-lib.js
+          let roll_rec = document.getElementById("roll_rec").value;
+          let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+          let roll_rec_sum = document.getElementById("roll_rec_sum").value;          
+                           
+          let ul_file = $('#ul_file').prop('files')[0];
           //-- Encode uploaded file name to handle Chinese characters --// 
           ul_file.name = unescape(encodeURIComponent(ul_file.name));       
           //-- Encrypt 'caption' and 'op_msg' before send the data set to the server, even 'caption' --//
           //-- is blank in this case.                                                                --//  
-          var algorithm = "AES-GCM";                   
+          let algorithm = "AES-GCM";                   
           op_msg = (typeof(op_msg) == "string")? op_msg : '';     
-          var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, '');   // Caption is always blank in this case
-          var caption_iv = enc_caption_obj.iv;
-          var enc_caption = enc_caption_obj.encrypted;
-          var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
-          var op_iv = enc_op_msg_obj.iv;
-          var enc_op_msg = enc_op_msg_obj.encrypted;
+          let enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, '');   // Caption is always blank in this case
+          let caption_iv = enc_caption_obj.iv;
+          let enc_caption = enc_caption_obj.encrypted;
+          let enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
+          let op_iv = enc_op_msg_obj.iv;
+          let enc_op_msg = enc_op_msg_obj.encrypted;
                                        
-          var form_data = new FormData();
+          let form_data = new FormData();
+          form_data.append('roll_rec', roll_rec);
+          form_data.append('iv_roll_rec', iv_roll_rec);
+          form_data.append('roll_rec_sum', roll_rec_sum);
           form_data.append('group_id', group_id);
           form_data.append('sender_id', user_id);
           form_data.append('ul_ftype', 'file');
@@ -5322,7 +6167,7 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
           $('#btn_send_file').attr("disabled", "disabled");
 
           // Clear aes_key from RAM after used //
-          aes_key = '';
+          aes_key = null;
         
           $.ajax({
             type: 'POST',
@@ -5340,6 +6185,15 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
                   alert("Error is found as file upload.");
                   $('#btn_send_file').removeAttr("disabled");
                   $('#btn_send_file').attr('src', '/images/send.png');
+                  break;
+                
+                case 'hacking':
+                  alert("Don't try to hack the system, you are blacklisted!");
+                  logoutSMS();
+                  break;
+
+                case 'invalid':
+                  logoutSMS();
                   break;
                   
                 case 'sess_expired':
@@ -5397,12 +6251,12 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
     }
     
     async function sendSound(group_id, user_id) {
-      var send_button_status = $('#btn_send_sound').attr("disabled");
+      let send_button_status = $('#btn_send_sound').attr("disabled");
       if (send_button_status == "disabled") {
         return false;
       }
       
-      var file_name = allTrim($('#sound').val());   
+      let file_name = allTrim($('#sound').val());   
       if (file_name != "") {
         let key_ready = true;
         aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");				  
@@ -5417,25 +6271,70 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
         }
       
         if (key_ready) {       
-          var sound = $('#sound').prop('files')[0];
+          await prepareRollingKey(${_key_len});                   // Defined on crypto-lib.js
+          let roll_rec = document.getElementById("roll_rec").value;
+          let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+          let roll_rec_sum = document.getElementById("roll_rec_sum").value;          
+                
+          let sound = $('#sound').prop('files')[0];
+          
+          //************
+          // Note: Sending sound track via smartphone, it keeps to upload the first recorded sound track.
+          //       This problem must be solved later.
+          // 
+          // Useful URL:
+          // 1. https://developer.mozilla.org/en-US/docs/Web/API/File_API/Using_files_from_web_applications
+          // 2. https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/file
+          // 3. https://web.dev/articles/media-recording-audio
+          
+          //var soundElement = document.getElementById("sound");
+          //soundElement.addEventListener("change", soundFileHandler, "false");
+          
+          /*          
+          function soundFileHandler() {
+            console.log("see me?");
+          
+            var filelist = this.files;
+            
+            // Note: If it is tested ok, the sound file uploading operation must be moved in here. // 
+                        
+            for (var i = 0; i < filelist.length; i++) {
+              var fname = filelist[i].name;
+              var fsize = filelist[i].size;
+              var ftype = filelist[i].type;
+              
+              console.log(fname + ', ' + fsize + ', ' + ftype);              
+            }
+          }
+
+          $('#btn_send_sound').removeAttr("disabled");
+          $('#btn_send_sound').attr('src', '/images/send.png');
+          
+          return false;
+          */             
+          //************
+          
           //-- Encode uploaded file name to handle Chinese characters --// 
           sound.name = unescape(encodeURIComponent(sound.name));    
                                           
           //-- Encrypt 'caption' and 'op_msg' before send the data set to the server, even 'caption' --//
           //-- is blank in this case.                                                                --//  
-          var algorithm = "AES-GCM";                   
+          let algorithm = "AES-GCM";                   
           op_msg = (typeof(op_msg) == "string")? op_msg : '';              
-          var enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, '');
-          var caption_iv = enc_caption_obj.iv;
-          var enc_caption = enc_caption_obj.encrypted;
-          var enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
-          var op_iv = enc_op_msg_obj.iv;
-          var enc_op_msg = enc_op_msg_obj.encrypted;
+          let enc_caption_obj = await aesEncryptJSON(algorithm, aes_key, '');
+          let caption_iv = enc_caption_obj.iv;
+          let enc_caption = enc_caption_obj.encrypted;
+          let enc_op_msg_obj = await aesEncryptJSON(algorithm, aes_key, op_msg);
+          let op_iv = enc_op_msg_obj.iv;
+          let enc_op_msg = enc_op_msg_obj.encrypted;
           
           // Clear aes_key from RAM after used //
           aes_key = '';
                                        
-          var form_data = new FormData();
+          let form_data = new FormData();
+          form_data.append('roll_rec', roll_rec);
+          form_data.append('iv_roll_rec', iv_roll_rec);
+          form_data.append('roll_rec_sum', roll_rec_sum);          
           form_data.append('group_id', group_id);
           form_data.append('sender_id', user_id);
           form_data.append('ul_ftype', 'sound');
@@ -5461,7 +6360,7 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
             processData: false,
             data: form_data,
             success: function(response) {
-              var new_token = response;
+              let new_token = response;
               
               switch (new_token) {
                 case 'error': 
@@ -5469,12 +6368,21 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
                   $('#btn_send_sound').removeAttr("disabled");
                   $('#btn_send_sound').attr('src', '/images/send.png');
                   break;
-                  
+                
+                case 'invalid':
+                  logoutSMS();
+                  break;
+                                  
                 case 'sess_expired':
                   alert("Session expired");
                   logoutSMS();
                   break;
-                  
+                
+                case 'hacking':
+                  alert("Don't try to hack the system, you are blacklisted!");
+                  logoutSMS();
+                  break;
+                                  
                 default:    
                   //-- Refresh message section (just load the last sent message only) --//
                   //-- '0' means get all unread messages, '1' means to get the last sent message. --//
@@ -5505,24 +6413,48 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       }      
     }
     
-    //-------------------------------------------------------------------------------------------------------//			                  
-    function goLoadMessage() {
+    //-------------------------------------------------------------------------------------------------------//    
+    async function goLoadMessage() {
+      await prepareRollingKey(${_key_len});    // Defined on crypto-lib.js
+      
+      let roll_rec = document.getElementById("roll_rec").value;
+      let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+      let roll_rec_sum = document.getElementById("roll_rec_sum").value;
+      
       $.ajax({
         type: 'POST',
         url: '/load_message',
         dataType: 'html',
-        data: {group_id: group_id, user_id: user_id, m_params: JSON.stringify(m_params)},
+        data: {
+          roll_rec: roll_rec,
+          iv_roll_rec: iv_roll_rec,
+          roll_rec_sum: roll_rec_sum,
+          group_id: group_id, 
+          user_id: user_id, 
+          m_params: JSON.stringify(m_params)
+        },
         success: function(ret_data) {
           var result = JSON.parse(ret_data);              // Note: Return data is in JSON format.                
           var new_token = allTrim(result.update_token);
           var msg_list = result.message;               
           
-          if (new_token != 'error') {         
+          if (new_token == 'error') {
+            alert("Unable to load message. Error is found.");
+          }
+          else if (new_token == 'logout') {
+            alert(msg_list[0]);
+            logoutSMS();          
+          }
+          else if (new_token == 'expired') {
+            alert("Session expired, please login again.");
+            logoutSMS();                    
+          }
+          else if (new_token == 'invalid') {
+            logoutSMS();                              
+          }
+          else {         
             showMessages(msg_list);
             update_token = new_token;
-          }
-          else {
-            alert("Unable to load message. Error is found.");
           }
         },
         error: function(xhr, ajaxOptions, thrownError) {
@@ -5666,7 +6598,7 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
     
     function informGroupMembersToRefresh(group_id, user_id) {
       if (typeof(myWebSocket) != 'undefined' && myWebSocket != null) {
-        var packet = {type: 'msg', content: {op: 'msg_refresh', group_id: group_id, user_id: user_id}};
+        let packet = {type: 'msg', content: {op: 'msg_refresh', group_id: group_id, user_id: user_id}};
         myWebSocket.send(JSON.stringify(packet));
       }
       else {
@@ -5674,8 +6606,12 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       }
     }
     
-    function loadNewMessages(group_id, user_id, last_sent_msg_only) {
-      var omid_list = getMessageIdListFromOtherSenders();
+    async function loadNewMessages(group_id, user_id, last_sent_msg_only) {
+      await prepareRollingKey(${_key_len});                   // Defined on crypto-lib.js
+      let roll_rec = document.getElementById("roll_rec").value;
+      let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+      let roll_rec_sum = document.getElementById("roll_rec_sum").value;          
+      let omid_list = getMessageIdListFromOtherSenders();
       
       //-- Note: Boolean value sent to back-end application will be changed to string automatically. Therefore, don't send --//
       //--       boolean value to back-end directly, but rather convert it to different type of value which can be sent to --//
@@ -5685,7 +6621,15 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
         type: 'POST',
         url: '/pull_new_message',
         dataType: 'json',
-        data: {group_id: group_id, receiver_id: user_id, last_sent_msg_only: last_sent_msg_only, omid_list: omid_list},
+        data: {
+          roll_rec: roll_rec,
+          iv_roll_rec: iv_roll_rec,
+          roll_rec_sum: roll_rec_sum,
+          group_id: group_id, 
+          receiver_id: user_id, 
+          last_sent_msg_only: last_sent_msg_only, 
+          omid_list: omid_list
+        },
         success: function(ret_data) {              
           var valid_ret_data = false;
           if (Array.isArray(ret_data)) {
@@ -5697,7 +6641,18 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
           if (valid_ret_data) {            
             if (ret_data[0].msg_status == "error") {
               alert(ret_data[0].message);
-            }               
+            }    
+            else if (ret_data[0].msg_status == "expired") {
+              alert(ret_data[0].message);
+              logoutSMS();
+            }           
+            else if (ret_data[0].msg_status == "hacking") {
+              alert(ret_data[0].message);
+              logoutSMS();            
+            }           
+            else if (ret_data[0].msg_status == "invalid") {
+              logoutSMS();
+            }           
             else {
               if (ret_data[0].msg_status == "deleted") {
                 hideMessageDeletedByOtherSender(ret_data);
@@ -5837,28 +6792,47 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       aes_key = "";      
     }
         
-    function deleteMessage(msg_id) {
+    async function deleteMessage(msg_id) {
       if (msg_id != '') {
+        await prepareRollingKey(${_key_len});                   // Defined on crypto-lib.js
+        let roll_rec = document.getElementById("roll_rec").value;
+        let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+        let roll_rec_sum = document.getElementById("roll_rec_sum").value;          
+              
         $.ajax({
           type: 'POST',
           url: '/delete_message',
           dataType: 'html',
-          data: {group_id: group_id, msg_id: msg_id},
+          data: {
+            roll_rec: roll_rec,
+            iv_roll_rec: iv_roll_rec,
+            roll_rec_sum: roll_rec_sum,
+            group_id: group_id, 
+            msg_id: msg_id
+          },
           success: function(ret_data) {
             //-- If message is deleted successfully, hide the row contained the deleted message, and update the value of --//
             //-- 'update_token' on do_sms.pl to avoid page refreshing.                                                   --//
-            //var result = eval('(' + ret_data + ')');      // Note: Return data in JSON format, so that 'evel' is required.
-            var result = JSON.parse(ret_data);              // Note: Return data is in JSON format.
-            var mg_status = result.mg_status;
-            var new_token = allTrim(mg_status.update_token);
+            let result = JSON.parse(ret_data);              // Note: Return data is in JSON format.
+            let mg_status = result.mg_status;
+            let new_token = allTrim(mg_status.update_token);
             
             switch (new_token) {
               case 'error':
                 alert("Error is found when delete this message");
                 break;
-                
+             
+              case 'invalid':
+                logoutSMS();
+                break;
+                               
               case 'sess_expired':
                 alert("Session expired!");
+                logoutSMS();
+                break;
+
+              case 'hacking':
+                alert("Don't try to hack the system, you are blacklisted!");
                 logoutSMS();
                 break;
                 
@@ -5878,8 +6852,13 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       }
     }
     
-    function loadPrevMessages(group_id, user_id) {
-      var button_status = $('#btn_load_more').attr("disabled");
+    async function loadPrevMessages(group_id, user_id) {
+      await prepareRollingKey(${_key_len});                   // Defined on crypto-lib.js
+      let roll_rec = document.getElementById("roll_rec").value;
+      let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+      let roll_rec_sum = document.getElementById("roll_rec_sum").value;          
+    
+      let button_status = $('#btn_load_more').attr("disabled");
       if (button_status == "disabled") {
         return false;
       }
@@ -5894,11 +6873,30 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
         type: 'POST',
         url: '/pull_prev_message',
         dataType: 'json',
-        data: {group_id: group_id, receiver_id: user_id, first_msg_id: first_msg_id, rows_limit: rows_limit},
+        data: {
+          roll_rec: roll_rec,
+          iv_roll_rec: iv_roll_rec,
+          roll_rec_sum: roll_rec_sum, 
+          group_id: group_id, 
+          receiver_id: user_id, 
+          first_msg_id: first_msg_id, 
+          rows_limit: rows_limit
+        },
         success: function(ret_data) {                     
           if (ret_data.msg_status == "error") {
             alert(ret_data.message);
-          }               
+          }      
+          else if (ret_data.msg_status == "invalid") {
+            logoutSMS();
+          }         
+          else if (ret_data.msg_status == "sess_expired") {
+            alert(ret_data.message);
+            logoutSMS();
+          }         
+          else if (ret_data.msg_status == "hacking") {
+            alert(ret_data.message);
+            logoutSMS();
+          }         
           else {                       
             first_msg_id = addPrevMessageRow(JSON.parse(ret_data.message));
             if (is_iOS) {
@@ -5921,40 +6919,40 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
     }
         
     async function addPrevMessageRow(ret_data) {
-      var the_msg_id = '';
+      let the_msg_id = '';
       
       //-- Get the AES key to decrypt received messages --//
       aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
                 
-      for (var i = 0; i < ret_data.length; i++) {
-        var rec = ret_data[i];          
-        var this_msg_id = rec.msg_id;
-        var this_is_my_msg = rec.is_my_msg;
-        var this_user_color = (allTrim(rec.user_status) == "A")? '#8B0909' : '#A4A5A5';
-        var is_member = (parseInt(rec.is_member, 10) == 0)? "(Non member)" : '';
-        var this_sender_id = rec.sender_id;
-        var this_sender = "<font color='" + this_user_color + "' size='2px'><b>" + rec.sender + " " + is_member + "</b></font>";
-        var this_s_date = rec.s_date;
-        var this_s_time_12 = rec.s_time_12;
-        var this_from_now = rec.from_now;
-        var this_week_day = rec.week_day;
-        var this_message = await aesDecryptBase64(rec.algorithm, aes_key, rec.iv, rec.message);
-        var this_fileloc = rec.fileloc;
-        var this_file_link = rec.file_link;
-        var this_op_flag = rec.op_flag;
-        var this_op_user = rec.op_user;            
-        var this_op_msg = await aesDecryptBase64(rec.algorithm, aes_key, rec.op_iv, rec.op_msg);        
-        var show_time = this_s_time_12;
-        var this_msg_time = "<font color='#31B404' size='2px'>" + show_time + "</font>";
-        var is_new_msg = rec.is_new_msg;
+      for (let i = 0; i < ret_data.length; i++) {
+        let rec = ret_data[i];          
+        let this_msg_id = rec.msg_id;
+        let this_is_my_msg = rec.is_my_msg;
+        let this_user_color = (allTrim(rec.user_status) == "A")? '#8B0909' : '#A4A5A5';
+        let is_member = (parseInt(rec.is_member, 10) == 0)? "(Non member)" : '';
+        let this_sender_id = rec.sender_id;
+        let this_sender = "<font color='" + this_user_color + "' size='2px'><b>" + rec.sender + " " + is_member + "</b></font>";
+        let this_s_date = rec.s_date;
+        let this_s_time_12 = rec.s_time_12;
+        let this_from_now = rec.from_now;
+        let this_week_day = rec.week_day;
+        let this_message = await aesDecryptBase64(rec.algorithm, aes_key, rec.iv, rec.message);
+        let this_fileloc = rec.fileloc;
+        let this_file_link = rec.file_link;
+        let this_op_flag = rec.op_flag;
+        let this_op_user = rec.op_user;            
+        let this_op_msg = await aesDecryptBase64(rec.algorithm, aes_key, rec.op_iv, rec.op_msg);        
+        let show_time = this_s_time_12;
+        let this_msg_time = "<font color='#31B404' size='2px'>" + show_time + "</font>";
+        let is_new_msg = rec.is_new_msg;
         // Process " and ' characters on 'this_msg_30' to avoid syntax error //
-        var this_msg_30 = processQuotationMarks(await aesDecryptBase64(rec.algorithm, aes_key, rec.msg_30_iv, rec.msg_30));
+        let this_msg_30 = processQuotationMarks(await aesDecryptBase64(rec.algorithm, aes_key, rec.msg_30_iv, rec.msg_30));
         // Process " and ' characters on 'this_msg_30' to avoid syntax error //
         this_msg_30 = this_msg_30.replace(/"/g, '“'); 
         this_msg_30 = this_msg_30.replace(/'/g, '‘');           
-        var this_tr = '';
-        var re_header = "";
-        var fw_header = "";
+        let this_tr = '';
+        let re_header = "";
+        let fw_header = "";
 
         //-- With reason still unknown, extra garbage record(s) may be embedded in the return data, so it needs to --//
         //-- take this checking for returned records.                                                              --//
@@ -5978,17 +6976,17 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
           }
                 
           if (first_msg_date != this_s_date) {
-            var blank_tr = "<tr style='height:8px;'><td></td></tr>";
+            let blank_tr = "<tr style='height:8px;'><td></td></tr>";
             $('#msg_table > tbody > tr').eq(0).before(blank_tr).enhanceWithin();                                  
-            var date_tr = "<tr style='background-color:#D9D9D8'><td align=center>" + this_s_date + "</td></tr>";
+            let date_tr = "<tr style='background-color:#D9D9D8'><td align=center>" + this_s_date + "</td></tr>";
             $('#msg_table > tbody > tr').eq(0).before(date_tr).enhanceWithin();
             first_msg_date = this_s_date
           }
                                 
           if (this_is_my_msg) {
-            var delete_link = "<a href=\\"javascript:deleteMessage('" + this_msg_id + "');\\">Delete</a>";
-            var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
-            var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
+            let delete_link = "<a href=\\"javascript:deleteMessage('" + this_msg_id + "');\\">Delete</a>";
+            let reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
+            let forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
       
             this_tr = "<tr id='row_" + this_msg_id + "'>" +
                       "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
@@ -6003,8 +7001,8 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
                       "</tr>";
           }
           else {
-            var reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
-            var forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
+            let reply_link = "<a href=\\"javascript:replyMessage('" + this_msg_id + "', " + this_sender_id + ", '" + rec.sender + "', '" + this_msg_30 + "');\\">Reply</a>";
+            let forward_link = "<a href=\\"javascript:forwardMessage(" + group_id + ", '" + this_msg_id + "');\\">Forward</a>";
         
             this_tr = "<tr id='row_" + this_msg_id + "'>" +
                       "  <input type='hidden' id='omid_" + this_msg_id + "' name='omid_" + this_msg_id + "' value='" + this_msg_id + "'>" +
@@ -6031,7 +7029,7 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       aes_key = '';
       
       //-- Try to retrieve the first message id of this group of this user (Note: It may not exist) --//
-      var top_msg_id = (is_iOS)? Cookies.get("top_id") : getLocalStoredItem("top_id");   // Defined on js.cookie.min.js : common_lib.js
+      let top_msg_id = (is_iOS)? Cookies.get("top_id") : getLocalStoredItem("top_id");   // Defined on js.cookie.min.js : common_lib.js
       top_msg_id = (top_msg_id == undefined)? 0 : top_msg_id;
       
       if (ret_data.length < rows_limit || the_msg_id == top_msg_id) {
@@ -6088,16 +7086,16 @@ async function _printMessagesDoSMSpage(conn, group_id, group_name, group_type, g
         //-- and demote admin. to member are not relevance.                                                                      --//
         admin_options = `
         <li data-role="list-divider" style="color:darkgreen;">Group Administration</li>
-        <li><a href="/auto_delete_setup?g_id=${group_id}" data-ajax="false">Auto Delete Setup</a></li>`;
+        <li><a href="javascript:autoDeleteSetup(${group_id});" data-ajax="false">Auto Delete Setup</a></li>`;
       }
       else {
         admin_options = `
         <li data-role="list-divider" style="color:darkgreen;">Group Administration</li>
-        <li><a href="/add_group_member?g_id=${group_id}" data-ajax="false">Add Member</a></li>
-        <li><a href="/delete_group_member?g_id=${group_id}" data-ajax="false">Delete Member</a></li>            
-        <li><a href="/promote_group_member?g_id=${group_id}" data-ajax="false">Promote Member</a></li>
-        <li><a href="/demote_group_admin?g_id=${group_id}" data-ajax="false">Demote Admin</a></li>
-        <li><a href="/inform_member?g_id=${group_id}" data-ajax="false">Inform Member</a></li>`;
+        <li><a href="javascript:addGroupMember(${group_id});" data-ajax="false">Add Member</a></li>
+        <li><a href="javascript:deleteGroupMember(${group_id});" data-ajax="false">Delete Member</a></li>            
+        <li><a href="javascript:promoteGroupMember(${group_id});" data-ajax="false">Promote Member</a></li>
+        <li><a href="javascript:demoteGroupAdmin(${group_id});" data-ajax="false">Demote Admin</a></li>
+        <li><a href="javascript:informMember(${group_id});" data-ajax="false">Inform Member</a></li>`;
       }
       
       //-- Group administrator --//
@@ -6107,8 +7105,8 @@ async function _printMessagesDoSMSpage(conn, group_id, group_name, group_type, g
             <ul data-role="listview">
               <li><a href="javascript:goHome();" data-ajax="false">Go Home</a></li>
               <li data-role="list-divider" style="color:darkgreen;">Group Profile</li>
-              <li><a href="/change_group_name?g_id=${group_id}" data-ajax="false">Change Group Name</a></li>
-              <li><a href="/list_group_member?g_id=${group_id}" data-ajax="false">List Member</a></li>            
+              <li><a href="javascript:changeGroupName(${group_id});" data-ajax="false">Change Group Name</a></li>
+              <li><a href="javascript:listGroupMember(${group_id});" data-ajax="false">List Member</a></li>            
               <li><a href="javascript:quitMessageGroup(${group_id}, ${user_id});" data-ajax="false">Exit Group</a></li>
               ${admin_options}
               <li data-role="list-divider" style="color:darkgreen;">Emergency</li>
@@ -6125,8 +7123,8 @@ async function _printMessagesDoSMSpage(conn, group_id, group_name, group_type, g
             <ul data-role="listview">
               <li><a href="javascript:goHome();" data-ajax="false">Go Home</a></li> 
               <li data-role="list-divider" style="color:darkgreen;">Group Profile</li>
-              <li><a href="/change_group_name?g_id=${group_id}" data-ajax="false">Change Group Name</a></li>
-              <li><a href="/list_group_member?g_id=${group_id}" data-ajax="false">List Member</a></li>            
+              <li><a href="javascript:changeGroupName(${group_id});" data-ajax="false">Change Group Name</a></li>
+              <li><a href="javascript:listGroupMember(${group_id});" data-ajax="false">List Member</a></li>            
               <li><a href="javascript:quitMessageGroup(${group_id}, ${user_id});" data-ajax="false">Exit Group</a></li>
             </ul>	
           </div>
@@ -6144,6 +7142,17 @@ async function _printMessagesDoSMSpage(conn, group_id, group_name, group_type, g
       </div>	
       
       <div data-role="content" style="overflow-y:auto;" data-position="fixed" data-tap-toggle="false">
+        <!-- The form is used to switch to another page with rolling key mechanism embedded -->
+        <form id="frmLeap" name="frmLeap" action="" method="POST">
+          <input type=hidden id="roll_rec" name="roll_rec" value="">
+          <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+          <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+          <input type=hidden id="from_group_id" name="from_group_id" value="">
+          <input type=hidden id="msg_id" name="msg_id" value="">            
+          <input type=hidden id="g_id" name="g_id" value="">
+          <input type=hidden id="member_id" name="member_id" value="">   
+        </form>
+      
         <table id="msg_table" width=100% cellspacing=0 cellpadding=0 style="table-layout:fixed;">
         <thead><tr id="read_more"><td align=center valign=center><img src='/images/files_uploading.gif' width="50%"></td></tr></thead>
         <tbody>
@@ -6253,6 +7262,33 @@ async function _printMessagesDoSMSpage(conn, group_id, group_name, group_type, g
                 </td>                        
                 <td width="65%" valign=center>
                   <input type="file" id="sound" name="sound" accept="audio/*" capture="microphone">
+                  <script>
+                    var soundElement = document.getElementById("sound");
+                    soundElement.addEventListener("change", soundFileHandler, "false");     
+                    
+                    function soundFileHandler() {
+                      //*****************
+                      console.log("see me?");
+                    
+                      var filelist = this.files;
+                      
+                      // Note: If it is tested ok, the sound file uploading operation must be moved in here. // 
+                                  
+                      for (var i = 0; i < filelist.length; i++) {
+                        var fname = filelist[i].name;
+                        var fsize = filelist[i].size;
+                        var ftype = filelist[i].type;
+                        
+                        console.log(fname + ', ' + fsize + ', ' + ftype);              
+                      }
+                      
+                      $('#btn_send_sound').removeAttr("disabled");
+                      $('#btn_send_sound').attr('src', '/images/send.png');
+                      
+                      return false;      
+                      //******************                   
+                    }                                 
+                  </script>
                 </td>
                 <td align=center valign=center nowap>
                   <img id="btn_send_sound" src="/images/send.png" width="50px" onClick="sendSound(${group_id}, ${user_id});">
@@ -6353,6 +7389,22 @@ exports.showDoSMSpage = async function(msg_pool, user_id, group_id, f_m_id, top_
 }
 
 
+async function _deleteRollingKey(conn, sess_code) {
+  let sql, param;
+  
+  try {
+    sql = `DELETE FROM sess_roll_key ` +
+          `  WHERE sess_code = ?`;
+          
+    param = [sess_code];
+    await dbs.sqlExec(conn, sql, param);      
+  }
+  catch(e) {
+    throw e;
+  }
+}
+
+
 exports.deleteSession = async function(db_pool, sess_code, conn_option) {
   let conn, url;
   
@@ -6362,6 +7414,7 @@ exports.deleteSession = async function(db_pool, sess_code, conn_option) {
     await _deleteSession(conn, sess_code);
     
     if (conn_option == "MSG") {    
+      await _deleteRollingKey(conn, sess_code);
       url = await _selectSiteForVisitor(conn);
     }
     else {
@@ -6425,81 +7478,90 @@ async function _getGroupsCouldBeForwarded(conn, user_id) {
 
 
 async function _printFwMsgJavaScriptSection(sess_code) {
-  var html;
+  let html;
   
   try {
-    html = `<!doctype html>
-            <html>
-            <head>
-              <title>Message</title>
-              <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-              <meta http-equiv='Content-Type' content='text/html; charset=utf-8'>
-            </head>  
-    
-            <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
-            <link rel="shortcut icon" href="/favicon.ico">
-            <script src="/js/jquery.min.js"></script>
-            <script src="/js/jquery.mobile-1.4.5.min.js"></script>
-            <script src="/js/js.cookie.min.js"></script>
-            <script src='/js/crypto-lib.js'></script>
-            <script src="/js/common_lib.js"></script>
-            
-            <script>
-              var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
-              var algorithm = "AES-GCM";
-              var aes_key = "";
-            
-              async function forwardMessage() {
-                var value = parseInt($('input[name=to_group_id]:checked', '#frm_forward').val(), 10);
-                if (isNaN(value)) {
-                  alert("Please select a group to let message forward to");
-                }
-                else {
-                  var key_ready = true;
-                  var err_msg = "";
-                  aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
-                
-                  if (typeof(aes_key) != "string") {
-                    key_ready = false;
-                    err_msg = "Session secure key is lost, the system is going to log you out!";
-                  }
-                  else {
-                    if (aes_key.trim().length < ${_key_len}) {
-                      key_ready = false;
-                      err_msg = "Session secure key length is too short, something is wrong. The system is going to log you out.";
-                    }
-                  }  
-                
-                  if (key_ready) {
-                    //-- Encrypt additional message before send it out, even it is blank. --//
-                    var a_message = document.getElementById("a_message").value;
-                    var enc_obj = await aesEncryptJSON(algorithm, aes_key, a_message);
-                    
-                    document.getElementById("algorithm").value = algorithm;
-                    document.getElementById("a_iv").value = enc_obj.iv;
-                    document.getElementById("a_enc_msg").value = enc_obj.encrypted;
-                    document.getElementById("a_message").value = '';                                                      
-                    document.getElementById("oper_mode").value = "S";
-                    
-                    // Clear AES key from RAM after used //
-                    aes_key = "";
-                    
-                    document.getElementById("frm_forward").submit();
-                  }
-                  else {
-                    alert(err_msg);    
-                    window.location.href = "/logout_msg";              
-                  }
-                }
+    html = `
+    <!doctype html>
+      <html>
+      <head>
+        <title>Message</title>
+        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+        <meta http-equiv='Content-Type' content='text/html; charset=utf-8'>
+      </head>  
+  
+      <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
+      <link rel="shortcut icon" href="/favicon.ico">
+      <script src="/js/jquery.min.js"></script>
+      <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+      <script src="/js/js.cookie.min.js"></script>
+      <script src='/js/crypto-lib.js'></script>
+      <script src="/js/common_lib.js"></script>
+      
+      <script>
+        let is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
+        let algorithm = "AES-GCM";
+        let aes_key = "";
+      
+        async function forwardMessage() {
+          await prepareRollingKey(${_key_len});
+        
+          let value = parseInt($('input[name=to_group_id]:checked', '#frm_forward').val(), 10);
+          if (isNaN(value)) {
+            alert("Please select a group to let message forward to");
+          }
+          else {
+            let key_ready = true;
+            let err_msg = "";
+            aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+          
+            if (typeof(aes_key) != "string") {
+              key_ready = false;
+              err_msg = "Session secure key is lost, the system is going to log you out!";
+            }
+            else {
+              if (aes_key.trim().length < ${_key_len}) {
+                key_ready = false;
+                err_msg = "Session secure key length is too short, something is wrong. The system is going to log you out.";
               }
+            }  
+          
+            if (key_ready) {
+              //-- Encrypt additional message before send it out, even it is blank. --//
+              let a_message = document.getElementById("a_message").value;
+              let enc_obj = await aesEncryptJSON(algorithm, aes_key, a_message);
               
-              function goBack(from_group_id) {
-                var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
-                var f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");         // Defined on common_lib.js : js.cookie.min.js
-                var top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
-                window.location.href = "/do_sms?g_id=" + from_group_id + "&f_m_id=" + f_m_id + "&top_id=" + top_id;
-              }
-            </script>`;
+              document.getElementById("algorithm").value = algorithm;
+              document.getElementById("a_iv").value = enc_obj.iv;
+              document.getElementById("a_enc_msg").value = enc_obj.encrypted;
+              document.getElementById("a_message").value = '';                                                      
+              document.getElementById("oper_mode").value = "S";
+              
+              // Clear AES key from RAM after used //
+              aes_key = null;
+              
+              document.getElementById("frm_forward").submit();
+            }
+            else {
+              alert(err_msg);
+              window.location.href = "/logout_msg";
+            }
+          }
+        }
+        
+        async function goBack(from_group_id) {
+          await prepareRollingKey(${_key_len}); 
+        
+          let is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
+          let f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");         // Defined on common_lib.js : js.cookie.min.js
+          let top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
+          document.getElementById("g_id").value = from_group_id;
+          document.getElementById("f_m_id").value = f_m_id;
+          document.getElementById("top_id").value = top_id;
+          document.getElementById("frm_forward").action = "/do_sms";
+          document.getElementById("frm_forward").submit();
+        }
+      </script>`;
   }
   catch(e) {
     throw e;
@@ -6535,14 +7597,20 @@ async function _printFwMsgGroupSelectionForm(from_group_id, user_id, msg_id, gro
   try {
     private_group_marker = "<img src='/images/lock.png' height='15px'>";
     
-    html = `<form id="frm_forward" name="frm_forward" action="/forward_message" method="post">
+    html = `<form id="frm_forward" name="frm_forward" action="/save_forward_message" method="post">
             <input type=hidden id="oper_mode" name="oper_mode" value="">
             <input type=hidden id="from_group_id" name="from_group_id" value="${from_group_id}">
             <input type=hidden id="msg_id" name="msg_id" value="${msg_id}">
             <input type=hidden id="algorithm" name="algorithm" value="AES-GCM">
             <input type=hidden id="a_iv" name="a_iv" value="">
             <input type=hidden id="a_enc_msg" name="a_enc_msg" value="">
-              
+            <input type=hidden id="g_id" name="g_id" value="">
+            <input type=hidden id="f_m_id" name="f_m_id" value="">
+            <input type=hidden id="top_id" name="top_id" value="">
+            <input type=hidden id="roll_rec" name="roll_rec" value="">
+            <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+            <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+                          
             <div data-role="page">
               <div data-role="header" data-position="fixed">
                 <a href="javascript:goBack(${from_group_id});" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>    
@@ -6626,6 +7694,65 @@ exports.showForwardMessageForm = async function(msg_pool, from_group_id, user_id
 }
 
 
+exports.returnToSMSpageHTML = async function(group_id, message) {
+  let html;
+  
+  try {
+    message = (typeof(message) != "string")? "" : message;
+    
+    html = `
+    <!doctype html>
+    <html>
+      <head>
+        <script type="text/javascript" src='/js/jquery.min.js'></script>
+        <script type="text/javascript" src="/js/js.cookie.min.js"></script>
+        <script type="text/javascript" src='/js/crypto-lib.js'></script>               
+        <script type="text/javascript" src='/js/common_lib.js'></script>
+                        
+        <script>
+          $(document).ready(function() {
+            let message = "${message}";
+            
+            if (message.trim() != "") {
+              alert("${message}");
+            }
+            
+            switchPage();
+          });
+          
+          async function switchPage() {
+            await prepareRollingKey(${_key_len});
+            let is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
+            let f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");         // Defined on common_lib.js : js.cookie.min.js
+            let top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id"); 
+            document.getElementById("g_id").value = ${group_id};
+            document.getElementById("f_m_id").value = f_m_id;
+            document.getElementById("top_id").value = top_id;
+            document.getElementById("frmLeap").submit();
+          }
+        </script>
+      </head>
+      
+      <body>
+        <form id="frmLeap" name="frmLeap" action="/do_sms" method="POST">
+          <input type=hidden id="roll_rec" name="roll_rec" value="">
+          <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+          <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+          <input type=hidden id="g_id" name="g_id" value="">
+          <input type=hidden id="f_m_id" name="f_m_id" value="">
+          <input type=hidden id="top_id" name="top_id" value="">
+        </form>        
+      </body>        
+    </html>`;
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return html;
+}
+
+
 function _includeJsLib(title) {
   var html;
   
@@ -6663,30 +7790,41 @@ exports.showGroupNameAmendPage = async function(msg_pool, group_id) {
     
     html += `
     <script>
-      function goBack() {
-        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
+      async function goBack() {
+        await prepareRollingKey(${_key_len});
+      
+        let is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
         //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
-        var f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
-        var top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
-        window.location.href = "/do_sms?g_id=${group_id}&f_m_id=" + f_m_id + "&top_id=" + top_id;
+        let f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
+        let top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
+        document.getElementById("f_m_id").value = f_m_id;
+        document.getElementById("top_id").value = top_id;
+        document.getElementById("frm_profile").action = "/do_sms";
+        document.getElementById("frm_profile").submit();
       }
     
-      function updateGroupName() {
-        var g_name = $("#group_name").val();
+      async function updateGroupName() {
+        let g_name = document.getElementById("group_name").value;
         
         if (allTrim(g_name) == "") {
           alert("Group name should not be blank");
-          $("#group_name").focus();
+          document.getElementById("group_name").focus();
         }
         else {
+          await prepareRollingKey(${_key_len});
           document.getElementById("frm_profile").submit();
         }
       }    
     </script>
     
-    <form id="frm_profile" name="frm_profile" action="/change_group_name" method="post">
+    <form id="frm_profile" name="frm_profile" action="/save_change_group_name" method="post">
     <input type="hidden" id="g_id" name="g_id" value="${group_id}">
-    
+    <input type="hidden" id="f_m_id" name="f_m_id" value="">
+    <input type="hidden" id="top_id" name="top_id" value="">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+        
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;">
         <a href="javascript:goBack();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
@@ -6748,12 +7886,17 @@ exports.listGroupMember = async function(msg_pool, group_id) {
     
     html += `
     <script>
-      function goBack() {
-        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
+      async function goBack() {
+        await prepareRollingKey(${_key_len});
+      
+        let is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
         //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
-        var f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
-        var top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");        
-        window.location.href = "/do_sms?g_id=${group_id}&f_m_id=" + f_m_id + "&top_id=" + top_id;
+        let f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
+        let top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
+        document.getElementById("f_m_id").value = f_m_id;
+        document.getElementById("top_id").value = top_id;
+        document.getElementById("frm_profile").action = "/do_sms";
+        document.getElementById("frm_profile").submit();
       }
     </script>
 
@@ -6764,6 +7907,15 @@ exports.listGroupMember = async function(msg_pool, group_id) {
       </div>
   
       <div data-role="main" class="ui-content">
+        <form id="frm_profile" name="frm_profile" action="/save_change_group_name" method="post">
+          <input type="hidden" id="g_id" name="g_id" value="${group_id}">
+          <input type="hidden" id="f_m_id" name="f_m_id" value="">
+          <input type="hidden" id="top_id" name="top_id" value="">
+          <input type=hidden id="roll_rec" name="roll_rec" value="">
+          <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+          <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+        </form>  
+      
         <table width=100% cellpadding=1 cellspacing=1>
         <thead>
           <tr style="background-color:lightblue"><td align=center><b>Username / Alias</b></td><td align=center><b>Role</b></td></tr>
@@ -6877,9 +8029,15 @@ exports.showAddGroupMemberPage = async function(group_id) {
         }
       }  
   
-      function addNewMember() {
+      async function addNewMember() {
         if (newMemberDataSetOk()) {
-          document.getElementById("frm_profile").submit();
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("frm_profile").submit();
+          }
+          catch(e) {
+            alert(e.message);
+          }
         }
       }
             
@@ -6902,17 +8060,33 @@ exports.showAddGroupMemberPage = async function(group_id) {
         return true;
       }
       
-      function goBack() {
-        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
-        //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
-        var f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
-        var top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
-        window.location.href = "/do_sms?g_id=${group_id}&f_m_id=" + f_m_id + "&top_id=" + top_id;
+      async function goBack() {
+        try {
+          await prepareRollingKey(${_key_len});
+          
+          let is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
+          //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
+          let f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
+          let top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
+        
+          document.getElementById("f_m_id").value = f_m_id;
+          document.getElementById("top_id").value = top_id;
+          document.getElementById("frm_profile").action = "/do_sms";
+          document.getElementById("frm_profile").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }        
     </script>
     
-    <form id="frm_profile" name="frm_profile" action="/add_group_member" method="post">
+    <form id="frm_profile" name="frm_profile" action="/save_group_member" method="post">
     <input type="hidden" id="g_id" name="g_id" value="${group_id}">
+    <input type=hidden id="f_m_id" name="f_m_id" value="">
+    <input type=hidden id="top_id" name="top_id" value="">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
     
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;" data-position="fixed">
@@ -6957,8 +8131,8 @@ exports.showAddGroupMemberPage = async function(group_id) {
 
 
 exports.showDeleteGroupMemberPage = async function(msg_pool, group_id, user_id) {
-  var conn, cnt, html;
-  var members = [];
+  let conn, cnt, html;
+  let members = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -6969,36 +8143,58 @@ exports.showDeleteGroupMemberPage = async function(msg_pool, group_id, user_id) 
     
     html += `
     <script>
-      function goBack() {
-        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
-        //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
-        var f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
-        var top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
-        window.location.href = "/do_sms?g_id=${group_id}&f_m_id=" + f_m_id + "&top_id=" + top_id;
+      async function goBack() {
+        try {
+          await prepareRollingKey(${_key_len});
+        
+          let is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
+          //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
+          let f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
+          let top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
+          
+          document.getElementById("f_m_id").value = f_m_id;
+          document.getElementById("top_id").value = top_id;
+          document.getElementById("frm_profile").action = "/do_sms";
+          document.getElementById("frm_profile").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        } 
       }        
 
-      function deleteMember(cnt) {
-        var select_cnt = 0;
-      
-        for (idx = 1; idx <= cnt; idx++) {
-          if (document.getElementById("dm_id_" + idx).checked) {
-            select_cnt++;
+      async function deleteMember(cnt) {
+        let select_cnt = 0;
+
+        try {       
+          for (idx = 1; idx <= cnt; idx++) {
+            if (document.getElementById("dm_id_" + idx).checked) {
+              select_cnt++;
+            }
+          }
+          
+          if (select_cnt == 0) {
+            alert("You must select at least one member to proceed");
+            return false;
+          }
+          else {
+            await prepareRollingKey(${_key_len});        
+            document.getElementById("frm_profile").submit();
           }
         }
-        
-        if (select_cnt == 0) {
-          alert("You must select at least one member to proceed");
-          return false;
-        }
-        else {
-          document.getElementById("frm_profile").submit();
+        catch(e) {
+          alert(e.message);
         }
       }    
     </script>
     
-    <form id="frm_profile" name="frm_profile" action="/delete_group_member" method="post">
+    <form id="frm_profile" name="frm_profile" action="/confirm_delete_group_member" method="POST">
     <input type="hidden" id="g_id" name="g_id" value="${group_id}">
-    
+    <input type=hidden id="f_m_id" name="f_m_id" value="">
+    <input type=hidden id="top_id" name="top_id" value="">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+        
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;" data-position="fixed">
         <a href="javascript:goBack();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
@@ -7013,10 +8209,10 @@ exports.showDeleteGroupMemberPage = async function(msg_pool, group_id, user_id) 
         <tbody>`;
     
     cnt = 0;    
-    for (var i = 0; i < members.length; i++) {
-      var this_user_id = members[i].user_id;
-      var this_member = (wev.allTrim(members[i].alias) == '')? wev.allTrim(members[i].username) : wev.allTrim(members[i].alias);
-      var this_group_role = (members[i].group_role == 1)? 'Group Admin' : '';       
+    for (let i = 0; i < members.length; i++) {
+      let this_user_id = members[i].user_id;
+      let this_member = (wev.allTrim(members[i].alias) == '')? wev.allTrim(members[i].username) : wev.allTrim(members[i].alias);
+      let this_group_role = (members[i].group_role == 1)? 'Group Admin' : '';       
       
       if (this_user_id != user_id) {    // Don't delete yourself
         cnt++;
@@ -7037,7 +8233,8 @@ exports.showDeleteGroupMemberPage = async function(msg_pool, group_id, user_id) 
         <br>
         <input type="button" id="save" name="save" value="Delete" onClick="deleteMember(${cnt});">
       </div>  
-    </div>`;            
+    </div>
+    </form>`;            
   }
   catch(e) {
     throw e;
@@ -7063,36 +8260,58 @@ exports.showPromoteGroupMemberPage = async function(msg_pool, group_id, user_id)
 
     html += `
     <script>
-      function goBack() {
-        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
-        //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
-        var f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
-        var top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
-        window.location.href = "/do_sms?g_id=${group_id}&f_m_id=" + f_m_id + "&top_id=" + top_id;
+      async function goBack() {
+        try {
+          await prepareRollingKey(${_key_len});    // Defined on crypto-lib.js
+        
+          let is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
+          //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
+          let f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
+          let top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
+          
+          document.getElementById("f_m_id").value = f_m_id;
+          document.getElementById("top_id").value = top_id;
+          document.getElementById("frm_profile").action = "/do_sms";
+          document.getElementById("frm_profile").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }        
 
-      function promoteMember(cnt) {
-        var select_cnt = 0;
-      
-        for (idx = 1; idx <= cnt; idx++) {
-          if (document.getElementById("pm_id_" + idx).checked) {
-            select_cnt++;
+      async function promoteMember(cnt) {
+        let select_cnt = 0;
+
+        try {      
+          for (idx = 1; idx <= cnt; idx++) {
+            if (document.getElementById("pm_id_" + idx).checked) {
+              select_cnt++;
+            }
           }
+          
+          if (select_cnt == 0) {
+            alert("You must select at least one member to promote");
+            return false;
+          }
+          else {
+            await prepareRollingKey(${_key_len});    // Defined on crypto-lib.js
+            document.getElementById("frm_profile").submit();
+          }    
         }
-        
-        if (select_cnt == 0) {
-          alert("You must select at least one member to promote");
-          return false;
-        }
-        else {
-          document.getElementById("frm_profile").submit();
-        }      
+        catch(e) {
+          alert(e.message);
+        }  
       }
     </script>
     
-    <form id="frm_profile" name="frm_profile" action="/promote_group_member" method="post">
+    <form id="frm_profile" name="frm_profile" action="/confirm_promote_group_member" method="post">
     <input type="hidden" id="g_id" name="g_id" value="${group_id}">
-    
+    <input type="hidden" id="f_m_id" name="f_m_id" value="">
+    <input type="hidden" id="top_id" name="top_id" value="">    
+    <input type="hidden" id="roll_rec" name="roll_rec" value="">
+    <input type="hidden" id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type="hidden" id="roll_rec_sum" name="roll_rec_sum" value="">
+        
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;" data-position="fixed">
         <a href="javascript:goBack();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
@@ -7133,7 +8352,8 @@ exports.showPromoteGroupMemberPage = async function(msg_pool, group_id, user_id)
           <br>
           <input type="button" id="save" name="save" value="Promote" onClick="promoteMember(${cnt});">
         </div>  
-      </div>`;
+      </div>
+      </form>`;
     }
     else {
       html += `
@@ -7143,7 +8363,8 @@ exports.showPromoteGroupMemberPage = async function(msg_pool, group_id, user_id)
           </tbody>  
           </table>
         </div>  
-      </div>`;
+      </div>
+      </form>`;
     }
   }
   catch(e) {
@@ -7170,35 +8391,57 @@ exports.showDemoteGroupAdminPage = async function(msg_pool, group_id, user_id) {
     
     html += `
     <script>
-      function goBack() {
-        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
-        //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
-        var f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
-        var top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
-        window.location.href = "/do_sms?g_id=${group_id}&f_m_id=" + f_m_id + "&top_id=" + top_id;
+      async function goBack() {
+        try {
+          await prepareRollingKey(${_key_len});    // Defined on crypto-lib.js
+        
+          let is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
+          //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
+          let f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
+          let top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
+          
+          document.getElementById("f_m_id").value = f_m_id;
+          document.getElementById("top_id").value = top_id;
+          document.getElementById("frm_profile").action = "/do_sms";
+          document.getElementById("frm_profile").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }        
 
-      function demoteGroupAdmin(cnt) {
-        var select_cnt = 0;
+      async function confirmDemoteGroupAdmin(cnt) {
+        let select_cnt = 0;
       
-        for (idx = 1; idx <= cnt; idx++) {
-          if (document.getElementById("da_id_" + idx).checked) {
-            select_cnt++;
+        try {
+          for (idx = 1; idx <= cnt; idx++) {
+            if (document.getElementById("da_id_" + idx).checked) {
+              select_cnt++;
+            }
           }
+          
+          if (select_cnt == 0) {
+            alert("You must select at least one group administrator to demote");
+            return false;
+          }
+          else {
+            await prepareRollingKey(${_key_len});    // Defined on crypto-lib.js
+            document.getElementById("frm_profile").submit();
+          }    
         }
-        
-        if (select_cnt == 0) {
-          alert("You must select at least one group administrator to demote");
-          return false;
-        }
-        else {
-          document.getElementById("frm_profile").submit();
-        }      
+        catch(e) {
+          alert(e.message);
+        }  
       }
     </script>
 
-    <form id="frm_profile" name="frm_profile" action="/demote_group_admin" method="post">
+    <form id="frm_profile" name="frm_profile" action="/confirm_demote_group_admin" method="post">
     <input type="hidden" id="g_id" name="g_id" value="${group_id}">
+    <input type="hidden" id="f_m_id" name="f_m_id" value="">
+    <input type="hidden" id="top_id" name="top_id" value="">    
+    <input type="hidden" id="roll_rec" name="roll_rec" value="">
+    <input type="hidden" id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type="hidden" id="roll_rec_sum" name="roll_rec_sum" value="">
     
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;" data-position="fixed">
@@ -7238,9 +8481,10 @@ exports.showDemoteGroupAdminPage = async function(msg_pool, group_id, user_id) {
           </tbody>  
           </table>
           <br>
-          <input type="button" id="save" name="save" value="Demote" onClick="demoteGroupAdmin(${cnt});">
+          <input type="button" id="save" name="save" value="Demote" onClick="confirmDemoteGroupAdmin(${cnt});">
         </div>  
-      </div>`;
+      </div>
+      </form>`;
     }
     else {
       html += `
@@ -7250,7 +8494,8 @@ exports.showDemoteGroupAdminPage = async function(msg_pool, group_id, user_id) {
           </tbody>  
           </table>
         </div>  
-      </div>`;
+      </div>
+      </form>`;
     }
   }
   catch(e) {
@@ -7274,30 +8519,47 @@ exports.showManualInformMemberPage = async function(group_id) {
         
     html += `
     <script>
-      function goBack() {
-        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
-        //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
-        var f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
-        var top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
-        window.location.href = "/do_sms?g_id=${group_id}&f_m_id=" + f_m_id + "&top_id=" + top_id;
+      async function goBack() {
+        try {
+          await prepareRollingKey(${_key_len});                   // Defined on crypto-lib.js
+          
+          let is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
+          //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
+          let f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
+          let top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
+          
+          document.getElementById("f_m_id").value = f_m_id;
+          document.getElementById("top_id").value = top_id;
+          document.getElementById("frm_profile").action = "/do_sms";
+          document.getElementById("frm_profile").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }        
     
-      function sendInformMessage() {
-        var message = allTrim(document.getElementById("inform_message").value);
+      async function sendInformMessage() {
+        let message = allTrim(document.getElementById("inform_message").value);
         if (message == "") {
           alert("Please input notification message before click send button.");
           document.getElementById("inform_message").focus();
         }
         else {
-          $('#to_be_inform').hide();
-          $('#go_inform').show();
+          await prepareRollingKey(${_key_len});                   // Defined on crypto-lib.js        
+          document.getElementById("to_be_inform").style.display = "none";      // Hide the table row
+          document.getElementById("go_inform").style.display = "table-row";    // Show the table row      
           document.getElementById("frm_profile").submit();        
         }
       }        
     </script>    
     
-    <form id="frm_profile" name="frm_profile" action="/inform_member" method="post">
+    <form id="frm_profile" name="frm_profile" action="/confirm_inform_member" method="post">
     <input type="hidden" id="g_id" name="g_id" value="${group_id}">
+    <input type="hidden" id="f_m_id" name="f_m_id" value="">
+    <input type="hidden" id="top_id" name="top_id" value="">
+    <input type="hidden" id="roll_rec" name="roll_rec" value="">
+    <input type="hidden" id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type="hidden" id="roll_rec_sum" name="roll_rec_sum" value="">
     
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;" data-position="fixed">
@@ -7317,7 +8579,7 @@ exports.showManualInformMemberPage = async function(group_id) {
           
           <tr><td>&nbsp;</td></tr>
           
-          <tr id="to_be_inform">
+          <tr id="to_be_inform" style="display:table-row">
             <td align=center width=100%><input type="button" id="send" name="send" value="Send" onClick="sendInformMessage();"></td>  
           </tr>
           
@@ -7393,7 +8655,7 @@ exports.buildGroupDeletedInformHTML = async function(msg_pool, group_id, members
           myWebSocket = connectWebServer();      
         });
 
-        function groupDeleted(cmd) {
+        async function groupDeleted(cmd) {
           var message = JSON.stringify(cmd);
           
           if (myWebSocket.readyState == WebSocket.OPEN) {
@@ -7402,10 +8664,16 @@ exports.buildGroupDeletedInformHTML = async function(msg_pool, group_id, members
           else {
             console.log('Unable to send group_deleted message due to websocket is not opened'); 
           }
-
-          clearLocalData();
-          //-- Return to the landing page of messaging --// 
-          window.location.href = "/message";        
+          
+          try {
+            clearLocalData();
+            //-- Return to the landing page of messaging --//
+            await prepareRollingKey(${_key_len}); 
+            document.getElementById("frmLeap").submit();
+          }
+          catch(e) {
+            alert(e.message);
+          }
         }
 
         function clearLocalData() {
@@ -7430,10 +8698,48 @@ exports.buildGroupDeletedInformHTML = async function(msg_pool, group_id, members
     else {
       html += `
       </script>
-        window.location.href = "/message";
+        $(document).ready(function() {
+          switchPage();
+        });
+
+        function clearLocalData() {
+          var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
+           
+          if (is_iOS) {
+            Cookies.remove("g_id");                                    // Defined on js.cookie.min.js
+            Cookies.remove("u_id");
+            Cookies.remove("m_id");
+            Cookies.remove("top_id");
+          }
+          else {
+            deleteLocalStoredItem("g_id");                             // Defined on common_lib.js
+            deleteLocalStoredItem("u_id");                             
+            deleteLocalStoredItem("m_id");                             
+            deleteLocalStoredItem("top_id");                                   
+          }      
+        }    
+        
+        async function switchPage() {
+          try {
+            clearLocalData();
+            await prepareRollingKey(${_key_len});
+            document.getElementById("frmLeap").submit();
+          }
+          catch(e) {
+            alert(e.message);
+          }  
+        }
       </script>      
       `;
     }
+    
+    html += `
+      <form id="frmLeap" name="frmLeap" action="/message" method="POST">
+        <input type=hidden id="roll_rec" name="roll_rec" value="">
+        <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+        <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+      </form>      
+    `;
   }
   catch(e) {
     throw e;
@@ -7447,8 +8753,8 @@ exports.buildGroupDeletedInformHTML = async function(msg_pool, group_id, members
 
 
 exports.showAutoDeleteSetupForm = async function(msg_pool, group_id) {
-  var conn, auto_delete, delete_after, checked, html;
-  var group_settings = null;
+  let conn, auto_delete, delete_after, checked, html;
+  let group_settings = null;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -7490,34 +8796,56 @@ exports.showAutoDeleteSetupForm = async function(msg_pool, group_id) {
         })      
       });
       
-      function updateAutoDeleteSettings() {
-        var is_checked = document.getElementById("auto_delete").checked;
-        if (is_checked == false) {
-          document.getElementById("auto_delete").value = 0;
-          document.getElementById("delete_after").value = 0;
-        }
-        else {
-          document.getElementById("auto_delete").value = 1;
-          var da = parseInt(document.getElementById("delete_after").value, 10);
-          if (isNaN(da) || (da < 1 || da > 30)) {
-            document.getElementById("delete_after").value = 1;
+      async function updateAutoDeleteSettings() {
+        try {
+          let is_checked = document.getElementById("auto_delete").checked;
+          if (is_checked == false) {
+            document.getElementById("auto_delete").value = 0;
+            document.getElementById("delete_after").value = 0;
           }
+          else {
+            document.getElementById("auto_delete").value = 1;
+            let da = parseInt(document.getElementById("delete_after").value, 10);
+            if (isNaN(da) || (da < 1 || da > 30)) {
+              document.getElementById("delete_after").value = 1;
+            }
+          }
+          
+          await prepareRollingKey(${_key_len});                   // Defined on crypto-lib.js          
+          document.getElementById("frm_profile").submit();
         }
-        
-        document.getElementById("frm_profile").submit();
+        catch(e) {
+          alert(e.message);
+        } 
       }    
       
-      function goBack() {
-        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
-        //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
-        var f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
-        var top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
-        window.location.href = "/do_sms?g_id=${group_id}&f_m_id=" + f_m_id + "&top_id=" + top_id;
+      async function goBack() {
+        try {
+          await prepareRollingKey(${_key_len});                   // Defined on crypto-lib.js
+        
+          let is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);      
+          //*-- Due to limitation on iOS, so I use cookies to store cross page data, instead to use localStorage. --*// 
+          let f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");
+          let top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
+          
+          document.getElementById("f_m_id").value = f_m_id;
+          document.getElementById("top_id").value = top_id;
+          document.getElementById("frm_profile").action = "/do_sms";
+          document.getElementById("frm_profile").submit();
+        }
+        catch (e) {
+          alert(e.message); 
+        }
       }        
     </script>
     
-    <form id="frm_profile" name="frm_profile" action="/auto_delete_setup" method="post">
+    <form id="frm_profile" name="frm_profile" action="/confirm_auto_delete_setup" method="post">
     <input type="hidden" id="g_id" name="g_id" value="${group_id}">
+    <input type=hidden id="f_m_id" name="f_m_id" value="">
+    <input type=hidden id="top_id" name="top_id" value="">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
     
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;">
@@ -8561,26 +9889,35 @@ function _promoteUserJavascriptSection(op) {
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
     <script src="/js/common_lib.js"></script>    
+    <script src="/js/crypto-lib.js"></script>
   
     <script>
-      function goStep(to_step, cnt) {
+      async function goStep(to_step, cnt) {
         to_step = parseInt(to_step, 10);
         
-        if (to_step == 0) {
-          var url = window.location.href;
-          var host = url.split('/');
-          location.href = host[0] + '//' + host[2] + '/promote_user?op=${op}';
-        }
-        else if (to_step == 1) {
-          document.getElementById("frm_promote").action = "/promote_select_user";          
-          document.getElementById("frm_promote").submit();
-        }
-        else if (to_step == 2) {
-          if (dataSetValid(cnt)) {
-            document.getElementById("frm_promote").action = "/promote_confirm_user";
+        try {
+          if (to_step == 0) {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("op0").value = ${op};
+            document.getElementById("frm_promote").action = "/promote_user";          
             document.getElementById("frm_promote").submit();          
           }
-        }              
+          else if (to_step == 1) {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("frm_promote").action = "/promote_select_user";          
+            document.getElementById("frm_promote").submit();
+          }
+          else if (to_step == 2) {
+            if (dataSetValid(cnt)) {
+              await prepareRollingKey(${_key_len});
+              document.getElementById("frm_promote").action = "/promote_confirm_user";
+              document.getElementById("frm_promote").submit();          
+            }
+          }    
+        }
+        catch(e) {
+          alert(e.message);
+        }          
       }
 
       function dataSetValid(cnt) {
@@ -8605,6 +9942,16 @@ function _promoteUserJavascriptSection(op) {
         return true;
       }
       
+      async function goHome() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_promote").action = "/message";
+          document.getElementById("frm_promote").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }
+      }
     </script>    
     `;
   }
@@ -8630,10 +9977,15 @@ function _printPromoteSelectOperationForm(op) {
     }
     
     html = `
-    <form id="frm_promote" name="frm_promote" action="" method="post">    
+    <form id="frm_promote" name="frm_promote" action="" method="post">  
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    <input type=hidden id="op0" name="op0" value="">
+          
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-        <a href="/message" data-icon="home" class="ui-btn-left" data-ajax="false">Home</a>		
+        <a href="javascript:goHome();" data-icon="home" class="ui-btn-left" data-ajax="false">Home</a>		
         <h1>Promote User</h1>
       </div>
       
@@ -8708,10 +10060,14 @@ async function _printPromoteSelectUserForm(conn, op) {
     html = `
     <form id="frm_promote" name="frm_promote" action="" method="post">
     <input type=hidden id="op" name="op" value="${op}">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    <input type=hidden id="op0" name="op0" value="">
     
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-        <a href="/message" data-icon="home" class="ui-btn-left" data-ajax="false">Home</a>		
+        <a href="javascript:goHome();" data-icon="home" class="ui-btn-left" data-ajax="false">Home</a>		
         <h1>Promote User</h1>
       </div>
       
@@ -8819,27 +10175,37 @@ function _demoteUserJavascriptSection(op) {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
-    <script src="/js/common_lib.js"></script>    
+    <script src="/js/common_lib.js"></script>   
+    <script src="/js/crypto-lib.js"></script> 
   
     <script>
-      function goStep(to_step, cnt) {
+      async function goStep(to_step, cnt) {
         to_step = parseInt(to_step, 10);
         
-        if (to_step == 0) {
-          var url = window.location.href;
-          var host = url.split('/');
-          location.href = host[0] + '//' + host[2] + '/demote_user?op=${op}';
-        }
-        else if (to_step == 1) {
-          document.getElementById("frm_demote").action = "/demote_select_user";          
-          document.getElementById("frm_demote").submit();
-        }
-        else if (to_step == 2) {
-          if (dataSetValid(cnt)) {
-            document.getElementById("frm_demote").action = "/demote_confirm_user";
-            document.getElementById("frm_demote").submit();          
+        try {
+          if (to_step == 0) {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("op0").value = ${op};
+            document.getElementById("frm_demote").action = "/demote_user";          
+            document.getElementById("frm_demote").submit();
+            
           }
-        }                      
+          else if (to_step == 1) {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("frm_demote").action = "/demote_select_user";          
+            document.getElementById("frm_demote").submit();
+          }
+          else if (to_step == 2) {
+            if (dataSetValid(cnt)) {
+              await prepareRollingKey(${_key_len});
+              document.getElementById("frm_demote").action = "/demote_confirm_user";
+              document.getElementById("frm_demote").submit();          
+            }
+          }    
+        }
+        catch(e) {
+          alert(e.message);
+        }                  
       }
       
       function dataSetValid(cnt) {
@@ -8862,6 +10228,17 @@ function _demoteUserJavascriptSection(op) {
         }
         
         return true;
+      }
+      
+      async function goHome() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_demote").action = "/message";
+          document.getElementById("frm_demote").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
     </script>    
     `;    
@@ -8889,10 +10266,14 @@ function _printDemoteSelectOperationForm(op) {
     
     html = `
     <form id="frm_demote" name="frm_demote" action="" method="post">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    <input type=hidden id="op0" name="op0" value="">    
     
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-        <a href="/message" data-icon="home" class="ui-btn-left" data-ajax="false">Home</a>		
+        <a href="javascript:goHome();" data-icon="home" class="ui-btn-left" data-ajax="false">Home</a>		
         <h1>Demote User</h1>
       </div>
       
@@ -8968,11 +10349,15 @@ async function _printDemoteSelectUserForm(conn, op, user_id) {
     
     html = `
     <form id="frm_demote" name="frm_demote" action="" method="post">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    <input type=hidden id="op0" name="op0" value="">
     <input type=hidden id="op" name="op" value="${op}">
     
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-        <a href="/message" data-icon="home" class="ui-btn-left" data-ajax="false">Home</a>		
+        <a href="javascript:goHome();" data-icon="home" class="ui-btn-left" data-ajax="false">Home</a>		
         <h1>Demote User</h1>
       </div>
       
@@ -9080,27 +10465,37 @@ function _lockUserJavascriptSection(op) {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
-    <script src="/js/common_lib.js"></script>    
+    <script src="/js/common_lib.js"></script>   
+    <script src="/js/crypto-lib.js"></script> 
   
     <script>
-      function goStep(to_step, cnt) {
-        to_step = parseInt(to_step, 10);
-        
-        if (to_step == 0) {
-          var url = window.location.href;
-          var host = url.split('/');
-          location.href = host[0] + '//' + host[2] + '/lock_user?op=${op}';
-        }
-        else if (to_step == 1) {
-          document.getElementById("frm_lock").action = "/lock_select_user";          
-          document.getElementById("frm_lock").submit();
-        }
-        else if (to_step == 2) {
-          if (dataSetValid(cnt)) {
-            document.getElementById("frm_lock").action = "/lock_confirm_user";
-            document.getElementById("frm_lock").submit();          
+      async function goStep(to_step, cnt) {
+        try {
+          var to_step = parseInt(to_step, 10);
+          
+          if (to_step == 0 || to_step == 1 || to_step == 2) {
+            await prepareRollingKey(${_key_len});
           }
-        }                      
+          
+          if (to_step == 0) {
+            document.getElementById("op0").value = ${op};
+            document.getElementById("frm_lock").action = "/lock_user";          
+            document.getElementById("frm_lock").submit();
+          }
+          else if (to_step == 1) {
+            document.getElementById("frm_lock").action = "/lock_select_user";          
+            document.getElementById("frm_lock").submit();
+          }
+          else if (to_step == 2) {
+            if (dataSetValid(cnt)) {
+              document.getElementById("frm_lock").action = "/lock_confirm_user";
+              document.getElementById("frm_lock").submit();          
+            }
+          }    
+        }
+        catch(e) {
+          alert(e.message);
+        }                  
       }
           
       function dataSetValid(cnt) {
@@ -9123,6 +10518,17 @@ function _lockUserJavascriptSection(op) {
         }
         
         return true;
+      }
+      
+      async function goHome() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_lock").action = "/message";
+          document.getElementById("frm_lock").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
     </script>    
     `;
@@ -9150,10 +10556,14 @@ function _printLockUnlockOptionForm(op) {
     
     html = `
     <form id="frm_lock" name="frm_lock" action="" method="post">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    <input type=hidden id="op0" name="op0" value="${op}">
     
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-        <a href="/message" data-icon="home" class="ui-btn-left" data-ajax="false">Home</a>		
+        <a href="javascript:goHome();" data-icon="home" class="ui-btn-left" data-ajax="false">Home</a>		
         <h1>Lock/Unlock User</h1>
       </div>
       
@@ -9230,11 +10640,15 @@ async function _printLockUnlockSelectUserForm(conn, op, user_id) {
     
     html = `
     <form id="frm_lock" name="frm_lock" action="" method="post">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">    
+    <input type=hidden id="op0" name="op0" value="${op}">
     <input type=hidden id="op" name="op" value="${op}">
     
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;" data-position="fixed">  
-        <a href="/message" data-icon="home" class="ui-btn-left" data-ajax="false">Home</a>		
+        <a href="javascript:goHome();" data-icon="home" class="ui-btn-left" data-ajax="false">Home</a>		
         <h1>Lock/Unlock User</h1>
       </div>
       
@@ -9369,6 +10783,7 @@ exports.buildForceLogoutHTML = async function(msg_pool, users, alert_message, la
       <script src="/js/jquery.mobile-1.4.5.min.js"></script>
       <script src="/js/js.cookie.min.js"></script>
       <script src="/js/common_lib.js"></script>
+      <script src="/js/crypto-lib.js"></script>
             
       <script>
         var users = ${jsonUsers};     // Note: 'jsonUsers' in here is an object, not string. 
@@ -9400,11 +10815,7 @@ exports.buildForceLogoutHTML = async function(msg_pool, users, alert_message, la
         
         $(document).on("pageshow", function(event) {
           //-- Open a websocket and send out force logout message --//
-          myWebSocket = connectWebServer();   
-          
-          if (alert_message != "") {
-            alert(alert_message);
-          }   
+          myWebSocket = connectWebServer();             
         });
 
         function sendCommand(cmd) {
@@ -9417,22 +10828,63 @@ exports.buildForceLogoutHTML = async function(msg_pool, users, alert_message, la
             console.log('Unable to send force logout message due to websocket is not opened'); 
           }
 
-          //-- Return to the message page --// 
-          window.location.href = "${landing_page}";        
+          if (alert_message != "") {
+            alert(alert_message);
+          }   
+
+          //-- Return to the message page --//
+          returnToHome();       
         }
+        
+        async function returnToHome() {
+          await prepareRollingKey(${_key_len});
+          document.getElementById('frmLeap').submit();
+        }        
       </script>   
       `;
     }
     else {
       html += `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Force Logout</title>
+        <meta name="viewport" content="minimum-scale=1.0, width=device-width, maximum-scale=1.0, initial-scale=1.0, user-scalable=no">   
+        <meta http-equiv='Content-Type' content='text/html; charset=utf-8'>                
+      </head>
+      <body style="width:auto;">  
+      <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
+      <link rel="shortcut icon" href="/favicon.ico">
+      <script src="/js/jquery.min.js"></script>
+      <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+      <script src="/js/js.cookie.min.js"></script>
+      <script src="/js/common_lib.js"></script>
+      <script src="/js/crypto-lib.js"></script>
+      
       </script>
         var err_msg = "Unable to force logout these users, since no websocket can be created.";
         alert_message = (alert_message == "")? err_msg : alert_message + " " + err_msg;
         alert(alert_message);
-        window.location.href = "${landing_page}";
+        
+        returnToHome();
+        
+        async function returnToHome() {
+          await prepareRollingKey(${_key_len});
+          document.getElementById('frmLeap').submit();
+        }
       </script>      
       `;
     }
+    
+    html += `
+      <form id='frmLeap' name='frmLeap' action='${landing_page}' method='POST'>
+        <input type=hidden id="roll_rec" name="roll_rec" value="">
+        <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+        <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+      </form>        
+    </body>
+    </html>     
+    `
   }
   catch(e) {
     throw e;
@@ -9450,17 +10902,99 @@ function _printSysSetupJavascriptSection() {
   
   try {
     html = `
-    <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
-    <link rel="shortcut icon" href="/favicon.ico">
-    <script src="/js/jquery.min.js"></script>
-    <script src="/js/jquery.mobile-1.4.5.min.js"></script>
-    <script src="/js/common_lib.js"></script>
-  
-    <script>
-      function goBack() {
-        window.location.href = "/message";
-      }
-    </script>    
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>System Setup</title>
+      <meta name="viewport" content="minimum-scale=1.0, width=device-width, maximum-scale=1.0, initial-scale=1.0, user-scalable=no">   
+      <meta http-equiv='Content-Type' content='text/html; charset=utf-8'>                
+      <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
+      <link rel="shortcut icon" href="/favicon.ico">
+      <script src="/js/jquery.min.js"></script>
+      <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+      <script src="/js/js.cookie.min.js"></script>
+      <script src="/js/common_lib.js"></script>
+      <script src="/js/crypto-lib.js"></script>
+    
+      <script>
+        async function maintainMainSites() {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById('frmLeap').action = "/admin/maintain_main_sites";
+            document.getElementById('frmLeap').submit();        
+          }
+          catch(e) {
+            alert(e.message);
+          }        
+        }
+        
+        async function maintainEmailSenders() {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById('frmLeap').action = "/admin/maintain_email_senders";
+            document.getElementById('frmLeap').submit();        
+          }
+          catch(e) {
+            alert(e.message);
+          }                
+        }
+        
+        async function maintainDecoySites() {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById('frmLeap').action = "/admin/maintain_decoy_sites";
+            document.getElementById('frmLeap').submit();        
+          }
+          catch(e) {
+            alert(e.message);
+          }                        
+        }
+        
+        async function maintainFileTypes() {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById('frmLeap').action = "/admin/maintain_file_types";
+            document.getElementById('frmLeap').submit();        
+          }
+          catch(e) {
+            alert(e.message);
+          }                                
+        }
+        
+        async function maintainSysSettings() {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById('frmLeap').action = "/admin/maintain_sys_settings";
+            document.getElementById('frmLeap').submit();        
+          }
+          catch(e) {
+            alert(e.message);
+          }                                        
+        }
+        
+        async function telegramBotMaintain() {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById('frmLeap').action = "/admin/telegram_bot_maintain";
+            document.getElementById('frmLeap').submit();        
+          }
+          catch(e) {
+            alert(e.message);
+          }                                        
+        }
+      
+        async function goBack() {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById('frmLeap').action = "/message";
+            document.getElementById('frmLeap').submit();        
+          }
+          catch(e) {
+            alert(e.message);
+          }
+        }
+      </script>
+    </head>    
     `;
   }
   catch(e) {
@@ -9478,23 +11012,32 @@ function _printSystemSetupMenu() {
     warning = `<font color="red"><b>Warning:</b><br>Incorrect settings change may cause system malfunction and data lost!</font>`;
     
     html = `
-    <div data-role="page">
-      <div data-role="header" data-position="fixed" data-tap-toggle="false">
-        <a href="javascript:goBack();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>			
-        <h1>System Settings</h1>
-      </div>	
-  
-      <div data-role="main" class="ui-body-d ui-content">
-        <a href="/admin/maintain_main_sites" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">Main Sites</a>
-        <a href="/admin/maintain_email_senders" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">Email Senders</a>      
-        <a href="/admin/maintain_decoy_sites" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">Decoy Sites</a>
-        <a href="/admin/maintain_file_types" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">File Types</a>
-        <a href="/admin/maintain_sys_settings" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">Misc. System Settings</a>
-        <a href="/admin/telegram_bot_maintain" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">Telegram Bot</a>
-        <br>
-        ${warning}      
+    <body style="width:auto;">  
+      <div data-role="page">
+        <div data-role="header" data-position="fixed" data-tap-toggle="false">
+          <a href="javascript:goBack();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>			
+          <h1>System Settings</h1>
+        </div>	
+    
+        <div data-role="main" class="ui-body-d ui-content">
+          <a href="javascript:maintainMainSites();" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">Main Sites</a>
+          <a href="javascript:maintainEmailSenders();" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">Email Senders</a>      
+          <a href="javascript:maintainDecoySites();" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">Decoy Sites</a>
+          <a href="javascript:maintainFileTypes();" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">File Types</a>
+          <a href="javascript:maintainSysSettings();" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">Misc. System Settings</a>
+          <a href="javascript:telegramBotMaintain();" class="ui-btn ui-corner-all ui-shadow" data-ajax="false">Telegram Bot</a>
+          <br>
+          ${warning}      
+        </div>
       </div>
-    </div>    
+  
+      <form id='frmLeap' name='frmLeap' action='' method='POST'>
+        <input type=hidden id="roll_rec" name="roll_rec" value="">
+        <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+        <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+      </form>            
+    </body>
+    </html>    
     `;
   }
   catch(e) {
@@ -9561,33 +11104,54 @@ function _printMainSitesMaintainJavascriptSection() {
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
     <script src="/js/common_lib.js"></script>
+    <script src="/js/crypto-lib.js"></script>
   
     <script>
-      function goBack() {
-        window.location.href = "/system_setup";
+      async function goBack() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_main_sites").action = "/system_setup";
+          document.getElementById("frm_main_sites").submit();          
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
     
-      function goHome() {
-        window.location.href = "/message";
+      async function goHome() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_main_sites").action = "/message";
+          document.getElementById("frm_main_sites").submit();          
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
       
-      function saveMainSites() {
-        var the_decoy_site = allTrim(document.getElementById("decoy_site").value);
-        var the_message_site = allTrim(document.getElementById("message_site").value);
+      async function saveMainSites() {
+        try {
+          var the_decoy_site = allTrim(document.getElementById("decoy_site").value);
+          var the_message_site = allTrim(document.getElementById("message_site").value);
+          
+          if (the_decoy_site == "") {
+            alert("Login (decoy) site DNS name should not be blank");
+            return false;
+          }
+          
+          if (the_message_site == "") {
+            alert("Messaging site DNS name should not be blank");
+            return false;
+          }
         
-        if (the_decoy_site == "") {
-          alert("Login (decoy) site DNS name should not be blank");
-          return false;
+          await prepareRollingKey(${_key_len});  
+          document.getElementById("oper_mode").value = "S";
+          document.getElementById("frm_main_sites").action = "/admin/save_main_sites";
+          document.getElementById("frm_main_sites").submit();
         }
-        
-        if (the_message_site == "") {
-          alert("Messaging site DNS name should not be blank");
-          return false;
+        catch(e) {
+          alert(e.message);
         }
-        
-        document.getElementById("oper_mode").value = "S";
-        document.getElementById("frm_main_sites").action = "/admin/save_main_sites";
-        document.getElementById("frm_main_sites").submit();
       }
     </script>    
     `;
@@ -9607,6 +11171,9 @@ function _printMainSitesMaintainForm(main_sites) {
     html = `
     <form id="frm_main_sites" name="frm_main_sites" action="" method="post">
     <input type=hidden id="oper_mode" name="oper_mode" value="">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
     
     <div data-role="page">
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
@@ -9729,12 +11296,12 @@ async function _printEmailSenderListJavascriptSection(conn, sess_code, op, ms_id
 			  }
 			  catch(e) {
 			    console.log(e);
-			    alert("Error is found, operation is aborted. Error: " + e);
-			    window.location.href = "/message";
+			    alert("Error is found, operation is aborted. Error: " + e.message);
+			    goHome();
 			  }	    
 		  }
 	    	    
-	    function getEmailWorkerProfile() {
+	    async function getEmailWorkerProfile() {
 				var key_valid = true;
 				aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
 				if (typeof(aes_key) != "string") {
@@ -9748,39 +11315,57 @@ async function _printEmailSenderListJavascriptSection(conn, sess_code, op, ms_id
 			  }
 				
         // Clear AES key from RAM after used //
-        aes_key = "";
+        aes_key = null;
                 
 				if (!key_valid) {
-					alert("Secure key is lost, operation is aborted."); 
-					window.location.href = '/message';
+					alert("Secure key is lost, operation is aborted.");
+          goHome(); 
 			  }
 			  else {					
 					//-- Note: Due to asynchronous nature of javascript execution, it needs to use a  --//
 					//--       promise to ensure the data is received from the server before the form --//
 					//--       is displayed.                                                          --//  
-					if (op == "E") {                    
+					if (op == "E") {
+            await prepareRollingKey(${_key_len});
+            let roll_rec = document.getElementById("roll_rec").value;
+            let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+            let roll_rec_sum = document.getElementById("roll_rec_sum").value;          
+                              
 						let this_promise = new Promise((resolve, reject) => {                  			          
 					    $.ajax({
 					      type: 'POST',
 					      url: '/get_email_sender_data',
 					      dataType: 'html',
-					      data: {op: op, ms_id: ms_id},
+					      data: {
+                  op: op, 
+                  ms_id: ms_id, 
+                  roll_rec: roll_rec,
+                  iv_roll_rec: iv_roll_rec,
+                  roll_rec_sum: roll_rec_sum 
+                },
 					      success: function(ret_data) {
 					        let result = JSON.parse(ret_data);
+                  let err_msg = "";
 					        
 					        if (result.ok == '1') {						
 					          resolve(result.data);         // Note: 'result.data' is encrypted by 'aes_key' on server side, except 'result.data.port'.
 								  }
 					        else {
-					          let err_msg = "Unable to get data. Error: " + result.msg;
-					          console.log(err_msg);
-					          reject(err_msg);
+                    if (result.msg == "force_logout" || result.msg == "session_expired" || result.msg == "session_check_error" || result.msg == "no_cookie") {
+                      err_msg = result.msg;
+                    }  
+                    else {
+					            err_msg = "Unable to get data. Error: " + result.msg;
+					            console.log(err_msg);
+                    }
+                    
+					          reject(new Error(err_msg));
 								  }
 							  },
 							  error: function(xhr, ajaxOptions, thrownError) {
 							    let err_msg = "Unable to get data. Error " + xhr.status + ": " + thrownError
 							    console.log(err_msg);
-		              reject(err_msg);
+		              reject(new Error(err_msg));
 		            }
 						  });
 					  });
@@ -9788,8 +11373,24 @@ async function _printEmailSenderListJavascriptSection(conn, sess_code, op, ms_id
 					  this_promise.then((enc_data) => {
 							showEmailSenderDataInForm(op, enc_data);
 					  }).catch((error) => {
-					    alert(error);
-					    window.location.href = "/message";							  
+              if (error.message.match(/force_logout/g)) {
+                logout_msg();
+              } 
+              else if (error.message.match(/no_cookie/g)) {
+                window.location.href = "/";
+              }
+              else if (error.message.match(/session_expired/g)) {
+                alert("Session expired!");
+                logout_msg();
+              }
+              else if (error.message.match(/session_check_failure/g)) {
+                alert("Unable to check your session status, please login again");
+                logout_msg();
+              }
+              else {
+					      alert(error.message);
+                goHome();
+              }
 					  });
 				  }
 			  }	    
@@ -9799,34 +11400,81 @@ async function _printEmailSenderListJavascriptSection(conn, sess_code, op, ms_id
 				getEmailWorkerProfile();				
 			});	    
     
-      function goBack() {
-        window.location.href = "/system_setup";
+      async function goBack() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_email_sender").action = "/system_setup";
+          document.getElementById("frm_email_sender").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
     
-      function goHome() {
-        window.location.href = "/message";
+      async function goHome() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_email_sender").action = "/message";
+          document.getElementById("frm_email_sender").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
       
-      function addEmailSender() {
-        document.getElementById("op").value = "A";
-        document.getElementById("frm_email_sender").action = "/admin/new_email_senders";
-        document.getElementById("frm_email_sender").submit();          
+      async function goEmailWorkerList() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_email_sender").action = "/admin/maintain_email_senders";
+          document.getElementById("frm_email_sender").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }      
       }
       
-      function editEmailSender(ms_id) {
-        document.getElementById("op").value = "E";
-        document.getElementById("ms_id").value = ms_id;
-        document.getElementById("frm_email_sender").action = "/admin/edit_email_senders";
-        document.getElementById("frm_email_sender").submit();      
+      function logout_msg() {
+        window.location.href = "/logout_msg";
       }
       
-      function deleteEmailSender(ms_id) {
-        if (confirm("Are you sure to delete this email sender?")) {
-          document.getElementById("op").value = "D";
-          document.getElementById("oper_mode").value = "S";
-          document.getElementById("ms_id").value = ms_id;
-          document.getElementById("frm_email_sender").action = "/admin/save_email_senders";
+      async function addEmailSender() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("op").value = "A";
+          document.getElementById("frm_email_sender").action = "/admin/new_email_senders";
           document.getElementById("frm_email_sender").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }          
+      }
+      
+      async function editEmailSender(ms_id) {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("op").value = "E";
+          document.getElementById("ms_id").value = ms_id;
+          document.getElementById("frm_email_sender").action = "/admin/edit_email_senders";
+          document.getElementById("frm_email_sender").submit();    
+        }
+        catch(e) {
+          alert(e.message);
+        }  
+      }
+      
+      async function deleteEmailSender(ms_id) {
+        if (confirm("Are you sure to delete this email sender?")) {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("op").value = "D";
+            document.getElementById("oper_mode").value = "S";
+            document.getElementById("ms_id").value = ms_id;
+            document.getElementById("frm_email_sender").action = "/admin/save_email_senders";
+            document.getElementById("frm_email_sender").submit();
+          }
+          catch(e) {
+            alert(e.message);
+          }
         }
       }
       
@@ -9883,55 +11531,61 @@ async function _printEmailSenderListJavascriptSection(conn, sess_code, op, ms_id
 			  }
         
         if (ready_to_go) {
-          var algorithm = "AES-GCM";
-          
-          enc_obj = await aesEncryptJSON(algorithm, aes_key, email);
-          var iv_email = enc_obj.iv
-          var e_email = enc_obj.encrypted;
-
-          enc_obj = await aesEncryptJSON(algorithm, aes_key, m_user);
-          var iv_m_user = enc_obj.iv
-          var e_m_user = enc_obj.encrypted;
-          
-          enc_obj = await aesEncryptJSON(algorithm, aes_key, m_pass);
-          var iv_m_pass = enc_obj.iv
-          var e_m_pass = enc_obj.encrypted;
-          
-          enc_obj = await aesEncryptJSON(algorithm, aes_key, smtp_server);
-          var iv_smtp_server = enc_obj.iv
-          var e_smtp_server = enc_obj.encrypted;
-          
-          var e_port = port;             // SMTP server port number isn't going to be encrypted.
-          
-          // Clear AES key from RAM after used //
-          aes_key = "";
-          
-          $('#algorithm').val(algorithm);
-          $('#iv_email').val(iv_email);
-          $('#e_email').val(e_email);
-          $('#iv_m_user').val(iv_m_user);
-          $('#e_m_user').val(e_m_user);
-          $('#iv_m_pass').val(iv_m_pass);
-          $('#e_m_pass').val(e_m_pass);
-          $('#iv_smtp_server').val(iv_smtp_server);
-          $('#e_smtp_server').val(e_smtp_server);
-          $('#e_port').val(e_port);
-          
-          $('#email').val("");
-          $('#m_user').val("");
-          $('#m_pass').val("");
-          $('#smtp_server').val("");
-          $('#port').val("");
-                          
-	        $('#oper_mode').val("S");
-	        //-- Note: Don't use jQuery syntax to submit the form, or else a strange issue will get in next step. --//
-	        //--       May be a bug on such old version jQuery libray cause it.                                   --// 
-	        document.getElementById("frm_email_sender").action = "/admin/save_email_senders";
-	        document.getElementById("frm_email_sender").submit();
+          try {
+            var algorithm = "AES-GCM";
+            
+            enc_obj = await aesEncryptJSON(algorithm, aes_key, email);
+            var iv_email = enc_obj.iv
+            var e_email = enc_obj.encrypted;
+  
+            enc_obj = await aesEncryptJSON(algorithm, aes_key, m_user);
+            var iv_m_user = enc_obj.iv
+            var e_m_user = enc_obj.encrypted;
+            
+            enc_obj = await aesEncryptJSON(algorithm, aes_key, m_pass);
+            var iv_m_pass = enc_obj.iv
+            var e_m_pass = enc_obj.encrypted;
+            
+            enc_obj = await aesEncryptJSON(algorithm, aes_key, smtp_server);
+            var iv_smtp_server = enc_obj.iv
+            var e_smtp_server = enc_obj.encrypted;
+            
+            var e_port = port;             // SMTP server port number isn't going to be encrypted.
+            
+            // Clear AES key from RAM after used //
+            aes_key = null;
+            
+            $('#algorithm').val(algorithm);
+            $('#iv_email').val(iv_email);
+            $('#e_email').val(e_email);
+            $('#iv_m_user').val(iv_m_user);
+            $('#e_m_user').val(e_m_user);
+            $('#iv_m_pass').val(iv_m_pass);
+            $('#e_m_pass').val(e_m_pass);
+            $('#iv_smtp_server').val(iv_smtp_server);
+            $('#e_smtp_server').val(e_smtp_server);
+            $('#e_port').val(e_port);
+            
+            $('#email').val("");
+            $('#m_user').val("");
+            $('#m_pass').val("");
+            $('#smtp_server').val("");
+            $('#port').val("");
+                            
+            $('#oper_mode').val("S");
+            //-- Note: Don't use jQuery syntax to submit the form, or else a strange issue will get in next step. --//
+            //--       Since currently used jQuery libray is too old to understand asyn/await syntax.             --// 
+            await prepareRollingKey(${_key_len});
+            document.getElementById("frm_email_sender").action = "/admin/save_email_senders";
+            document.getElementById("frm_email_sender").submit();
+          }
+          catch(e) {
+            alert(e.message);
+          }
 			  }
 			  else {
 			    alert("The secure key is lost, and operation is aborted. Now, you will be returned to the home page.");
-			    window.location.href = "/message";
+          goHome();
 			  }
       }
     </script>    
@@ -9954,6 +11608,9 @@ function _printEmailSenderList(ms_list) {
     <input type=hidden id="oper_mode" name="oper_mode" value="">
     <input type=hidden id="op" name="op" value="">
     <input type=hidden id="ms_id" name="ms_id" value="0">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">    
     
     <div data-role="page">
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
@@ -10042,10 +11699,13 @@ function _printNewEmailSenderForm(op) {
     <input type=hidden id="iv_smtp_server" name="iv_smtp_server" value="">
     <input type=hidden id="e_smtp_server" name="e_smtp_server" value="">
     <input type=hidden id="e_port" name="e_port" value="">
-    
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+        
     <div data-role="page">
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
-        <a href="/admin/maintain_email_senders" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>			
+        <a href="javascript:goEmailWorkerList();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>			
         <h1>Add Email Sender</h1>
       </div>	
   
@@ -10186,10 +11846,13 @@ function _printEmailSenderEditForm(op, ms_id) {
     <input type=hidden id="iv_smtp_server" name="iv_smtp_server" value="">
     <input type=hidden id="e_smtp_server" name="e_smtp_server" value="">
     <input type=hidden id="e_port" name="e_port" value="">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
     
     <div data-role="page">
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
-        <a href="/admin/maintain_email_senders" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>			
+        <a href="javascript:goEmailWorkerList();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>			
         <h1>Edit Email Sender</h1>
       </div>	
   
@@ -10292,51 +11955,101 @@ function _printDecoySiteListJavascriptSection() {
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
     <script src="/js/common_lib.js"></script>
+    <script src="/js/crypto-lib.js"></script>
   
     <script>
-      function goBack() {
-        window.location.href = "/system_setup";
+      async function goBack() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_decoy_site").action = "/system_setup";
+          document.getElementById("frm_decoy_site").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
     
-      function goHome() {
-        window.location.href = "/message";
+      async function goHome() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_decoy_site").action = "/message";
+          document.getElementById("frm_decoy_site").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
       
-      function addDecoySite() {
-        document.getElementById("op").value = "A";
-        document.getElementById("frm_decoy_site").action = "/admin/add_new_decoy_site";
-        document.getElementById("frm_decoy_site").submit();          
+      async function goDecoySiteList() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_decoy_site").action = "/admin/maintain_decoy_sites";
+          document.getElementById("frm_decoy_site").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }
+      }      
+      
+      async function addDecoySite() {
+        try {
+          await prepareRollingKey(${_key_len});        
+          document.getElementById("op").value = "A";
+          document.getElementById("frm_decoy_site").action = "/admin/add_new_decoy_site";
+          document.getElementById("frm_decoy_site").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }          
       }
       
-      function editDecoySite(site_url) {
-        document.getElementById("op").value = "E";
-        document.getElementById("site_url").value = site_url;
-        document.getElementById("frm_decoy_site").action = "/admin/modify_decoy_site";
-        document.getElementById("frm_decoy_site").submit();      
-      }
-      
-      function deleteDecoySite(site_url) {
-        if (confirm("Are you sure to delete this decoy site?")) {
-          document.getElementById("op").value = "D";
-          document.getElementById("oper_mode").value = "S";
+      async function editDecoySite(site_url) {
+        try {
+          await prepareRollingKey(${_key_len});                
+          document.getElementById("op").value = "E";
           document.getElementById("site_url").value = site_url;
+          document.getElementById("frm_decoy_site").action = "/admin/modify_decoy_site";
+          document.getElementById("frm_decoy_site").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }      
+      }
+      
+      async function deleteDecoySite(site_url) {
+        if (confirm("Are you sure to delete this decoy site?")) {
+          try {
+            await prepareRollingKey(${_key_len});                          
+            document.getElementById("op").value = "D";
+            document.getElementById("oper_mode").value = "S";
+            document.getElementById("site_url").value = site_url;
+            document.getElementById("frm_decoy_site").action = "/admin/save_decoy_site";
+            document.getElementById("frm_decoy_site").submit();
+          }
+          catch(e) {
+            alert(e.message);
+          }
+        }
+      }
+      
+      async function saveDecoySite() {
+        try {            
+          let site_url = allTrim(document.getElementById("site_url").value);
+          
+          if (site_url == "") {
+            alert("Please input decoy site URL before saving");          
+            document.getElementById("site_url").focus();
+            return false;
+          }
+        
+          await prepareRollingKey(${_key_len});                                  
+          document.getElementById("oper_mode").value = "S";
           document.getElementById("frm_decoy_site").action = "/admin/save_decoy_site";
           document.getElementById("frm_decoy_site").submit();
         }
-      }
-      
-      function saveDecoySite() {
-        var site_url = allTrim(document.getElementById("site_url").value);
-        
-        if (site_url == "") {
-          alert("Please input decoy site URL before saving");          
-          document.getElementById("site_url").focus();
-          return false;
+        catch(e) {
+          alert(e.message);
         }
-              
-        document.getElementById("oper_mode").value = "S";
-        document.getElementById("frm_decoy_site").action = "/admin/save_decoy_site";
-        document.getElementById("frm_decoy_site").submit();
       }
     </script>    
     `;
@@ -10358,7 +12071,10 @@ function _printDecoySiteList(site_list) {
     <input type=hidden id="op" name="op" value="">
     <input type=hidden id="oper_mode" name="oper_mode" value="">
     <input type=hidden id="site_url" name="site_url" value="">
-    
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+        
     <div data-role="page">
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
         <a href="javascript:goBack()" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
@@ -10450,10 +12166,13 @@ function _printNewDecoySiteForm(op) {
     <form id="frm_decoy_site" name="frm_decoy_site" action="" method="post">
     <input type=hidden id="op" name="op" value="${op}">
     <input type=hidden id="oper_mode" name="oper_mode" value="">
-    
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+        
     <div data-role="page">
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
-        <a href="/admin/maintain_decoy_sites" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>			
+        <a href="javascript:goDecoySiteList();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>			
         <h1>Add Decoy Site</h1>
       </div>	
   
@@ -10532,10 +12251,13 @@ function _printDecoySiteEditForm(op, decoy_site) {
     <input type=hidden id="op" name="op" value="${op}">
     <input type=hidden id="oper_mode" name="oper_mode" value="">
     <input type=hidden id="site_url_old" name="site_url_old" value="${decoy_site.site_url}">
-    
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+        
     <div data-role="page">
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
-        <a href="/admin/maintain_decoy_sites" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>			
+        <a href="javascript:goDecoySiteList();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>			
         <h1>Edit Decoy Site</h1>
       </div>	
   
@@ -10621,58 +12343,108 @@ function _printFileTypeListJS() {
     <script src="/js/jquery-editable-select.min.js"></script>
     <link href="/js/jquery-editable-select.min.css" rel="stylesheet">  
     <script src="/js/common_lib.js"></script>
+    <script src="/js/crypto-lib.js"></script>
   
     <script>
-      function goBack() {
-        window.location.href = "/system_setup";
+      async function goBack() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_file_type").action = "/system_setup";
+          document.getElementById("frm_file_type").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
     
-      function goHome() {
-        window.location.href = "/message";
+      async function goHome() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_file_type").action = "/message";
+          document.getElementById("frm_file_type").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
       
-      function addFileType() {
-        document.getElementById("op").value = "A";
-        document.getElementById("frm_file_type").action = "/admin/add_new_file_type";
-        document.getElementById("frm_file_type").submit();          
+      async function goFileTypeList() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_file_type").action = "/admin/maintain_file_types";
+          document.getElementById("frm_file_type").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }      
       }
       
-      function editFileType(ftype_id) {
-        document.getElementById("op").value = "E";
-        document.getElementById("ftype_id").value = ftype_id;
-        document.getElementById("frm_file_type").action = "/admin/modify_file_type";
-        document.getElementById("frm_file_type").submit();      
+      async function addFileType() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("op").value = "A";
+          document.getElementById("frm_file_type").action = "/admin/add_new_file_type";
+          document.getElementById("frm_file_type").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }          
       }
       
-      function deleteFileType(ftype_id) {
-        if (confirm("Are you sure to delete this file type?")) {
-          document.getElementById("op").value = "D";
+      async function editFileType(ftype_id) {
+        try {
+          await prepareRollingKey(${_key_len});        
+          document.getElementById("op").value = "E";
           document.getElementById("ftype_id").value = ftype_id;
+          document.getElementById("frm_file_type").action = "/admin/modify_file_type";
+          document.getElementById("frm_file_type").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }      
+      }
+      
+      async function deleteFileType(ftype_id) {
+        if (confirm("Are you sure to delete this file type?")) {
+          try {
+            await prepareRollingKey(${_key_len});        
+            document.getElementById("op").value = "D";
+            document.getElementById("ftype_id").value = ftype_id;
+            document.getElementById("oper_mode").value = "S";
+            document.getElementById("frm_file_type").action = "/admin/save_file_type";
+            document.getElementById("frm_file_type").submit();
+          }
+          catch(e) {
+            alert(e.message);
+          }
+        }
+      }
+      
+      async function saveFileType() {
+        try {
+          var file_ext = allTrim($('#file_ext').val());
+          var file_type = allTrim($('#file_type').val());
+          
+          if (file_ext == "") {
+            alert("Please input file extension before saving");
+            $('#file_ext').focus();
+            return false;
+          }
+          
+          if (file_type == "") {
+            alert("Please input file type before saving");
+            $('#file_type').focus();
+            return false;
+          }      
+
+          await prepareRollingKey(${_key_len});
           document.getElementById("oper_mode").value = "S";
           document.getElementById("frm_file_type").action = "/admin/save_file_type";
           document.getElementById("frm_file_type").submit();
         }
-      }
-      
-      function saveFileType() {
-        var file_ext = allTrim($('#file_ext').val());
-        var file_type = allTrim($('#file_type').val());
-        
-        if (file_ext == "") {
-          alert("Please input file extension before saving");
-          $('#file_ext').focus();
-          return false;
-        }
-        
-        if (file_type == "") {
-          alert("Please input file type before saving");
-          $('#file_type').focus();
-          return false;
-        }      
-
-        document.getElementById("oper_mode").value = "S";
-        document.getElementById("frm_file_type").action = "/admin/save_file_type";
-        document.getElementById("frm_file_type").submit();        
+        catch(e) {
+          alert(e.message);
+        }        
       }
     </script>    
     `;
@@ -10694,7 +12466,10 @@ function _printFileTypeList(ftype_list) {
     <input type=hidden id="op" name="op" value="">
     <input type=hidden id="oper_mode" name="oper_mode" value="">
     <input type=hidden id="ftype_id" name="ftype_id" value="">
-    
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+        
     <div data-role="page">
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
         <a href="javascript:goBack()" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
@@ -10820,10 +12595,13 @@ function _printNewFileTypeForm(op, file_types) {
     <form id="frm_file_type" name="frm_file_type" action="" method="post">
     <input type=hidden id="op" name="op" value="${op}">
     <input type=hidden id="oper_mode" name="oper_mode" value="">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
     
     <div data-role="page">
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
-        <a href="/admin/maintain_file_types" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
+        <a href="javascript:goFileTypeList();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
         <h1>Add File Type</h1>
       </div>
       
@@ -10925,10 +12703,13 @@ function _printFileTypeEditForm(op, ftype_id, ftype_dtl, file_types) {
     <input type=hidden id="op" name="op" value="${op}">
     <input type=hidden id="oper_mode" name="oper_mode" value="">
     <input type=hidden id="ftype_id" name="ftype_id" value="${ftype_id}">
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
     
     <div data-role="page">
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
-        <a href="/admin/maintain_file_types" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
+        <a href="javascript:goFileTypeList();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
         <h1>Edit File Type</h1>
       </div>
     
@@ -11023,14 +12804,40 @@ function _printSysSettingJS() {
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
     <script src="/js/common_lib.js"></script>
+    <script src="/js/crypto-lib.js"></script>
   
     <script>
-      function goBack() {
-        window.location.href = "/system_setup";
+      async function goBack() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_sys_set").action = "/system_setup";
+          document.getElementById("frm_sys_set").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
     
-      function goHome() {
-        window.location.href = "/message";
+      async function goHome() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_sys_set").action = "/message";
+          document.getElementById("frm_sys_set").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }
+      }
+
+      async function goSysSettingList() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frm_sys_set").action = "/admin/maintain_sys_settings";
+          document.getElementById("frm_sys_set").submit();                    
+        }
+        catch(e) {
+          alert(e.message);
+        }      
       }
       
       /* This code block is frozen to prevent user add misc. system settings.
@@ -11041,11 +12848,17 @@ function _printSysSettingJS() {
       }
       */
       
-      function editSysSetting(sys_key) {
-        document.getElementById("op").value = "E";
-        document.getElementById("sys_key").value = sys_key;
-        document.getElementById("frm_sys_set").action = "/admin/modify_sys_setting";
-        document.getElementById("frm_sys_set").submit();      
+      async function editSysSetting(sys_key) {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("op").value = "E";
+          document.getElementById("sys_key").value = sys_key;
+          document.getElementById("frm_sys_set").action = "/admin/modify_sys_setting";
+          document.getElementById("frm_sys_set").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }      
       }
       
       /* This code block is frozen to prevent user delete misc. system settings.
@@ -11060,25 +12873,31 @@ function _printSysSettingJS() {
       }
       */
       
-      function saveSysSetting() {
-        var sys_key = allTrim($('#sys_key').val());
-        var sys_value = allTrim($('#sys_value').val());
-        
-        if (sys_key == "") {
-          alert("Please input key of system setting before saving");
-          $('#sys_key').focus();
-          return false;
+      async function saveSysSetting() {
+        try {
+          var sys_key = allTrim($('#sys_key').val());
+          var sys_value = allTrim($('#sys_value').val());
+          
+          if (sys_key == "") {
+            alert("Please input key of system setting before saving");
+            $('#sys_key').focus();
+            return false;
+          }
+          
+          if (sys_value == "") {
+            alert("Please input key value of system setting before saving");
+            $('#sys_value').focus();
+            return false;
+          }
+
+          await prepareRollingKey(${_key_len});          
+          document.getElementById("oper_mode").value = "S";
+          document.getElementById("frm_sys_set").action = "/admin/save_sys_setting";
+          document.getElementById("frm_sys_set").submit();
         }
-        
-        if (sys_value == "") {
-          alert("Please input key value of system setting before saving");
-          $('#sys_value').focus();
-          return false;
+        catch(e) {
+          alert(e.message);
         }
-        
-        document.getElementById("oper_mode").value = "S";
-        document.getElementById("frm_sys_set").action = "/admin/save_sys_setting";
-        document.getElementById("frm_sys_set").submit();
       }
     </script>    
     `;
@@ -11100,7 +12919,10 @@ function _printSysSettingList(key_list) {
     <input type=hidden id="op" name="op" value="">
     <input type=hidden id="oper_mode" name="oper_mode" value="">
     <input type=hidden id="sys_key" name="sys_key" value="">
-    
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+        
     <div data-role="page">
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
         <a href="javascript:goBack()" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
@@ -11229,10 +13051,13 @@ function _printSysSettingEditForm(op, key_dtl) {
     <input type=hidden id="op" name="op" value="${op}">
     <input type=hidden id="oper_mode" name="oper_mode" value="">
     <input type=hidden id="sys_key_old" name="sys_key_old" value="${key_dtl.sys_key}">
-    
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+        
     <div data-role="page">
       <div data-role="header" data-position="fixed" data-tap-toggle="false">
-        <a href="/admin/maintain_sys_settings" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
+        <a href="javascript:goSysSettingList();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>
         <h1>Edit Sys Setting</h1>
       </div>
     
@@ -11299,32 +13124,12 @@ async function _printTelegramBotProfileJS(conn, sess_code) {
     <script>
       var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
       var aes_key = "";
-				        
-	    async function showProfileDataInForm(enc_data) {
-	      let bot_name, bot_username, http_api_token;
-	    
-	      try {
-	        aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
-	        
-	        bot_name = await aesDecryptBase64(enc_data.algorithm, aes_key, enc_data.iv_bot_name, enc_data.bot_name);
-	        bot_username = await aesDecryptBase64(enc_data.algorithm, aes_key, enc_data.iv_bot_username, enc_data.bot_username);
-	        http_api_token = await aesDecryptBase64(enc_data.algorithm, aes_key, enc_data.iv_http_api_token, enc_data.http_api_token);
-	        
-          // Clear session AES key from RAM after used //
-          aes_key = "";
-          	        
-          $('#bot_name').val(bot_name);
-			    $('#bot_username').val(bot_username);
-			    $('#http_api_token').val(http_api_token);
-			  }
-			  catch(e) {
-			    console.log(e);
-			    alert("Error is found, operation is aborted. Error: " + e);
-			    window.location.href = "/system_setup";
-			  }	    
-		  }
-	    
-	    function getTelegramBotProfile() {
+
+			$(document).on("pageshow", function(event) {    
+			  getTelegramBotProfile();      
+			});	    
+				        	    
+	    async function getTelegramBotProfile() {
 				var key_ready = true;
 				aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
 				if (typeof(aes_key) != "string") {
@@ -11337,15 +13142,18 @@ async function _printTelegramBotProfileJS(conn, sess_code) {
 				  }
 			  }
         // Clear AES key from RAM after used //
-        aes_key = "";
+        aes_key = null;
 				
 				if (!key_ready) {
-					alert("Secure key is lost, operation is aborted and return to home page."); 
-					var url = window.location.href;
-					var host = url.split('/');
-					location.href = host[0] + '//' + host[2] + '/message';
+					alert("Secure key is lost, operation is aborted and return to home page.");
+          goHome(); 
 			  }
-			  else {					
+			  else {
+          await prepareRollingKey(${_key_len});
+          let roll_rec = document.getElementById("roll_rec").value;
+          let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+          let roll_rec_sum = document.getElementById("roll_rec_sum").value;          
+                  					
 					//-- Note: Due to asynchronous nature of javascript execution, it needs to use a  --//
 					//--       promise to ensure the data is received from the server before the form --//
 					//--       is displayed.                                                          --//                      
@@ -11354,6 +13162,11 @@ async function _printTelegramBotProfileJS(conn, sess_code) {
 				      type: 'POST',
 				      url: '/get_telegram_bot_profile',
 				      dataType: 'html',
+              data: {
+                roll_rec: roll_rec,
+                iv_roll_rec: iv_roll_rec,
+                roll_rec_sum: roll_rec_sum
+              },
 				      success: function(ret_data) {
 				        let result = JSON.parse(ret_data);
 				        
@@ -11361,15 +13174,32 @@ async function _printTelegramBotProfileJS(conn, sess_code) {
 				          resolve(result.data);         // Note: 'result.data' is encrypted by 'aes_key' on server side.
 							  }
 				        else {
-				          let err_msg = "Unable to get Telegram bot profile data. Error: " + result.msg;
-				          console.log(err_msg);
-				          reject(err_msg);
+                  if (result.msg == "force_logout") {
+                    reject(new Error(result.msg));
+                  }
+                  else if (result.msg == "unable_admin_verify") {
+                    reject(new Error(result.msg));
+                  }
+                  else if (result.msg == "sess_expired") {
+                    reject(new Error(result.msg));
+                  }
+                  else if (result.msg == "unable_sess_verify") {
+                    reject(new Error(result.msg));
+                  }
+                  else if (result.msg == "no_cookie") {
+                    reject(new Error(result.msg));
+                  }
+                  else {                
+                    let err_msg = "Unable to get Telegram bot profile data. Error: " + result.msg;
+                    console.log(err_msg);
+                    reject(new Error(err_msg));
+                  }
 							  }
 						  },
 						  error: function(xhr, ajaxOptions, thrownError) {
 						    let err_msg = "Unable to get Telegram bot profile data. Error " + xhr.status + ": " + thrownError
 						    console.log(err_msg);
-	              reject(err_msg);
+	              reject(new Error(err_msg));
 	            }
 					  });
 				  });
@@ -11377,16 +13207,56 @@ async function _printTelegramBotProfileJS(conn, sess_code) {
 				  this_promise.then((enc_data) => {
 						showProfileDataInForm(enc_data);
 				  }).catch((error) => {
-				    alert(error);
-				    window.location.href = "/system_setup";							  
+            if (error.message.match(/force_logout/g)) {
+              logout();
+            } 
+            else if (error.message.match(/unable_admin_verify/g)) {
+              alert("Unable to check whether you are system administrator, process is aborted.");
+              goHome();
+            } 
+            else if (error.message.match(/sess_expired/g)) {
+              alert("Session expired!");
+              logout();
+            } 
+            else if (error.message.match(/unable_sess_verify/g)) {
+              alert("Unable to verify your session status, please login again.");
+              logout();
+            } 
+            else if (error.message.match(/no_cookie/g)) {
+              window.location.href = "/";
+            } 
+            else {           
+				      alert(error.message);
+              goBack();
+            }
 				  });
 			  }	    
 		  }
-	    	    
-			$(document).on("pageshow", function(event) {    
-			  getTelegramBotProfile();      
-			});	    
-    
+      
+	    async function showProfileDataInForm(enc_data) {
+	      let bot_name, bot_username, http_api_token;
+	    
+	      try {
+	        aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+	        
+	        bot_name = await aesDecryptBase64(enc_data.algorithm, aes_key, enc_data.iv_bot_name, enc_data.bot_name);
+	        bot_username = await aesDecryptBase64(enc_data.algorithm, aes_key, enc_data.iv_bot_username, enc_data.bot_username);
+	        http_api_token = await aesDecryptBase64(enc_data.algorithm, aes_key, enc_data.iv_http_api_token, enc_data.http_api_token);
+	        
+          // Clear session AES key from RAM after used //
+          aes_key = null;
+          	        
+          $('#bot_name').val(bot_name);
+			    $('#bot_username').val(bot_username);
+			    $('#http_api_token').val(http_api_token);
+			  }
+			  catch(e) {
+			    console.log(e);
+			    alert("Error is found, operation is aborted. Error: " + e.message);
+          goBack();
+			  }	    
+		  }
+      	    	        
       async function saveTgBotProfile() {
         if (dataSetOk()) {
 	        var bot_name = allTrim(document.getElementById("bot_name").value);
@@ -11405,7 +13275,7 @@ async function _printTelegramBotProfileJS(conn, sess_code) {
 					  }
 				  }
                     
-          if (key_ready) {
+          if (key_ready) {          
             //-- Encrypt data before send to server --//         
             var algorithm, enc_obj, iv_bot_name, e_bot_name, iv_bot_username, e_bot_username, iv_http_api_token, e_http_api_token;
             
@@ -11424,7 +13294,10 @@ async function _printTelegramBotProfileJS(conn, sess_code) {
             e_http_api_token = enc_obj.encrypted;
             
             // Clear AES key from RAM after used //
-            aes_key = "";
+            aes_key = null;
+            
+            // Generate new rolling key //            
+            await prepareRollingKey(${_key_len});
                         
             //-- Fill encrypted data --//
             document.getElementById("algorithm").value = algorithm;
@@ -11445,7 +13318,7 @@ async function _printTelegramBotProfileJS(conn, sess_code) {
 				  }
 				  else {
 				    alert("Secure key is lost, operation cannot proceed, return to home page.");
-				    window.location.href = "/message";
+				    goHome();
 				  }
         }
       }
@@ -11484,13 +13357,31 @@ async function _printTelegramBotProfileJS(conn, sess_code) {
         }      
       }
       
-      function goBack() {
-        window.location.href = "/system_setup";
+      async function goBack() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frmTgBot").action = "/system_setup";
+          document.getElementById("frmTgBot").submit();          
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
       
-      function goHome() {
-        window.location.href = "/message"; 
+      async function goHome() {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frmTgBot").action = "/message";
+          document.getElementById("frmTgBot").submit();          
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }    
+      
+      function logout() {
+        window.location.href = "/logout_msg";
+      } 
     </script>    
     `;
   }
@@ -11516,7 +13407,10 @@ function _printTelegramBotProfileInputForm() {
     <input type=hidden id="e_bot_username" name="e_bot_username" value="">
     <input type=hidden id="iv_http_api_token" name="iv_http_api_token" value="">
     <input type=hidden id="e_http_api_token" name="e_http_api_token" value="">
-    
+    <input type=hidden id="roll_rec" name="roll_rec" value="">
+    <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+    <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+        
     <div data-role="page">
       <div data-role="header" style="overflow:hidden;" data-position="fixed">  
         <a href="javascript:goBack();" data-icon="back" class="ui-btn-left" data-ajax="false">Back</a>		
@@ -11748,10 +13642,19 @@ function _printSelectToolsJS() {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+    <script src="/js/crypto-lib.js"></script>
+    <script src="/js/common_lib.js"></script>
     
     <script>
-      function runFeature(url) {
-        window.location.href = url;
+      async function runFeature(url) {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById("frmLeap").action = url;
+          document.getElementById("frmLeap").submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }
       }
     </script>    
     `;
@@ -11780,7 +13683,7 @@ async function _printSelectToolsForm(conn_msg, user_role, features) {
         <div data-role="main" class="ui-content">
           <ul data-role="listview">
             <li data-role="list-divider" style="color:darkgreen;">System Administration</li>
-            <li><a href="/admin/feature_setup" data-ajax="false">Feature Setup</a></li>
+            <li><a href="javascript:runFeature('/admin/feature_setup');" data-ajax="false">Feature Setup</a></li>
           </ul>
         </div>
       </div>        
@@ -11844,7 +13747,13 @@ async function _printSelectToolsForm(conn_msg, user_role, features) {
         </tbody>
         </table>
       </div> 
-    </div>    
+    </div> 
+    
+    <form id='frmLeap' name='frmLeap' action='' method='POST'>
+      <input type=hidden id="roll_rec" name="roll_rec" value="">
+      <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+      <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    </form>               
     `;
   }
   catch(e) {
@@ -12801,10 +14710,10 @@ async function _getDateInfo(conn, first_date) {
   
   try {
     //-- Note: Day of the week index for the date (1 = Sunday, 2 = Monday, ..., 7 = Saturday). i.e. offset --//
-    sql = `SELECT LAST_DAY(?) AS last_date, DAYOFWEEK(?) AS offset, MONTHNAME(?) AS month`;
+    sql = `SELECT LAST_DAY(?) AS last_date, DAYOFWEEK(?) AS dow, MONTHNAME(?) AS month`;
     param = [first_date, first_date, first_date];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
-    result = {last_date: data[0].last_date, offset: data[0].offset, month: data[0].month};
+    result = {last_date: data[0].last_date, offset: data[0].dow, month: data[0].month};
   }
   catch(e) {
     throw e;
@@ -14219,6 +16128,85 @@ exports.printSearchResult = async function(pda_pool, op, user_id, what_year, wha
   }
   finally {
     dbs.releasePoolConn(conn);
+  }
+  
+  return html;
+}
+
+
+async function _switchToPage(url, param, method, message) {
+  let html;
+  
+  try {
+    html = `
+    <!doctype html>
+    <html>
+      <head>
+        <script type="text/javascript" src='/js/jquery.min.js'></script>
+        <script type="text/javascript" src="/js/js.cookie.min.js"></script>
+        <script type="text/javascript" src='/js/crypto-lib.js'></script>               
+        <script type="text/javascript" src='/js/common_lib.js'></script>
+                        
+        <script>
+          $(document).ready(function() {
+            let message = "${message}";
+          
+            if (typeof(message) == "string") {
+              if (message.trim() != "") {
+                alert(message);
+              }
+            }
+            
+            switchPage();
+          });
+          
+          async function switchPage() {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("frmLeap").submit();  
+          }
+        </script>
+      </head>
+      
+      <body>
+        <form id="frmLeap" name="frmLeap" action="${url}" method="${method}">
+          <input type=hidden id="roll_rec" name="roll_rec" value="">
+          <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+          <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">`;
+      
+    if (typeof(param) == "object" && param != null) {     
+      for (let key in param) {
+        // Check if the property is actually on the object itself
+        // and not inherited from the prototype chain
+        if (Object.hasOwnProperty.call(param, key)) {
+          let value = param[key];
+          html += `
+          <input type=hidden id="${key}" name="${key}" value="${value}">
+          `
+        }
+      }            
+    }
+                
+    html += `         
+        </form>        
+      </body>        
+    </html>`;
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return html;  
+}
+
+
+exports.switchToPage = async function(url, param, method, message) {
+  let html;
+  
+  try {
+    html = await _switchToPage(url, param, method, message);
+  }
+  catch(e) {
+    throw e;
   }
   
   return html;

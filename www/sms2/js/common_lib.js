@@ -371,3 +371,4 @@ function base64Encode(u8) {
 function base64Decode(str) {
   return new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)))
 }
+

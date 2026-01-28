@@ -63,6 +63,8 @@
 //
 // V1.0.15       2024-10-22      DW              Rewrite functions 'encryptPassword' and 'isPasswordMatch' by using 3rd party library
 //                                               'hash-wasm' and phase out library 'bcrypt'.
+//
+// V1.0.16       2025-12-26      DW              Adjust parameters of argon2id on function 'encryptPassword' to harden password security.
 //#################################################################################################################################
 
 "use strict";
@@ -187,9 +189,9 @@ exports.encryptPassword = async function(password) {
     result = await hashwasm.argon2id({
       password: password,
       salt,                  // salt is a buffer containing random bytes
-      parallelism: 1,
-      iterations: 256,
-      memorySize: 512,       // use 512KB memory
+      parallelism: 8,
+      iterations: 3,
+      memorySize: 131072,    // use 128MB memory
       hashLength: 32,        // output size = 32 bytes
       outputType: 'encoded', // return standard encoded string containing parameters needed to verify the key
     });    
@@ -1346,7 +1348,7 @@ exports.aesDecryptJSON = async function(algorithm, passphase, c_iv, c_encrypted)
   
   try {
     let iv = _convertJsonObjStrToUint8Array(c_iv);
-    let encrypted = _convertJsonObjStrToUint8Array(c_encrypted);    
+    let encrypted = _convertJsonObjStrToUint8Array(c_encrypted);        
     result = await _aesDecrypt(algorithm, passphase, iv, encrypted);
   }
   catch(e) {
@@ -1606,7 +1608,7 @@ exports.getKyberClientModule = function() {
     js = `
     <script type="module">
       // Start from mlkem 2.5.0, it can be called locally. //
-      import { MlKem1024 } from "/js/mlkem/esm/mod.js";    
+      import { MlKem1024 } from "/js/mlkem/esm/mod.js";
       //import { MlKem1024 } from "https://esm.sh/mlkem";
 
       function base64Encode(u8) {

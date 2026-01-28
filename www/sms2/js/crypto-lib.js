@@ -28,6 +28,9 @@
 // V1.0.03       2024-03-14      DW              Add functions 'aesEncryptWithKeyJSON' and 'symmeticEncryptWithKey', which is a 
 //                                               preperation to use a post-quantum computing era cryptographic method "Crystrals
 //                                               Kyber" later.
+//
+// V1.0.04       2025-12-04      DW              Add function 'prepareRollingKey', the rolling key mechanism is used for MITM attacking 
+//                                               detection and prevention.  
 //#################################################################################################################################
 
 
@@ -909,3 +912,70 @@ async function pbkdf2(message, salt, iterations, keyLen, algorithm) {
   }
 }
 
+
+function getRandomInt(min, max) {
+  let result = 0;
+  
+  try {
+    if (Number.isInteger(min) == false || Number.isInteger(max) == false) {
+      throw new Error("Invalid parameter is given");
+    }
+    
+    if (min > max) {
+      throw new Error("Given parameters are incorrect");
+    } 
+  
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    result = Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;  
+}
+
+
+async function prepareRollingKey(key_len) {
+  let is_iOS, new_rolling_key, cur_rolling_key, aes_key, roll_rec, roll_rec_json, roll_rec_sum, enc_roll_rec;       
+  
+  try {
+    is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
+    aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+
+    if (typeof(aes_key) == "string" && aes_key.length >= key_len) {    
+      new_rolling_key = generateTrueRandomStr('A', getRandomInt(32, 64));      
+      cur_rolling_key = (is_iOS)? Cookies.get("rolling_key") : getLocalStoredItem("rolling_key"); 
+      
+      roll_rec = {cur_rolling_key: cur_rolling_key, new_rolling_key: new_rolling_key};              
+      roll_rec_json = JSON.stringify(roll_rec);           
+      roll_rec_sum = await digestData("SHA-256", roll_rec_json);           
+      enc_roll_rec = await aesEncryptJSON("AES-GCM", aes_key, roll_rec_json);
+      
+      document.getElementById("roll_rec").value = enc_roll_rec.encrypted;
+      document.getElementById("iv_roll_rec").value = enc_roll_rec.iv;
+      document.getElementById("roll_rec_sum").value = roll_rec_sum;   
+      
+      aes_key = null;    
+    }
+    else {
+      throw new Error("Session key is lost or invalid!");
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+}
+
+
+async function switchToPage(form_id, url, key_len) {
+  try {
+    await prepareRollingKey(key_len);
+    document.getElementById(form_id).action = url;
+    document.getElementById(form_id).submit();
+  }
+  catch(e) {
+    throw e;
+  }
+}

@@ -86,6 +86,10 @@ function _getGlobalValue(option) {
       value = 50;
       break;  
       
+    case 'AES_KEY_LEN':
+      value = 128;
+      break;  
+      
     default:
       value = '';              
   }
@@ -547,7 +551,7 @@ exports.setSessionValidTime = async function() {
 }
 
 
-exports.createSessionRecord = async function(conn, user_id, aes_key, http_user_agent, ip_addr) {
+exports.createSessionRecord = async function(conn, user_id, aes_key, rolling_key, http_user_agent, ip_addr) {
   var sqlcmd, param, data, sess_code, secure_key, valid_until, ip_address, result;
 
   result = {ok: false, msg: '', sess_code: ''};
@@ -555,14 +559,15 @@ exports.createSessionRecord = async function(conn, user_id, aes_key, http_user_a
   try {
     //-- Step 1: Create new session record for user --//
     sess_code = await _generateSessionCode(conn, 'A', 64);
-    secure_key = (typeof(aes_key) != "string")? '' : aes_key;     // It is the secret key used for message encryption and decryption during message sent in and out. 
-    valid_until = await _setSessionValidTime();         // Don't call publicly exported function 'setSessionValidTime' directly.  
+    secure_key = (typeof(aes_key) != "string")? '' : aes_key;           // It is the secret key used for message encryption and decryption during message sent in and out.
+    rolling_key = (typeof(rolling_key) != "string")? '' : rolling_key;  // It is the initial rolling key which is used to verify all other following rolling keys.  
+    valid_until = await _setSessionValidTime();           
         
     sqlcmd = `INSERT INTO web_session ` +
-             `(sess_code, user_id, sess_until, ip_address, http_user_agent, secure_key, status) ` +
+             `(sess_code, user_id, sess_until, ip_address, http_user_agent, secure_key, rolling_key, status) ` +
              `VALUES ` +
-             `(?, ?, ?, ?, ?, ?, 'A')`;
-    param = [sess_code, user_id, valid_until, ip_addr, http_user_agent, secure_key];         
+             `(?, ?, ?, ?, ?, ?, ?, 'A')`;
+    param = [sess_code, user_id, valid_until, ip_addr, http_user_agent, secure_key, rolling_key];         
     data = await dbs.sqlExec(conn, sqlcmd, param);
     
     //-- Step 2: Delete all other active session record(s) of this user except the newest created one. i.e. Just one live session --//

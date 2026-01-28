@@ -38,6 +38,8 @@ const wev = require('../lib/webenv_lib.js');
 const cipher = require('../lib/cipher_lib.js');
 const telecom = require('../lib/telecom_lib.js');
 const smslib = require('../lib/sms_lib.js');
+//-- Define constants --//
+const _key_len = wev.getGlobalValue('AES_KEY_LEN');                   // AES-256 passphase length
 
 
 async function _isGroupMember(conn, user_id, group_id) {
@@ -2184,11 +2186,11 @@ async function _getForwardMessageDetails(conn, msg_id) {
 
 
 async function _copyForwardFile(file) {
-  var filename, dirs, suffix, tn_file, fw_fileloc, fw_tn_file, idx, stop_run;
-  var result = {ok: false, msg: 'Not known', fw_fileloc: '', fw_tn_file: ''}; 
+  let filename, dirs, suffix, tn_file, fw_fileloc, fw_tn_file, idx, stop_run;
+  let result = {ok: false, msg: 'Not known', fw_fileloc: '', fw_tn_file: ''}; 
 
   try {
-    var fileinfo = await wev.fileNameParser(file);
+    let fileinfo = await wev.fileNameParser(file);
     filename = fileinfo.filename; 
     dirs = fileinfo.dirs;
     suffix = fileinfo.ext;
@@ -2200,7 +2202,7 @@ async function _copyForwardFile(file) {
     idx = 1;
     stop_run = false;
     while (!stop_run) {
-      var ver_no = idx.toString().padStart(3, '0');
+      let ver_no = idx.toString().padStart(3, '0');
       fw_fileloc = `${dirs}${filename}-${ver_no}${suffix}`;
       fw_tn_file = (tn_file != '')? wev.getGlobalValue('ITN_TN_PATH') + '/' + `${filename}-${ver_no}.jpg` : '';      // Note: Thumbnail file may not exist.
       
@@ -2220,7 +2222,7 @@ async function _copyForwardFile(file) {
     }
     
     if (fw_fileloc != '') {
-      var cp_ok = await wev.copyFile(file, fw_fileloc);
+      let cp_ok = await wev.copyFile(file, fw_fileloc);
       
       if (cp_ok) {
         result = {ok: true, msg: '', fw_fileloc: fw_fileloc, fw_tn_file: ''};
@@ -2248,7 +2250,7 @@ async function _copyForwardFile(file) {
 
 
 async function _forwardMessage(conn, user_id, to_group_id, a_message, fw_message, http_user_agent, ip_addr) {
-  var ok, msg, op_flag, op_user_id, message, fileloc, fw_fileloc, fw_tn_file;
+  let ok, msg, op_flag, op_user_id, message, fileloc, fw_fileloc, fw_tn_file;
 
   ok = true;
   msg = '';
@@ -2265,7 +2267,7 @@ async function _forwardMessage(conn, user_id, to_group_id, a_message, fw_message
     if (fileloc != '') {
       //-- When a message with attached file is forwarded, then the attached file must be copied as a new file for message forwarding. --//
       //-- Otherwise, it would be lost in the forwarded message if the original message is deleted.                                    --//             
-      var retval = await _copyForwardFile(fileloc);
+      let retval = await _copyForwardFile(fileloc);
       ok = retval.ok;
       msg = retval.msg;
       fw_fileloc = retval.fw_fileloc; 
@@ -2302,7 +2304,7 @@ async function _forwardMessage(conn, user_id, to_group_id, a_message, fw_message
 
 
 async function _informGroupMemberAndGotoGroup(conn, user_id, group_id, clear_local_data) {
-  var m_site_dns, wspath, html;
+  let m_site_dns, wspath, html;
   
   m_site_dns = await wev.getSiteDNS(conn, 'M');
   if (m_site_dns != '') {
@@ -2315,124 +2317,170 @@ async function _informGroupMemberAndGotoGroup(conn, user_id, group_id, clear_loc
   }
   
   //-- Step 1: Load all required javascript libraries --//
-  html = `<link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
-          <link rel="shortcut icon" href="/favicon.ico">
-          <script src="/js/jquery.min.js"></script>
-          <script src="/js/jquery.mobile-1.4.5.min.js"></script>
-          <script src="/js/js.cookie.min.js"></script>
-          <script src="/js/common_lib.js"></script> `;
+  html = `
+  <!doctype html>
+  <html>  
+  <head>
+    <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <script src="/js/jquery.min.js"></script>
+    <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+    <script src="/js/js.cookie.min.js"></script>
+    <script src='/js/crypto-lib.js'></script>
+    <script src="/js/common_lib.js"></script> 
+  `;
   
   //-- Step 2: If websocket link can be built, inform other group members to refresh message. --//        
   if (wspath != '') {        
-    html += `<script>
-               var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
-               var myWebSocket = null;
-               var wsOpenSocket = null;   
-               var is_reopen = false;
-               var group_id = ${group_id};
-               var user_id = ${user_id};
-            
-               function connectWebServer() {
-                 var ws = new WebSocket("${wspath}");
-                                        
-                 function reopenWebSocket() {                                    
-                   is_reopen = true; 
-                   myWebSocket = connectWebServer();
-                 }
-              
-                 ws.onopen = function(e) {
-                   //-- Once the websocket has been opened, stop the websocket openning scheduler (if it is activated). --//  
-                   if (wsOpenSocket != null) {clearTimeout(wsOpenSocket)};
-                   
-                   var cnt = 0;
-                   var stop_run = false;
-                   while (!stop_run) {
-                     var inform_ok = informGroupMembers(group_id, user_id);
-                     if (inform_ok) {
-                       stop_run = true;
-                     } 
-                     else {
-                       cnt++;
-                       if (cnt >= 10) {
-                         console.log("Fail to inform group members to refresh messages");
-                         stop_run = true;
-                       }
-                       else {
-                         sleep(100);
-                       }
-                     }
-                   }
-                 }
-                                
-                 ws.onclose = function(e) {
-                   //-- Reopen websocket automatically within 100ms --//
-                   wsOpenSocket = setTimeout(reopenWebSocket, 100);
-                 }
-                
-                 ws.onerror = function(e) {
-                   console.log('Error: ' + e.message);
-                 }
-                
-                 return ws;
-               }          
-              
-               function informGroupMembers(group_id, user_id) {
-                 var result;
-                
-                 if (typeof(myWebSocket) != 'undefined' && myWebSocket != null) {
-                   var packet = {type: 'msg', content: {op: 'msg_refresh', group_id: group_id, user_id: user_id}};
-                   myWebSocket.send(JSON.stringify(packet));
-                   result = true;
-                 }
-                 else {
-                   console.log("Websocket handler is lost!");
-                   result = false;
-                 }              
-                
-                 return result;
-               }
-
-               function sleep(ms) {
-                 return new Promise(resolve => setTimeout(resolve, ms));
-               }
-
-               myWebSocket = connectWebServer(); `;               
+    html += `
+      <script>
+      var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
+      var myWebSocket = null;
+      var wsOpenSocket = null;   
+      var is_reopen = false;
+      var group_id = ${group_id};
+      var user_id = ${user_id};
+      
+      async function connectWebServer() {
+        var ws = new WebSocket("${wspath}");
+                              
+        async function reopenWebSocket() {                                    
+          is_reopen = true; 
+          myWebSocket = await connectWebServer();
+        }
+      
+        ws.onopen = function(e) {
+          //-- Once the websocket has been opened, stop the websocket openning scheduler (if it is activated). --//  
+          if (wsOpenSocket != null) {clearTimeout(wsOpenSocket)};
+         
+          var cnt = 0;
+          var stop_run = false;
+          while (!stop_run) {
+            var inform_ok = informGroupMembers(group_id, user_id);
+            if (inform_ok) {
+              stop_run = true;
+            } 
+            else {
+              cnt++;
+              if (cnt >= 10) {
+                console.log("Fail to inform group members to refresh messages");
+                stop_run = true;
+              }
+              else {
+               sleep(100);
+              }
+            }
+          }
+        }
+                      
+        ws.onclose = function(e) {
+          //-- Reopen websocket automatically within 100ms --//
+          wsOpenSocket = setTimeout(reopenWebSocket, 100);
+        }
+      
+        ws.onerror = function(e) {
+          console.log('Error: ' + e.message);
+        }
+      
+        return ws;
+      }          
+      
+      function informGroupMembers(group_id, user_id) {
+        var result;
+      
+        if (typeof(myWebSocket) != 'undefined' && myWebSocket != null) {
+          var packet = {type: 'msg', content: {op: 'msg_refresh', group_id: group_id, user_id: user_id}};
+          myWebSocket.send(JSON.stringify(packet));
+          result = true;
+        }
+        else {
+          console.log("Websocket handler is lost!");
+          result = false;
+        }              
+      
+        return result;
+      }
+      
+      function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+      }
+      
+      //myWebSocket = await connectWebServer(); 
+    `;               
   }
   else {
-    html += `<script>
-               alert("Unable to inform group members to refresh messages!");
-               var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false); `;                 
+    html += `
+      <script>
+        alert("Unable to inform group members to refresh messages!");
+        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false); `;                 
   }              
   
   //-- Step 3: If it needs to switch to another message group, delete all storage data. --// 
+  let del_data_html = '';
   if (clear_local_data) {
-    html += `if (is_iOS) {
-               Cookies.remove("g_id");                                    // Defined on js.cookie.min.js
-               Cookies.remove("u_id");
-               Cookies.remove("m_id");
-               Cookies.remove("top_id");
-             }
-             else {
-               deleteLocalStoredItem("g_id");                             // Defined on common_lib.js
-               deleteLocalStoredItem("u_id");                             
-               deleteLocalStoredItem("m_id");                             
-               deleteLocalStoredItem("top_id");                                   
-             } `;
+    del_data_html = `
+          if (is_iOS) {
+            Cookies.remove("g_id");                                    // Defined on js.cookie.min.js
+            Cookies.remove("u_id");
+            Cookies.remove("m_id");
+            Cookies.remove("top_id");
+          }
+          else {
+            deleteLocalStoredItem("g_id");                             // Defined on common_lib.js
+            deleteLocalStoredItem("u_id");                             
+            deleteLocalStoredItem("m_id");                             
+            deleteLocalStoredItem("top_id");                                   
+          }        
+    `;
   }
+  
+  let inform_group_members = (wspath != '')? "myWebSocket = await connectWebServer();" : "";
+  html += `      
+      $(document).ready(function() {          
+        switchPage();
+      });
+      
+      async function switchPage() {
+        ${inform_group_members}        
+        await prepareRollingKey(${_key_len});
 
-  //-- Step 4: Build page redirection link --//
-  html += `  var f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");        // Defined on common_lib.js : js.cookie.min.js
-             var top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");
-             window.location.href = "/do_sms?g_id=${group_id}&f_m_id=" + f_m_id + "&top_id=" + top_id;
-           </script>`;
+        ${del_data_html}
+                  
+        let f_m_id = (is_iOS == false)? getLocalStoredItem("m_id") : Cookies.get("m_id");         // Defined on common_lib.js : js.cookie.min.js
+        let top_id = (is_iOS == false)? getLocalStoredItem("top_id") : Cookies.get("top_id");        
+        
+        document.getElementById("g_id").value = ${group_id};
+        document.getElementById("f_m_id").value = f_m_id;
+        document.getElementById("top_id").value = top_id;
+        document.getElementById("frmLeap").submit();
+      }
+  `;
+
+  //-- Step 4: Build page redirection form --//
+  html += `  
+    </script>
+  </head>
+           
+  <body>
+    <form id='frmLeap' name='frmLeap' action='/do_sms' method='POST'>
+      <input type=hidden id="roll_rec" name="roll_rec" value="">
+      <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+      <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+      <input type=hidden id="g_id" name="g_id" value="">
+      <input type=hidden id="f_m_id" name="f_m_id" value="">
+      <input type=hidden id="top_id" name="top_id" value="">
+    </form>                   
+  </body>
+  </html>
+  `;
   
   return html;  
 }
 
 
 exports.forwardMessage = async function(msg_pool, from_group_id, to_group_id, user_id, msg_id, a_message, http_user_agent, ip_addr) {
-  var conn, is_from_group_member, is_to_group_member, html;
-  var fw_message = {};
+  let conn, is_from_group_member, is_to_group_member, html;
+  let fw_message = {};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -2456,7 +2504,7 @@ exports.forwardMessage = async function(msg_pool, from_group_id, to_group_id, us
     } 
     else {
       //-- Log down potential hacking activity and force log out the current user --//
-      var msg = '';
+      let msg = '';
       
       if (!is_from_group_member && is_to_group_member) {
         msg = `User ${user_id} tries to steal message from another group`;
@@ -2470,12 +2518,14 @@ exports.forwardMessage = async function(msg_pool, from_group_id, to_group_id, us
       
       await smslib.logSystemError(conn, user_id, msg, 'Alert', http_user_agent); 
       
-      html = `<script>
-                alert("The system has detected you are doing something abnormal, you are forced to logout."); 
-                var url = window.location.href;
-                var host = url.split('/');
-                location.href = host[0] + '//' + host[2] + '/logout_msg';
-              </script>`;
+      html = `
+      <script>
+        alert("The system has detected you are doing something abnormal, you are forced to logout."); 
+        var url = window.location.href;
+        var host = url.split('/');
+        location.href = host[0] + '//' + host[2] + '/logout_msg';
+      </script>
+      `;
     }
   }
   catch(e) {
@@ -3792,13 +3842,13 @@ async function _buildDeletedGroupMemberInformPage(conn, fail_cnt, inform_members
     html = wev.printHeader('Inform Members'); 
 
     html += `
-    <body style="width:auto;">  
+    <head>  
     <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
     <script src="/js/js.cookie.min.js"></script>
-    <script src='/js/crypto-js.js'></script>
+    <script src='/js/crypto-lib.js'></script>
     <script src="/js/common_lib.js"></script>
 
     <script>
@@ -3832,13 +3882,23 @@ async function _buildDeletedGroupMemberInformPage(conn, fail_cnt, inform_members
 
         if (fail_cnt > 0) {
           alert("${fail_cnt} group(s) cannot be deleted, please try again.");
-          window.location.href = "/delete_group_by_admin";
+          gotoPage("/delete_group_by_admin");
         }
         else {
-          //alert("Message group(s) are deleted successfully");        
-          window.location.href = "/message";
+          gotoPage("/message");
         }              
       });
+      
+      async function gotoPage(url) {
+        try {
+          await prepareRollingKey(${_key_len});
+          document.getElementById('frmLeap').action = url;
+          document.getElementById('frmLeap').submit();
+        }
+        catch(e) {
+          alert(e.message);
+        }
+      }
 
       function groupDeleted(cmd) {
         var message = JSON.stringify(cmd);
@@ -3851,6 +3911,15 @@ async function _buildDeletedGroupMemberInformPage(conn, fail_cnt, inform_members
         }
       }    
     </script>    
+    </head>
+
+    <body style="width:auto;">    
+    <form id='frmLeap' name='frmLeap' action='' method='POST'>
+      <input type=hidden id="roll_rec" name="roll_rec" value="">
+      <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+      <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">
+    </form>            
+    </body>
     `;    
   }
   catch(e) {
@@ -3862,12 +3931,12 @@ async function _buildDeletedGroupMemberInformPage(conn, fail_cnt, inform_members
 
 
 exports.deleteGroupByAdmin = async function(msg_pool, delete_groups) {
-  var conn, group_id, html, fail_cnt, sqlTxStarted;
-  var attached_files = [];
-  var group_members = [];
-  var inform_members = [];
-  var result = {ok: true, msg: '', html: ''}; 
-  
+  let conn, group_id, html, fail_cnt, sqlTxStarted;
+  let attached_files = [];
+  let group_members = [];
+  let inform_members = [];
+  let result = {ok: true, msg: '', html: ''}; 
+
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
 
@@ -3886,15 +3955,15 @@ exports.deleteGroupByAdmin = async function(msg_pool, delete_groups) {
         //--       I only want to get value of 'user_id' only. The other values, such as usernamem alias, name and group_role --//
         //--       will become null. It is for security measure: Don't transfer sensitive data which is don't needed.         --//                                       
         group_members = await _getMessageGroupMembers(conn, group_id, {user_id: true});
-                
+        
         //-- Step 2: Get the list of all attachment files of the group --//
         attached_files = await _getGroupAttachedFiles(conn, group_id);
-  
+
         //-- Step 3: Delete group, messages and delivery transactions --// 
         await _removeGroup(conn, group_id);
         await _removeGroupMember(conn, group_id);
         await _removeGroupMessageAndDeliveryHistory(conn, group_id);
-        
+
         //-- Step 4: Commit SQL transaction --//
         if (await dbs.commitTransaction(conn)) {
           sqlTxStarted = false;
@@ -3902,12 +3971,12 @@ exports.deleteGroupByAdmin = async function(msg_pool, delete_groups) {
           if (attached_files.length > 0) {
             //-- Step 5: If SQL transaction is committed, delete all attachment --//
             //--         files (if any).                                        --// 
-            await _deleteGroupAttachedFiles(attached_files);
-            
-            //-- Log down group members that should be informed, which will be used on step 6. --//
-            var inform_rec = {group_id: group_id, members: group_members}; 
-            inform_members.push(inform_rec);
+            await _deleteGroupAttachedFiles(attached_files);            
           }
+          
+          //-- Log down group members that should be informed, which will be used on step 6. --//
+          let inform_rec = {group_id: group_id, members: group_members}; 
+          inform_members.push(inform_rec);          
         }
         else {
           await dbs.rollbackTransaction(conn);
@@ -3924,18 +3993,18 @@ exports.deleteGroupByAdmin = async function(msg_pool, delete_groups) {
     //-- Step 6: Build HTML to inform members of deleted groups. --//
     if (inform_members.length > 0) {
       //-- Note: This step should be performed even error is found --//
-      //--       during operation.                                 --//              
-      html = await _buildDeletedGroupMemberInformPage(conn, fail_cnt, inform_members);       
+      //--       during operation.                                 --//      
+              
+      html = await _buildDeletedGroupMemberInformPage(conn, fail_cnt, inform_members);
     }
     else {
-      html = `
-      <script>
-        alert("Unable to commit any group deletion process to the database by unknown reason, please try again."); 
-        var url = window.location.href;
-        var host = url.split('/');
-        location.href = host[0] + '//' + host[2] + '/delete_group_by_admin';
-      </script>      
-      `;
+      if (fail_cnt > 0) {
+        let message = (result.msg.trim().length > 0)? result.msg : "Error is found, please try again.";
+        html = await smslib.switchToPage("/delete_group_by_admin", null, "POST", message);
+      }
+      else {         
+        html = await smslib.switchToPage("/message", null, "POST", "");
+      }
     }
     
     result.html = html;

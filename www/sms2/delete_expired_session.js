@@ -29,6 +29,7 @@
 // V2.0.02       2024-03-22      DW              - Add function to remove expired Kyber key pair records.
 // V2.0.03       2025-06-27      DW              Show timestamp on error message.
 // V2.0.04       2025-07-07      DW              Use database connection pool to avoid database connection timeout issue.
+// V2.0.05       2026-01-22      DW              Delete rolling key records for all invalid web sessions, if any.
 //##########################################################################################
 
 "use strict";
@@ -52,6 +53,12 @@ async function _deleteExpiredWebSession(conn) {
           `     OR status <> 'A'`;
           
     await dbs.sqlExec(conn, sql);      
+
+    //-- Delete all rolling keys for those deleted web sessions, if any. --//
+    sql = `DELETE FROM sess_roll_key ` +
+          `  WHERE sess_code NOT IN (SELECT sess_code FROM web_session)`;
+    
+    await dbs.sqlExec(conn, sql);       
   }
   catch(e) {
     throw e;
