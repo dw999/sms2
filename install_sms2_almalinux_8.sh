@@ -28,6 +28,8 @@
 # V1.0.12     2025-03-13      DW              Add NPM package 'terser'.
 # V1.0.13     2025-04-22      DW              Replace NPM package 'telegram-bot-api' by 'telegramsjs'.
 # V1.0.14     2026-01-28      DW              Let 'mlkem' library is called locally by clients.
+# V1.0.15     2026-01-29      DW              Use a soft link instead a physical copy of 'mlkem' library to be called 
+#                                             by clients
 #=========================================================================================================
 
 setterm -blank 0
@@ -423,9 +425,7 @@ npm install -S unicode-substring >> /tmp/install.log
 npm install -S ws >> /tmp/install.log
 
 #-- Let mlkem library is called locally by clients --#
-mkdir -p /www/sms2/js/mlkem
-cd /www/sms2/js/mlkem
-cp -R -f /www/sms2/node_modules/mlkem/* .  
+ln -s /www/sms2/node_modules/mlkem /www/sms2/js/mlkem
 
 #-- Copy those libraries used on front end to '/www/sms2/js' --#
 #cp -f /www/sms2/node_modules/crypto-js/crypto-js.js /www/sms2/js
