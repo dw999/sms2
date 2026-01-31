@@ -44,6 +44,7 @@
 # V1.0.17     2026-01-28      DW              Let 'mlkem' library is called locally by clients.
 # V1.0.18     2026-01-29      DW              Use a soft link instead a physical copy of 'mlkem' library to be called 
 #                                             by clients
+# V1.0.19     2026-01-31      DW              Set Node.js version to 24.x  
 #=========================================================================================================
 
 setterm -blank 0
@@ -247,8 +248,8 @@ then
   mkdir -p /etc/apt/keyrings >> /tmp/install.log
 fi  
 curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-#-- Use Node.js 20.x LTS --#
-NODE_MAJOR=20
+#-- Use Node.js 24.x LTS --#
+NODE_MAJOR=24
 echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list
 apt-get update >> /tmp/install.log
 apt-get -y install nodejs >> /tmp/install.log
