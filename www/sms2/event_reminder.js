@@ -23,6 +23,7 @@
 // V2.0.00       2023-01-26      DW              - Rewrite it from Perl to Node.js (javascript).
 //                                               - Install a scheduler to operate this service periodically. 
 // V2.0.01       2025-07-08      DW              Use database connection pool to avoid database connection timeout issue.
+// V2.0.02       2026-01-30      DW              Refine scope of variables declare in this library.  
 //#################################################################################################################################
 
 "use strict";
@@ -38,8 +39,8 @@ var pda_pool = dbs.createConnectionPool('COOKIE_PDA', 1);
 
 
 async function _getEventReminders(conn_pda) {
-  var sql, data;
-  var result = [];
+  let sql, data;
+  let result = [];
   
   try {
     sql = `
@@ -56,7 +57,7 @@ async function _getEventReminders(conn_pda) {
     
     data = JSON.parse(await dbs.sqlQuery(conn_pda, sql));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push({reminder_id: data[i].reminder_id, user_id: data[i].user_id, event_title: data[i].event_title, ev_start: data[i].ev_start, 
                    remind_before: data[i].remind_before, remind_unit: data[i].remind_unit, ev_passed: data[i].ev_passed});
     }
@@ -70,7 +71,7 @@ async function _getEventReminders(conn_pda) {
 
 
 async function _setReminderOff(conn_pda, reminder_id) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `
@@ -89,7 +90,7 @@ async function _setReminderOff(conn_pda, reminder_id) {
 
 
 async function _remindTimeHasReached(conn_pda, reminder_id, ev_start, remind_before, remind_unit) {
-  var sql, data, result;
+  let sql, data, result;
   
   try {
     result = false;
@@ -112,8 +113,8 @@ async function _remindTimeHasReached(conn_pda, reminder_id, ev_start, remind_bef
 
 
 async function _getUserInformData(conn_msg, user_id) {
-  var sql, param, data;
-  var result = {email: '', tg_id: ''};
+  let sql, param, data;
+  let result = {email: '', tg_id: ''};
   
   try {
     sql = `
@@ -141,17 +142,17 @@ async function _getUserInformData(conn_msg, user_id) {
 
 
 async function runEventReminder(interval) {
-  var scheduler_id;
+  let scheduler_id;
   
   //-- Run "_eventReminder()" immediately, then put it into a scheduler. --//
   await _eventReminder();
   scheduler_id = setInterval(_eventReminder, interval);
   
   async function _eventReminder() {
-    var conn_pda, conn_msg;
-    var event_reminders = [];
-    var mail_worker = {};
-    var tg_profile = {};
+    let conn_pda, conn_msg;
+    let event_reminders = [];
+    let mail_worker = {};
+    let tg_profile = {};
     
     try {
       //conn_pda = await dbs.dbConnect(dbs.selectCookie('PDA'));
@@ -165,26 +166,26 @@ async function runEventReminder(interval) {
         mail_worker = await telecom.getMailWorker(conn_msg);
         tg_profile = await telecom.getTelegramBotProfile(conn_msg);
         
-        for (var i = 0; i < event_reminders.length; i++) {
-          var this_reminder_id = event_reminders[i].reminder_id;
-          var this_user_id = event_reminders[i].user_id;
-          var this_event_title = event_reminders[i].event_title;       
-          var this_ev_start = event_reminders[i].ev_start;
-          var this_remind_before = event_reminders[i].remind_before;
-          var this_remind_unit = event_reminders[i].remind_unit;
-          var this_ev_passed = (parseInt(event_reminders[i].ev_passed, 10) > 0)? true : false;
+        for (let i = 0; i < event_reminders.length; i++) {
+          let this_reminder_id = event_reminders[i].reminder_id;
+          let this_user_id = event_reminders[i].user_id;
+          let this_event_title = event_reminders[i].event_title;       
+          let this_ev_start = event_reminders[i].ev_start;
+          let this_remind_before = event_reminders[i].remind_before;
+          let this_remind_unit = event_reminders[i].remind_unit;
+          let this_ev_passed = (parseInt(event_reminders[i].ev_passed, 10) > 0)? true : false;
           
           if (this_ev_passed) {
             await _setReminderOff(conn_pda, this_reminder_id);
           }
           else {
             if (await _remindTimeHasReached(conn_pda, this_reminder_id, this_ev_start, this_remind_before, this_remind_unit)) {
-              var user_profile = await _getUserInformData(conn_msg, this_user_id);
-              var remainder_delivered = false;
+              let user_profile = await _getUserInformData(conn_msg, this_user_id);
+              let remainder_delivered = false;
               
               if (user_profile.email != "" || user_profile.tg_id != "") {
-                var subject = this_event_title + " " + this_remind_before + " " + ((this_remind_before > 1)? this_remind_unit + "s" : this_remind_unit) + " later";
-                var body = "It reminds you that event " + this_event_title + " will start on " + this_ev_start;
+                let subject = this_event_title + " " + this_remind_before + " " + ((this_remind_before > 1)? this_remind_unit + "s" : this_remind_unit) + " later";
+                let body = "It reminds you that event " + this_event_title + " will start on " + this_ev_start;
                 
                 //-- Deliver event reminder via email --//
                 if (user_profile.email != "" && wev.allTrim(mail_worker.email) != "") {

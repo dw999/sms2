@@ -25,6 +25,7 @@
 //                                               and sleep.
 // V1.0.04       2024-03-05      DW              Add function processQuotationMarks. 
 // V1.0.05       2024-03-20      DW              Add functions base64Encode and base64Decode. 
+// V1.0.06       2026-01-29      DW              Refine scope of variables declare in this library.
 //#################################################################################################################################
 
 function allTrim(s) {
@@ -42,7 +43,7 @@ function allTrim(s) {
 
 
 function setLocalStoredItem(s_key, s_value) {
-  var err = "";
+  let err = "";
   
   if (typeof(Storage) != undefined) {
     try {
@@ -60,7 +61,7 @@ function setLocalStoredItem(s_key, s_value) {
 
 
 function getLocalStoredItem(s_key) {
-  var result;
+  let result;
   
   if (typeof(Storage) != undefined) {
     try {
@@ -78,7 +79,7 @@ function getLocalStoredItem(s_key) {
 
 
 function deleteLocalStoredItem(s_key) {
-  var err = "";
+  let err = "";
   
   if (typeof(Storage) != undefined) {
     try {
@@ -96,7 +97,7 @@ function deleteLocalStoredItem(s_key) {
 
 
 function clearLocalStoredData() {
-  var err = "";
+  let err = "";
   
   if (typeof(Storage) != undefined) {
     try {
@@ -186,7 +187,7 @@ function padRight(str, size, filler) {
 
 
 function sayCurrentDateTime() {
-  var today, curr_datetime;
+  let today, curr_datetime;
   
   try {
     today = new Date();
@@ -202,7 +203,7 @@ function sayCurrentDateTime() {
 
 
 function sayCurrentTime() {
-  var today, curr_time;
+  let today, curr_time;
   
   try {
     today = new Date();
@@ -217,7 +218,7 @@ function sayCurrentTime() {
 
 
 function stripSecondAway(date_time, type) {
-  var dt_parts, time, time_parts, result;
+  let dt_parts, time, time_parts, result;
   
   try {
     if (type == "DT") {        // Data type is DATETIME
@@ -261,11 +262,11 @@ function _getRandomInt(max) {
 
 //-- This function is phased out, and replaced by generateTrueRandomStr in crypto-lib.js --//
 function _generateRandomStr(option, max_len) {
-  var result = '';
-  var ascii_list = new Array();
-  var max_ascii_value = 0; 
-  var stop_run = 0;
-  var cnt = 0;
+  let result = '';
+  let ascii_list = new Array();
+  let max_ascii_value = 0; 
+  let stop_run = 0;
+  let cnt = 0;
 
 	//*-- Valid options are: 'A' = Alphanumeric, 'N' = Numeric only, 'S' = English characters only. --*//
   if (typeof(option) != 'string') {
@@ -289,33 +290,33 @@ function _generateRandomStr(option, max_len) {
   
 
   if (option == 'N') {
-    for (var i = 48; i <= 57; i++) {
+    for (let i = 48; i <= 57; i++) {
     	ascii_list.push(i);
     }
 
     max_ascii_value = 57;    
   } 
   else if (option == 'S') {
-    for (var i = 65; i <= 90; i++) {
+    for (let i = 65; i <= 90; i++) {
     	ascii_list.push(i);
     }
 
-    for (var i = 97; i <= 122; i++) {
+    for (let i = 97; i <= 122; i++) {
     	ascii_list.push(i);
     }
 
     max_ascii_value = 122;
   }
   else {
-    for (var i = 48; i <= 57; i++) {
+    for (let i = 48; i <= 57; i++) {
     	ascii_list.push(i);
     }
 
-    for (var i = 65; i <= 90; i++) {
+    for (let i = 65; i <= 90; i++) {
     	ascii_list.push(i);
     }
 
-    for (var i = 97; i <= 122; i++) {
+    for (let i = 97; i <= 122; i++) {
     	ascii_list.push(i);
     }
 
@@ -323,8 +324,8 @@ function _generateRandomStr(option, max_len) {
   }
   
   while (stop_run == 0) {
-    var this_ascii = _getRandomInt(max_ascii_value);
-    var valid_value = 0;
+    let this_ascii = _getRandomInt(max_ascii_value);
+    let valid_value = 0;
 
     if (ascii_list.includes(this_ascii)) {
       result += String.fromCharCode(this_ascii);

@@ -24,7 +24,8 @@
 // V2.0.00       2022-12-05      DW              - Rewrite it from Perl to Node.js (javascript).
 //                                               - Install a scheduler to operate this service periodically. 
 // V2.0.01       2025-06-27      DW              Show timestamp on error message.      
-// V2.0.02       2025-07-03      DW              Use database connection pool to avoid database connection timeout issue.                                        
+// V2.0.02       2025-07-03      DW              Use database connection pool to avoid database connection timeout issue.    
+// V2.0.03       2026-01-30      DW              Refine scope of variables declare in this library.                                                                    
 //#################################################################################################################################
 
 "use strict";
@@ -58,8 +59,8 @@ runNotificator();
 
 
 async function _getPrivateMessageGroups(conn) {
-  var sql, data;
-  var result = [];
+  let sql, data;
+  let result = [];
   
   try {
     sql = `SELECT group_id, delete_after_read ` +
@@ -82,8 +83,8 @@ async function _getPrivateMessageGroups(conn) {
 
 
 async function _getMessagesShouldBeChecked(conn, group_id, delete_after_read) {
-  var sql, param, data, time_limit;
-  var result = [];
+  let sql, param, data, time_limit;
+  let result = [];
   
   try {
     time_limit = "00:" + wev.padLeft(delete_after_read.toString(), 2, "0") + ":00";
@@ -99,7 +100,7 @@ async function _getMessagesShouldBeChecked(conn, group_id, delete_after_read) {
     param = [group_id, time_limit];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push(data[i].msg_id);
     }
   }
@@ -112,7 +113,7 @@ async function _getMessagesShouldBeChecked(conn, group_id, delete_after_read) {
 
 
 async function _allMembersHaveReadThisMessage(conn, msg_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` +
@@ -137,7 +138,7 @@ async function _informMemberToRefresh(group_id) {
   try {
     //-- Inform users on all app servers to handle message refresh operation which is initiated by --//
     //-- user of this app server.                                                                  --//
-    var notice = {op: 'msg_refresh', content: {type: 'msg', group_id: group_id, my_user_id: 0}};
+    let notice = {op: 'msg_refresh', content: {type: 'msg', group_id: group_id, my_user_id: 0}};
     notificator.notify(notice);
   }
   catch(e) {
@@ -147,7 +148,7 @@ async function _informMemberToRefresh(group_id) {
 
 
 async function _deleteReadMembersTxRec(conn, msg_id, delete_after_read) {
-  var sql, param, time_limit;
+  let sql, param, time_limit;
   
   try {
     time_limit = "00:" + wev.padLeft(delete_after_read.toString(), 2, "0") + ":00";
@@ -167,15 +168,15 @@ async function _deleteReadMembersTxRec(conn, msg_id, delete_after_read) {
 
 
 async function deleteReadPrivateMessages(interval) {
-  var scheduler_id;
+  let scheduler_id;
 
   //-- Run "_deletePrivateMessages()" immediately, then put it into a scheduler. --//
   await _deletePrivateMessages();
   scheduler_id = setInterval(_deletePrivateMessages, interval);
       
   async function _deletePrivateMessages() {
-    var conn;
-    var private_groups = [];
+    let conn;
+    let private_groups = [];
     
     try {      
       //conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
@@ -184,14 +185,14 @@ async function deleteReadPrivateMessages(interval) {
       private_groups = await _getPrivateMessageGroups(conn);
       
       for (const this_group of private_groups) { 
-        var this_group_id = this_group.group_id;
-        var this_delete_after_read = this_group.delete_after_read;
+        let this_group_id = this_group.group_id;
+        let this_delete_after_read = this_group.delete_after_read;
         
         //-- Get to be deleted message list --//
-        var messages = await _getMessagesShouldBeChecked(conn, this_group_id, this_delete_after_read);
+        let messages = await _getMessagesShouldBeChecked(conn, this_group_id, this_delete_after_read);
 
-        for (var i = 0; i < messages.length; i++) {
-          var this_msg_id = messages[i];             // Note: msg_id is a binary data generated as UUID, here is it's hexadecimal form.
+        for (let i = 0; i < messages.length; i++) {
+          let this_msg_id = messages[i];             // Note: msg_id is a binary data generated as UUID, here is it's hexadecimal form.
           if (await _allMembersHaveReadThisMessage(conn, this_msg_id)) {
             console.log(`* Delete message ${this_msg_id} for group ${this_group_id}`);
             await msglib.removeMessageDataSet(conn, this_group_id, this_msg_id);

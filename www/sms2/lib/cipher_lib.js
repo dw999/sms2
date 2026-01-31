@@ -65,6 +65,8 @@
 //                                               'hash-wasm' and phase out library 'bcrypt'.
 //
 // V1.0.16       2025-12-26      DW              Adjust parameters of argon2id on function 'encryptPassword' to harden password security.
+//
+// V1.0.17       2026-01-29      DW              Refine scope of variables declare in this library.
 //#################################################################################################################################
 
 "use strict";
@@ -159,7 +161,7 @@ exports.generateTrueRandomStr = function(option, max_len) {
 
 /*
 exports.encryptPassword = function(password) {
-  var salt, hash;
+  let salt, hash;
   
   try {
 	  salt = bcrypt.genSaltSync(10);
@@ -704,7 +706,7 @@ exports.addNewRsaKeyPair = async function(conn, rsa_keys) {
 
 
 async function _rsaKeyPairPoolSize(conn, days) {
-  var sql, data, param, size;
+  let sql, data, param, size;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` +
@@ -798,7 +800,7 @@ async function _rsaDrawKeyPair(conn, days) {
 
 
 async function _rsaKeyExist(conn, key_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` + 
@@ -819,8 +821,8 @@ async function _rsaKeyExist(conn, key_id) {
 
 
 async function _rsaGenerateKeyPair(conn, algorithm, days) {
-  var result = {key_id: '', algorithm: '', public: '', private: ''};
-  var sql, param, data, key_id, stop_run, loop_cnt;
+  let result = {key_id: '', algorithm: '', public: '', private: ''};
+  let sql, param, data, key_id, stop_run, loop_cnt;
   
   try {
 		if (typeof(algorithm) != "object" || typeof(algorithm) == "undefined" || algorithm == null) {

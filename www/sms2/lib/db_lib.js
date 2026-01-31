@@ -24,7 +24,8 @@
 //                                                 connection timeout error on heavy loading server.
 //                                               - Implement database connection pool and related functions.  
 // V1.0.02       2023-09-11      DW              Replace 'localhost' with '127.0.0.1' on function '_getConnConfig'. MariaDB connection
-//                                               may fail as IPv6 is not activated when 'host' on connection profile is 'localhost'.  
+//                                               may fail as IPv6 is not activated when 'host' on connection profile is 'localhost'. 
+// V1.0.03       2026-01-29      DW              Refine scope of variables declare in this library. 
 //#################################################################################################################################
 
 "use strict";
@@ -33,7 +34,7 @@ const wev = require('../lib/webenv_lib.js');
 
 
 exports.selectCookie = function(option) {
-  var result;
+  let result;
   
   if (typeof(option) == 'string') {
     option = wev.allTrim(option.toUpperCase());
@@ -57,7 +58,7 @@ exports.selectCookie = function(option) {
 
 
 function _getConnConfig(cookie) {
-  var result;
+  let result;
   
   switch (cookie) {
     case 'COOKIE_PDA':
@@ -87,7 +88,7 @@ function _getConnConfig(cookie) {
 
 
 async function _dbConnect(cookie) {
-  var config, conn;
+  let config, conn;
 
   try {  
     config = _getConnConfig(cookie);
@@ -114,7 +115,7 @@ async function _dbConnect(cookie) {
 
 
 exports.dbConnect = async function(cookie) {
-  var conn;
+  let conn;
   
   try {
     conn = await _dbConnect(cookie);
@@ -141,7 +142,7 @@ exports.dbClose = async function(conn) {
 
 //-- Create a database connection pool --//
 exports.createConnectionPool = function(cookie, limit) {
-  var config, pool;
+  let config, pool;
 
   try {
     if (typeof(limit) != 'number' || limit <= 0) {
@@ -174,7 +175,7 @@ exports.createConnectionPool = function(cookie, limit) {
 
 //-- Try to obtain a connection from a database pool --//
 exports.getPoolConn = async function(pool, cookie) {    
-  var conn;
+  let conn;
   
   try {
     conn = await pool.getConnection();
@@ -202,7 +203,7 @@ exports.getPoolConn = async function(pool, cookie) {
 
 //-- Release a connection to a database pool --//
 exports.releasePoolConn = function(conn) {
-  var result = {ok: true, msg: ''};
+  let result = {ok: true, msg: ''};
   
   try {
     if (conn) {
@@ -257,7 +258,7 @@ function _toJSON(data) {
 
 exports.sqlQuery = async function(conn, sql, param) {
   try {
-    var rows = await conn.query(sql, param);
+    let rows = await conn.query(sql, param);
     // Note: rows is an array
     return JSON.stringify(JSON.parse(_toJSON(rows)));   
   }
@@ -269,7 +270,7 @@ exports.sqlQuery = async function(conn, sql, param) {
 
 exports.sqlExec = async function(conn, sql, param) {
   try {
-    var record = await conn.query(sql, param);
+    let record = await conn.query(sql, param);
     // Possible returned values of 'record' are {fieldCount, affectedRows, insertId, info, serverStatus, warningStatus, changedRows} for data insertion/update.
     // Note: 'record' is not an array.    
     return JSON.stringify(JSON.parse(_toJSON(record)));
@@ -281,7 +282,7 @@ exports.sqlExec = async function(conn, sql, param) {
 
 
 exports.startTransaction = async function(conn) {
-  var result = true;
+  let result = true;
   
   try {
     await conn.beginTransaction();
@@ -295,7 +296,7 @@ exports.startTransaction = async function(conn) {
 
 
 exports.commitTransaction = async function(conn) {
-  var result = true;
+  let result = true;
   
   try {
     await conn.commit();
@@ -309,7 +310,7 @@ exports.commitTransaction = async function(conn) {
 
 
 exports.rollbackTransaction = async function(conn) {
-  var result = true;
+  let result = true;
   
   try {
     await conn.rollback();

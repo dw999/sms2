@@ -28,7 +28,8 @@
 //                                               - Install a scheduler to operate this service
 //                                                 periodically.
 // V2.0.01       2025-06-27      DW              Show timestamp on error message.              
-// V2.0.02       2025-07-07      DW              Use database connection pool to avoid database connection timeout issue.                                  
+// V2.0.02       2025-07-07      DW              Use database connection pool to avoid database connection timeout issue.   
+// V2.0.03       2026-01-30      DW              Refine scope of variables declare in this library.                                
 //#########################################################################################
 
 "use strict";
@@ -62,8 +63,8 @@ runNotificator();
 
 
 async function _getMessageGroupsToBeChecked(conn) {
-  var sql, data;
-  var result = [];
+  let sql, data;
+  let result = [];
   
   try {
     sql = `SELECT group_id ` +
@@ -75,7 +76,7 @@ async function _getMessageGroupsToBeChecked(conn) {
     
     data = JSON.parse(await dbs.sqlQuery(conn, sql));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push(data[i].group_id);
     }    
   }
@@ -88,8 +89,8 @@ async function _getMessageGroupsToBeChecked(conn) {
 
 
 async function _getMessagesShouldBeDeleted(conn, group_id, cutoff_days) {
-  var sql, param, data;
-  var result = [];
+  let sql, param, data;
+  let result = [];
   
   try {
     sql = `SELECT HEX(msg_id) AS msg_id ` +
@@ -100,7 +101,7 @@ async function _getMessagesShouldBeDeleted(conn, group_id, cutoff_days) {
     param = [group_id, cutoff_days];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push(data[i].msg_id);
     }
   }
@@ -116,7 +117,7 @@ async function _informMemberToRefresh(group_id) {
   try {
     //-- Inform users on all app servers to handle message refresh operation which is initiated by --//
     //-- user of this app server.                                                                  --//
-    var notice = {op: 'msg_refresh', content: {type: 'msg', group_id: group_id, my_user_id: 0}};
+    let notice = {op: 'msg_refresh', content: {type: 'msg', group_id: group_id, my_user_id: 0}};
     notificator.notify(notice);
   }
   catch(e) {
@@ -126,15 +127,15 @@ async function _informMemberToRefresh(group_id) {
 
 
 async function deleteOldMessages(interval) {
-  var scheduler_id;
+  let scheduler_id;
 
   //-- Run "_deleteOldMessages()" immediately, then put it into a scheduler. --//
   await _deleteOldMessages();
   scheduler_id = setInterval(_deleteOldMessages, interval);
   
   async function _deleteOldMessages() {
-    var conn, cutoff_days;
-    var msg_groups = [];
+    let conn, cutoff_days;
+    let msg_groups = [];
   
     try {
       //conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
@@ -145,12 +146,12 @@ async function deleteOldMessages(interval) {
       
       msg_groups = await _getMessageGroupsToBeChecked(conn);
       
-      for (var i = 0; i < msg_groups.length; i++) {
-        var this_group_id = msg_groups[i];
-        var messages = await _getMessagesShouldBeDeleted(conn, this_group_id, cutoff_days);
+      for (let i = 0; i < msg_groups.length; i++) {
+        let this_group_id = msg_groups[i];
+        let messages = await _getMessagesShouldBeDeleted(conn, this_group_id, cutoff_days);
         
-        for (var k = 0; k < messages.length; k++) {
-          var this_msg_id = messages[k];          
+        for (let k = 0; k < messages.length; k++) {
+          let this_msg_id = messages[k];          
           await msglib.removeMessageDataSet(conn, this_group_id, this_msg_id);
         }        
         

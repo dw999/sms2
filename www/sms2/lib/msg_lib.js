@@ -28,6 +28,7 @@
 // V1.0.04       2024-03-02      DW              - Message(s) loading from the server will be continuous, even message decryption error 
 //                                                 is found. i.e. Let user has chance to get other normal message(s).
 //                                               - Diable embedded javascript on messages to prevent inside job of hacking. 
+// V2.0.05       2026-01-29      DW              Refine scope of variables declare in this library.
 //#################################################################################################################################
 
 "use strict";
@@ -43,7 +44,7 @@ const _key_len = wev.getGlobalValue('AES_KEY_LEN');                   // AES-256
 
 
 async function _isGroupMember(conn, user_id, group_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` +
@@ -73,7 +74,7 @@ async function _isGroupMember(conn, user_id, group_id) {
 
 
 exports.isGroupMember = async function(msg_pool, user_id, group_id) {
-  var conn, result;
+  let conn, result;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -91,8 +92,7 @@ exports.isGroupMember = async function(msg_pool, user_id, group_id) {
 
 
 async function _getMessageGroupMembers(conn, group_id, data_filter) {
-  var sql, param, data;
-  var members = [];
+  let sql, param, data, members = [];
   
   try {
     sql = `SELECT a.user_id, b.user_name, b.user_alias, b.name, a.group_role ` +
@@ -106,12 +106,12 @@ async function _getMessageGroupMembers(conn, group_id, data_filter) {
     data = await dbs.sqlQuery(conn, sql, param);
     data = JSON.parse(data);      
     
-    for (var i = 0; i < data.length; i++) {
-      var this_user_id = data[i].user_id;
-      var this_user_name = data[i].user_name;
-      var this_user_alias = data[i].user_alias;
-      var this_name = data[i].name;
-      var this_group_role = data[i].group_role;
+    for (let i = 0; i < data.length; i++) {
+      let this_user_id = data[i].user_id;
+      let this_user_name = data[i].user_name;
+      let this_user_alias = data[i].user_alias;
+      let this_name = data[i].name;
+      let this_group_role = data[i].group_role;
       
       //-- Note: If 'data_filter' is not defined, it means to return full set of data. --//
       if (typeof(data_filter) == 'object') {
@@ -122,7 +122,7 @@ async function _getMessageGroupMembers(conn, group_id, data_filter) {
         this_group_role = (data_filter.group_role)? this_group_role : null;
       }
       
-      var this_rec = {user_id: this_user_id, username: this_user_name, alias: this_user_alias, name: this_name, group_role: this_group_role};
+      let this_rec = {user_id: this_user_id, username: this_user_name, alias: this_user_alias, name: this_name, group_role: this_group_role};
       members.push(this_rec);
     }
   }
@@ -135,8 +135,7 @@ async function _getMessageGroupMembers(conn, group_id, data_filter) {
 
 
 exports.getMessageGroupMembers = async function(conn, group_id) {
-  var close_conn = false;
-  var members = [];
+  let close_conn = false, members = [];
   
   try {
     if (conn == null || typeof(conn) == 'undefined') {
@@ -160,12 +159,10 @@ exports.getMessageGroupMembers = async function(conn, group_id) {
 
 
 exports.getMessageGroupMembersViaPool = async function(msg_pool, group_id) {
-  var conn;
-  var members = [];
+  let conn, members = [];
   
   try {
-    conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
-    
+    conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));    
     members = await _getMessageGroupMembers(conn, group_id);
   }
   catch(e) {
@@ -180,7 +177,7 @@ exports.getMessageGroupMembersViaPool = async function(msg_pool, group_id) {
 
 
 async function _getMessageGroupKey(conn, group_id) {
-  var sql, param, data, key; 
+  let sql, param, data, key; 
   
   key = '';
 
@@ -209,7 +206,7 @@ async function _getMessageGroupKey(conn, group_id) {
 
 
 async function _getMessageGroupAlgorithm(conn, group_id) {
-  var sql, param, data, algorithm; 
+  let sql, param, data, algorithm; 
   
   algorithm = '';
 
@@ -269,8 +266,8 @@ async function _getMessageGroupEncryptInfo(conn, group_id) {
 
 
 async function _updateGroupRefreshToken(conn, group_id) {
-  var sql, param, token;
-  var result = {ok: true, msg: ''};
+  let sql, param, token;
+  let result = {ok: true, msg: ''};
   
   try {
     token = cipher.generateTrueRandomStr('A', 16);
@@ -292,7 +289,7 @@ async function _updateGroupRefreshToken(conn, group_id) {
 
 
 exports.updateGroupRefreshToken = async function(conn, group_id) {
-  var result = {ok: true, msg: ''};
+  let result = {ok: true, msg: ''};
   
   try {
     result = await _updateGroupRefreshToken(conn, group_id);
@@ -400,8 +397,8 @@ async function _addMessageRecord(conn, user_id, group_id, message, fileloc, op_f
 
 
 async function _deliverMessage(conn, msg_id, receiver_id, status) {
-  var sql, param;
-  var result = {ok: true, msg: ''};
+  let sql, param;
+  let result = {ok: true, msg: ''};
   
   try {
     sql = `INSERT INTO msg_tx ` +
@@ -421,7 +418,7 @@ async function _deliverMessage(conn, msg_id, receiver_id, status) {
 
 
 async function _isUserAcceptInform(conn, user_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT inform_new_msg ` +
@@ -449,7 +446,7 @@ async function _isUserAcceptInform(conn, user_id) {
 
 
 async function _isUserOnline(conn, user_id) {
-  var sql, param, data, sess_until, result;
+  let sql, param, data, sess_until, result;
   
   try {
     sql = `SELECT MAX(sess_until) AS last_sess ` +
@@ -485,7 +482,7 @@ async function _isUserOnline(conn, user_id) {
 
 
 async function _hasInformRec(conn, user_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` +
@@ -511,7 +508,7 @@ async function _hasInformRec(conn, user_id) {
 
 
 async function _needToInformMember(conn, member_id) {
-  var accept_inform, online, has_inform_rec, result;
+  let accept_inform, online, has_inform_rec, result;
 
   try {
     //-- 2023-06-06: Skip member accept new message checking --//
@@ -546,8 +543,8 @@ async function _needToInformMember(conn, member_id) {
 
 
 async function _setUserInformFlag(conn, member_id, flag) {
-  var sql, param;
-  var result = {ok: true, msg: ''};
+  let sql, param;
+  let result = {ok: true, msg: ''};
   
   try {
     sql = `UPDATE user_list ` +
@@ -567,8 +564,8 @@ async function _setUserInformFlag(conn, member_id, flag) {
 
 
 async function _addNewMessageInformQueueRec(conn, member_id) {
-  var sql, param;
-  var result = {ok: true, msg: ''};
+  let sql, param;
+  let result = {ok: true, msg: ''};
   
   try {
     sql = `INSERT INTO new_msg_inform ` +
@@ -593,9 +590,9 @@ async function _addNewMessageInformQueueRec(conn, member_id) {
 //-- Note: Since '_snedMessage' involves multiple tables updating, so it is better to run it within SQL transaction protection. i.e.: Start a SQL   --//
 //--       transaction session, then execute involved SQL commands, and determine whether commit or rollback database operations by returned value. --// 
 async function _sendMessage(conn, group_id, sender_id, message, fileloc, op_flag, op_user_id, op_msg, http_user_agent, ip_addr) {
-  var tx_on, msg_id;
-  var result = {ok: true, msg: ''};
-  var members = [];
+  let tx_on, msg_id;
+  let result = {ok: true, msg: ''};
+  let members = [];
     
   try {
     tx_on = await dbs.startTransaction(conn);
@@ -610,8 +607,8 @@ async function _sendMessage(conn, group_id, sender_id, message, fileloc, op_flag
         msg_id = await _addMessageRecord(conn, sender_id, group_id, message, fileloc, op_flag, op_user_id, op_msg, http_user_agent, ip_addr);
         
         //-- Step 3: Delivery message to all members (include message sender) --//
-        for (var i = 0; i < members.length; i++) {
-          var this_member_id = members[i].user_id;
+        for (let i = 0; i < members.length; i++) {
+          let this_member_id = members[i].user_id;
           result = await _deliverMessage(conn, msg_id, this_member_id, 'U');
 
           if (result.ok && this_member_id != sender_id) {
@@ -664,7 +661,7 @@ async function _sendMessage(conn, group_id, sender_id, message, fileloc, op_flag
 
 
 async function _getMessageUpdateToken(conn, group_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   result = '';
   
@@ -694,8 +691,8 @@ async function _getMessageUpdateToken(conn, group_id) {
 
 
 exports.sendMessage = async function(msg_pool, group_id, sender_id, message, fileloc, op_flag, op_user_id, op_msg, http_user_agent, ip_addr) {
-  var conn, retvals, update_token;
-  var result = {mg_status: {update_token: ''}};
+  let conn, retvals, update_token;
+  let result = {mg_status: {update_token: ''}};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -722,8 +719,7 @@ exports.sendMessage = async function(msg_pool, group_id, sender_id, message, fil
 
 
 exports.getMessageGroup = async function(conn, user_id) {
-  var sqlcmd, param, data, rec;
-  var result = [];
+  let sqlcmd, param, data, rec, result = [];
   
   try {
     sqlcmd = `SELECT DISTINCT a.group_id, a.group_name, a.group_type, b.group_role ` +
@@ -736,12 +732,12 @@ exports.getMessageGroup = async function(conn, user_id) {
     data = await dbs.sqlQuery(conn, sqlcmd, param);
     data = JSON.parse(data);
     
-    for (var i = 0; i < data.length; i++) {
-      var group_id = data[i].group_id;
-      var group_name = data[i].group_name;
-      var group_type = data[i].group_type;
-      var group_role = data[i].group_role;
-      var unread_cnt = 0; 
+    for (let i = 0; i < data.length; i++) {
+      let group_id = data[i].group_id;
+      let group_name = data[i].group_name;
+      let group_type = data[i].group_type;
+      let group_role = data[i].group_role;
+      let unread_cnt = 0; 
       
       sqlcmd = `SELECT COUNT(*) AS cnt ` +        
                `  FROM msg_tx a, message b ` +
@@ -767,7 +763,7 @@ exports.getMessageGroup = async function(conn, user_id) {
 
 
 exports.isUserGroupMember = async function(msg_pool, user_id, group_id) {
-  var conn, is_member;
+  let conn, is_member;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, 'COOKIE_MSG');
@@ -785,7 +781,7 @@ exports.isUserGroupMember = async function(msg_pool, user_id, group_id) {
 
 
 exports.getMessageGroupName = async function(conn, group_id) {
-  var sqlcmd, param, data, result;
+  let sqlcmd, param, data, result;
   
   result = '';
   
@@ -814,7 +810,7 @@ exports.getMessageGroupName = async function(conn, group_id) {
 
 
 async function _getMessageUpdateToken(conn, group_id) {
-  var sqlcmd, param, data, result;
+  let sqlcmd, param, data, result;
   
   result = '';
   
@@ -828,8 +824,8 @@ async function _getMessageUpdateToken(conn, group_id) {
     data = JSON.parse(data);
     
     if (data.length > 0) {
-      var r_token = data[0].refresh_token;
-      var g_id = parseInt(data[0].group_id, 10);
+      let r_token = data[0].refresh_token;
+      let g_id = parseInt(data[0].group_id, 10);
       
       if (g_id == group_id) {
         result = r_token.trim();
@@ -853,7 +849,7 @@ async function _getMessageUpdateToken(conn, group_id) {
 
 
 exports.getMessageUpdateToken = async function(conn, group_id) {
-  var result = '';
+  let result = '';
     
   try {
     result = await _getMessageUpdateToken(conn, group_id);
@@ -867,7 +863,7 @@ exports.getMessageUpdateToken = async function(conn, group_id) {
 
 
 async function _getGroupRole(conn, group_id, user_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   result = 0;
   
@@ -897,7 +893,7 @@ async function _getGroupRole(conn, group_id, user_id) {
  
 
 exports.getGroupRole = async function(conn, group_id, user_id) {
-  var result = 0;
+  let result = 0;
   
   try {
     result = await _getGroupRole(conn, group_id, user_id);
@@ -911,7 +907,7 @@ exports.getGroupRole = async function(conn, group_id, user_id) {
 
 
 exports.getGroupName = async function(conn, group_id) {
-  var sql, param, data, group_name;
+  let sql, param, data, group_name;
   
   group_name = '';
   
@@ -939,8 +935,8 @@ exports.getGroupName = async function(conn, group_id) {
 
 
 async function _getGroupSettings(conn, group_id) {
-  var sql, param, data;
-  var result = {};
+  let sql, param, data;
+  let result = {};
   
   try {
     sql = `SELECT group_name, group_type, msg_auto_delete, delete_after_read, algorithm, encrypt_key, status, refresh_token ` +
@@ -969,7 +965,7 @@ async function _getGroupSettings(conn, group_id) {
 
 
 exports.getGroupSettings = async function(conn, group_id) {
-  var result = {};
+  let result = {};
   
   try {
     result = await _getGroupSettings(conn, group_id);
@@ -983,8 +979,8 @@ exports.getGroupSettings = async function(conn, group_id) {
 
 
 async function _getGroupType(conn, group_id) {
-  var group_type;
-  var group_profile = {};
+  let group_type;
+  let group_profile = {};
 
   try {
     group_profile = await _getGroupSettings(conn, group_id);
@@ -999,7 +995,7 @@ async function _getGroupType(conn, group_id) {
 
 
 exports.getGroupType = async function(conn, group_id) {
-  var group_type;
+  let group_type;
 
   try {
     group_type = await _getGroupType(conn, group_id);
@@ -1013,7 +1009,7 @@ exports.getGroupType = async function(conn, group_id) {
 
 
 exports.isPrivateGroup = async function(conn, group_id) {
-  var group_type, close_conn, result;
+  let group_type, close_conn, result;
 
   try {
     if (conn == null) {
@@ -1041,8 +1037,8 @@ exports.isPrivateGroup = async function(conn, group_id) {
 
 
 function _12HourTimeFormat(given_time) {    // Note: given_time must be in 12 hours time format.
-  var time, hh, mm, ampm, result;
-  var parts = [];
+  let time, hh, mm, ampm, result;
+  let parts = [];
   
   try {
     parts = given_time.split(' ');
@@ -1069,8 +1065,8 @@ function _12HourTimeFormat(given_time) {    // Note: given_time must be in 12 ho
 
 
 function _descFromNow(time_diff) {
-  var hr, min, sec, result;
-  var dateparts = []; 
+  let hr, min, sec, result;
+  let dateparts = []; 
 
   try {
     dateparts = time_diff.split(':');
@@ -1105,7 +1101,7 @@ function _descFromNow(time_diff) {
 
 
 function _descWeekDay(mysql_week_day_no) {
-  var result;
+  let result;
   
   try {
     switch (mysql_week_day_no) {
@@ -1284,8 +1280,8 @@ async function _gatherMessage(conn, sql, sql_params, algorithm, key, group_id, u
 
 
 async function _markMessagesAreRead(conn, group_id, user_id, http_user_agent) {
-  var ok, msg, sql, param;
-  var result = {ok: true, msg: ''};
+  let ok, msg, sql, param;
+  let result = {ok: true, msg: ''};
   
   try {
     sql = `UPDATE msg_tx JOIN message ON msg_tx.msg_id = message.msg_id ` +
@@ -1467,8 +1463,8 @@ async function _getGroupMessage(conn, group_id, user_id, m_params, client_device
 
 
 exports.getGroupMessage = async function(conn, group_id, user_id, m_params, client_device_info, http_user_agent) {
-  var close_conn = false;
-  var result = [];
+  let close_conn = false;
+  let result = [];
   
   try {
     if (typeof(conn) == 'undefined' || conn == null) {
@@ -1544,8 +1540,8 @@ exports.loadGroupMessages = async function(msg_pool, group_id, user_id, m_params
 
 
 exports.getGroupMessageViaDbPool = async function(msg_pool, group_id, user_id, m_params, sess_code, client_device_info, http_user_agent) {
-  var conn, algorithm, aes_key;
-  var result = [];
+  let conn, algorithm, aes_key;
+  let result = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -1592,7 +1588,7 @@ exports.getGroupMessageViaDbPool = async function(msg_pool, group_id, user_id, m
 
 
 async function _markMessageIsRead(conn, group_id, receiver_id, msg_id) {
-  var sql, param, result;
+  let sql, param, result;
   
   try {
     sql = `UPDATE msg_tx JOIN message ON msg_tx.msg_id = message.msg_id ` +
@@ -1729,7 +1725,7 @@ exports.getLastSentMessage = async function(msg_pool, group_id, sender_id, sess_
 
 
 async function _messageExist(conn, receiver_id, msg_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
 
   try {
     sql = `SELECT COUNT(*) AS cnt ` +
@@ -1759,23 +1755,23 @@ async function _messageExist(conn, receiver_id, msg_id) {
 
 
 exports.getDeletedMessageIdList = async function(msg_pool, receiver_id, omid_list) {
-  var conn;
-  var omid = [];
-  var result = [];
+  let conn;
+  let omid = [];
+  let result = [];
 
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
     
     omid = omid_list.split('|');
     
-    for (var i = 0; i < omid.length; i++) {
+    for (let i = 0; i < omid.length; i++) {
       //-- Note: 1. For private group, if one of my message delivery transaction record is deleted, then related message should  --//
       //--          be considered as 'deleted', even the message still exists.                                                   --//
       //--       2. In a private group, all the messages displaying is from my point of view. i.e. A message will be shown, even --//
       //--          it's delivery transaction record for another group member has been deleted. Conversely, A message will not   --//
       //--          be displayed if it's delivery transaction record for me is deleted.                                          --//
       if (await _messageExist(conn, receiver_id, omid[i]) == false) {
-        var this_rec = {msg_id: omid[i], msg_status: 'deleted'};
+        let this_rec = {msg_id: omid[i], msg_status: 'deleted'};
         result.push(this_rec);
       }    
     }    
@@ -1793,8 +1789,8 @@ exports.getDeletedMessageIdList = async function(msg_pool, receiver_id, omid_lis
 
 //-- Note: Used for websocket operations only --//
 exports.getOtherGroupMembers = async function(msg_pool, group_id, user_id, callback) {     // 'callback' is a function to return the result and error (if any) to the caller.
-  var conn, sql, param, data, error;
-  var result = [];
+  let conn, sql, param, data, error;
+  let result = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -1807,7 +1803,7 @@ exports.getOtherGroupMembers = async function(msg_pool, group_id, user_id, callb
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
     if (data.length > 0) {
-      for (var i = 0; i < data.length; i++) {
+      for (let i = 0; i < data.length; i++) {
         if (data[i].user_id != user_id) {
           result.push(data[i].user_id); 
         }
@@ -1828,7 +1824,7 @@ exports.getOtherGroupMembers = async function(msg_pool, group_id, user_id, callb
 
 
 async function _isUserLocked(conn, user_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT status ` +
@@ -1857,8 +1853,8 @@ async function _isUserLocked(conn, user_id) {
 
 
 exports.checkMessageUpdateToken = async function(msg_pool, group_id, user_id) {
-  var conn, token;
-  var result = {mg_status: {update_token: ''}};
+  let conn, token;
+  let result = {mg_status: {update_token: ''}};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, 'COOKIE_MSG');
@@ -1887,13 +1883,13 @@ exports.checkMessageUpdateToken = async function(msg_pool, group_id, user_id) {
 
 
 async function _loadAudioConverter(conn) {
-  var audio_converter_setting, audio_converter, result;
+  let audio_converter_setting, audio_converter, result;
 
   try {
     audio_converter_setting = wev.allTrim(await wev.getSysSettingValue(conn, 'audio_converter')); 
     
     if (audio_converter_setting != '') {
-      var parts = audio_converter_setting.split(' ');
+      let parts = audio_converter_setting.split(' ');
       audio_converter = wev.allTrim(parts[0]);         // Audio converter (with full path) must be the first data
       if ((await wev.fileExist(audio_converter)) && audio_converter_setting.match(/{input_file}/) && audio_converter_setting.match(/{output_file}/)) {
         result = audio_converter_setting;
@@ -1916,7 +1912,7 @@ async function _loadAudioConverter(conn) {
 
 
 exports.uploadFileToMessageGroup = async function(msg_pool, group_id, sender_id, ul_ftype, upload_file, caption, op_flag, op_user_id, op_msg, http_user_agent, ip_addr) {
-  var conn, filename, tn_filename, audio_converter, token;
+  let conn, filename, tn_filename, audio_converter, token;
   
   token = '';
   filename = '';
@@ -1942,8 +1938,8 @@ exports.uploadFileToMessageGroup = async function(msg_pool, group_id, sender_id,
           tn_filename = await wev.createThumbnail(filename, wev.getGlobalValue('ITN_TN_PATH'));          
         }
         else {
-          var fileinfo = await wev.fileNameParser(filename);                  
-          var file_type = await wev.findFileType(conn, fileinfo.ext);                               
+          let fileinfo = await wev.fileNameParser(filename);                  
+          let file_type = await wev.findFileType(conn, fileinfo.ext);                               
           if (file_type == 'image') {
             //-- Note: The process will continue even thumbnail file can't be created --//
             tn_filename = await wev.createThumbnail(filename, wev.getGlobalValue('ITN_TN_PATH'));      
@@ -1962,7 +1958,7 @@ exports.uploadFileToMessageGroup = async function(msg_pool, group_id, sender_id,
       }
       
       //-- Step 3: Send out message --//
-      var retvals = await _sendMessage(conn, group_id, sender_id, caption, filename, op_flag, op_user_id, op_msg, http_user_agent, ip_addr);     
+      let retvals = await _sendMessage(conn, group_id, sender_id, caption, filename, op_flag, op_user_id, op_msg, http_user_agent, ip_addr);     
       if (retvals.ok) {
         token = await _getMessageUpdateToken(conn, group_id);
       }
@@ -1971,7 +1967,7 @@ exports.uploadFileToMessageGroup = async function(msg_pool, group_id, sender_id,
       }      
     }
     else {    
-      var msg = `upload_files: User ${sender_id} tries to upload file to group ${group_id}, but this guy is not member of this group. It may be a hacking activity, check for it.`;
+      let msg = `upload_files: User ${sender_id} tries to upload file to group ${group_id}, but this guy is not member of this group. It may be a hacking activity, check for it.`;
       await smslib.logSystemError(conn, sender_id, msg, 'Alert', http_user_agent);
       throw new Error("Can't upload file to a message group as you are not group member");
     }
@@ -1992,7 +1988,7 @@ exports.uploadFileToMessageGroup = async function(msg_pool, group_id, sender_id,
 
 
 async function _isMessageOwner(conn, group_id, user_id, msg_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` +
@@ -2018,7 +2014,7 @@ async function _isMessageOwner(conn, group_id, user_id, msg_id) {
 
 
 async function _getMessageAttachment(conn, msg_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT fileloc ` +
@@ -2044,7 +2040,7 @@ async function _getMessageAttachment(conn, msg_id) {
 
 
 async function _removeMessage(conn, msg_id) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM message ` +
@@ -2060,7 +2056,7 @@ async function _removeMessage(conn, msg_id) {
 
 
 async function _removeMessageDeliveryRecord(conn, msg_id) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM msg_tx ` +
@@ -2076,7 +2072,7 @@ async function _removeMessageDeliveryRecord(conn, msg_id) {
 
 
 async function _removeMessageDataSet(conn, group_id, msg_id) {
-  var tx_on, fileloc, fname, tn_file;
+  let tx_on, fileloc, fname, tn_file;
   
   try {
     tx_on = await dbs.startTransaction(conn);
@@ -2096,7 +2092,7 @@ async function _removeMessageDataSet(conn, group_id, msg_id) {
           await wev.deleteFile(fileloc);
         } 
         
-        var fileinfo = await wev.fileNameParser(fileloc);
+        let fileinfo = await wev.fileNameParser(fileloc);
         fname = fileinfo.filename;
         tn_file = (wev.getGlobalValue('ITN_TN_PATH')) + '/' + fname + '.jpg';
         if (await wev.fileExist(tn_file)) {
@@ -2118,7 +2114,7 @@ async function _removeMessageDataSet(conn, group_id, msg_id) {
 
 
 exports.deleteMessage = async function(msg_pool, group_id, user_id, msg_id, http_user_agent, ip_addr) {
-  var conn, token;
+  let conn, token;
   
   token = '';
     
@@ -2130,7 +2126,7 @@ exports.deleteMessage = async function(msg_pool, group_id, user_id, msg_id, http
       token = await _getMessageUpdateToken(conn, group_id);  
     }
     else {
-      var err_msg = `delete_message: User ${user_id} tries to delete message belongs to another user! The message ID is ${msg_id}.`;
+      let err_msg = `delete_message: User ${user_id} tries to delete message belongs to another user! The message ID is ${msg_id}.`;
       await smslib.logSystemError(conn, user_id, err_msg, 'Alert', http_user_agent);
       throw new Error(err_msg);
     }
@@ -2213,7 +2209,7 @@ async function _copyForwardFile(file) {
         idx++;
         if (idx > 999) {
           //-- Last resort --//
-          var curr_time = new Date().getTime();
+          let curr_time = new Date().getTime();
           fw_fileloc = `${dirs}${filename}-${curr_time}${suffix}`;
           fw_tn_file = (tn_file != '')? wev.getGlobalValue('ITN_TN_PATH') + '/' + `${filename}-${curr_time}.jpg` : '';
           stop_run = true;  
@@ -2631,7 +2627,7 @@ exports.getPrevGroupMessage = async function(msg_pool, group_id, user_id, first_
 
 
 async function _getUserRole(conn, user_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   result = 0;
   
@@ -2659,7 +2655,7 @@ async function _getUserRole(conn, user_id) {
 
 
 exports.getUserRole = async function(conn, user_id) {
-  var result;
+  let result;
   
   try {
     result = await _getUserRole(conn, user_id);
@@ -2673,7 +2669,7 @@ exports.getUserRole = async function(conn, user_id) {
 
 
 exports.hasRightToMgtMember = async function(msg_pool, group_id, user_id) {
-  var conn, result;
+  let conn, result;
   
   result = 0;
   
@@ -2704,14 +2700,14 @@ exports.hasRightToMgtMember = async function(msg_pool, group_id, user_id) {
 
 
 async function _findAndVerifyNewMember(conn, group_id, user_id, new_members) {
-  var sql, param, data;
-  var result = [];
+  let sql, param, data;
+  let result = [];
     
   try {
-    for (var i = 0; i < new_members.length; i++) {
-      var this_alias = new_members[i];
-      var this_username = '';
-      var this_user_id = 0;
+    for (let i = 0; i < new_members.length; i++) {
+      let this_alias = new_members[i];
+      let this_username = '';
+      let this_user_id = 0;
       
       //-- Step 1: Try to find the new member by his/her alias. --//
       sql = `SELECT user_id, user_name ` +
@@ -2753,7 +2749,7 @@ async function _findAndVerifyNewMember(conn, group_id, user_id, new_members) {
 
 
 async function _loadGroupMessagesForNewMember(conn, group_id, member_id) {
-  var sql, param, data;
+  let sql, param, data;
   
   try {
     //-- Step 1: Find out all missing messages for the new member --//
@@ -2767,7 +2763,7 @@ async function _loadGroupMessagesForNewMember(conn, group_id, member_id) {
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
 
     //-- Step 2: Recreate message delivery transaction records for the new member --//    
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       sql = `INSERT INTO msg_tx ` +
             `(msg_id, receiver_id, read_status) ` +
             `VALUES ` +
@@ -2784,14 +2780,14 @@ async function _loadGroupMessagesForNewMember(conn, group_id, member_id) {
 
 
 async function _addNewGroupMember(conn, group_id, final_members, http_user_agent, ip_addr) {
-  var sql, param, msg;
+  let sql, param, msg;
   
   msg = '';
   
   try {
-    for (var i = 0; i < final_members.length; i++) {
-      var this_user_id = final_members[i].user_id;
-      var this_member = (wev.allTrim(final_members[i].alias) == '')? final_members[i].user_name : final_members[i].alias;
+    for (let i = 0; i < final_members.length; i++) {
+      let this_user_id = final_members[i].user_id;
+      let this_member = (wev.allTrim(final_members[i].alias) == '')? final_members[i].user_name : final_members[i].alias;
       
       //-- Step 1: Add new member to the group --//
       sql = `INSERT INTO group_member ` +
@@ -2806,7 +2802,7 @@ async function _addNewGroupMember(conn, group_id, final_members, http_user_agent
       await _loadGroupMessagesForNewMember(conn, group_id, this_user_id);
       
       //-- Step 3: The new member sends an inform message to all other group members --//    
-      var message = `I am ${this_member}, just join this group.`;
+      let message = `I am ${this_member}, just join this group.`;
       await _sendMessage(conn, group_id, this_user_id, message, '', '', 0, '', http_user_agent, ip_addr);
     }    
   }
@@ -2820,8 +2816,8 @@ async function _addNewGroupMember(conn, group_id, final_members, http_user_agent
 
 
 exports.addNewMemberToGroup = async function(msg_pool, group_id, user_id, new_members, http_user_agent, ip_addr) {
-  var conn, msg;
-  var final_members = [];
+  let conn, msg;
+  let final_members = [];
   
   msg = '';
   
@@ -2855,7 +2851,7 @@ exports.addNewMemberToGroup = async function(msg_pool, group_id, user_id, new_me
 
 exports.removeMemberFromGroup = async function(msg_pool, group_id, delete_members) {
   try {
-    for (var i = 0; i < delete_members.length; i++) {
+    for (let i = 0; i < delete_members.length; i++) {
       smslib.quitMessageGroup(msg_pool, group_id, delete_members[i]);
     }
   }
@@ -2866,13 +2862,13 @@ exports.removeMemberFromGroup = async function(msg_pool, group_id, delete_member
 
 
 exports.promoteGroupMember = async function(msg_pool, group_id, promote_members) {
-  var conn, sql, param;
+  let conn, sql, param;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
     
-    for (var i = 0; i < promote_members.length; i++) {
-      var this_member_id = promote_members[i];
+    for (let i = 0; i < promote_members.length; i++) {
+      let this_member_id = promote_members[i];
       
       sql = `UPDATE group_member ` +
             `  SET group_role = '1' ` +
@@ -2893,13 +2889,13 @@ exports.promoteGroupMember = async function(msg_pool, group_id, promote_members)
 
 
 exports.demoteGroupAdmin = async function(msg_pool, group_id, demote_admin) {
-  var conn, sql, param;
+  let conn, sql, param;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
     
-    for (var i = 0; i < demote_admin.length; i++) {
-      var this_member_id = demote_admin[i];
+    for (let i = 0; i < demote_admin.length; i++) {
+      let this_member_id = demote_admin[i];
       
       sql = `UPDATE group_member ` +
             `  SET group_role = '0' ` +
@@ -2920,9 +2916,9 @@ exports.demoteGroupAdmin = async function(msg_pool, group_id, demote_admin) {
 
 
 exports.sendGroupInformMessage = async function(msg_pool, group_id, inform_message) {
-  var conn, sql, param, data, msg, url, subject, mail_body, tg_bot_api_token;
-  var from_mail, from_user, from_pass, smtp_server, port;
-  var mail_worker = {};
+  let conn, sql, param, data, msg, url, subject, mail_body, tg_bot_api_token;
+  let from_mail, from_user, from_pass, smtp_server, port;
+  let mail_worker = {};
   
   msg = '';
   
@@ -2975,10 +2971,10 @@ exports.sendGroupInformMessage = async function(msg_pool, group_id, inform_messa
         subject = "Important News";
         mail_body = `${inform_message} \n\n${url}\n`;
 
-        for (var i = 0; i < data.length; i++) {
-          var this_user_id = data[i].user_id;
-          var this_to_mail = data[i].email;
-          var this_tg_id = wev.allTrim(data[i].tg_id);
+        for (let i = 0; i < data.length; i++) {
+          let this_user_id = data[i].user_id;
+          let this_to_mail = data[i].email;
+          let this_tg_id = wev.allTrim(data[i].tg_id);
           
           if (mail_worker.email != null) {
             //-- Send inform email --//
@@ -2993,7 +2989,7 @@ exports.sendGroupInformMessage = async function(msg_pool, group_id, inform_messa
           }           
         }
         
-        var result_msg = 'Members are informed';
+        let result_msg = 'Members are informed';
         if (msg == '') {
           msg = result_msg;
         }
@@ -3012,8 +3008,8 @@ exports.sendGroupInformMessage = async function(msg_pool, group_id, inform_messa
 
 
 async function _getGroupAttachedFiles(conn, group_id) {
-  var sql, param, data, tn_path;
-  var result = [];
+  let sql, param, data, tn_path;
+  let result = [];
   
   try {
     tn_path = wev.getGlobalValue('ITN_TN_PATH');
@@ -3027,11 +3023,11 @@ async function _getGroupAttachedFiles(conn, group_id) {
     param = [group_id];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
-    for (var i = 0; i < data.length; i++) {
-      var this_file = data[i].fileloc;
-      var file_info = await wev.fileNameParser(this_file);
-      var this_filename = wev.allTrim(file_info.filename);
-      var this_tn_file = `${tn_path}/${this_filename}.jpg`;   
+    for (let i = 0; i < data.length; i++) {
+      let this_file = data[i].fileloc;
+      let file_info = await wev.fileNameParser(this_file);
+      let this_filename = wev.allTrim(file_info.filename);
+      let this_tn_file = `${tn_path}/${this_filename}.jpg`;   
       
       result.push(this_file);
       //-- If related thumbnail file exists, include it also. --//
@@ -3049,7 +3045,7 @@ async function _getGroupAttachedFiles(conn, group_id) {
 
 
 async function _removeGroup(conn, group_id) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM msg_group ` +
@@ -3065,7 +3061,7 @@ async function _removeGroup(conn, group_id) {
 
 
 async function _removeGroupMember(conn, group_id) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM group_member ` +
@@ -3081,7 +3077,7 @@ async function _removeGroupMember(conn, group_id) {
 
 
 async function _removeGroupMessageAndDeliveryHistory(conn, group_id) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE message, msg_tx ` + 
@@ -3098,11 +3094,11 @@ async function _removeGroupMessageAndDeliveryHistory(conn, group_id) {
 
 
 async function _deleteGroupAttachedFiles(attached_files) {
-  for (var i = 0; i < attached_files.length; i++) {
-    var this_file = attached_files[i];
+  for (let i = 0; i < attached_files.length; i++) {
+    let this_file = attached_files[i];
     
     if (await wev.fileExist(this_file)) {
-      var ok = await wev.deleteFile(this_file);
+      let ok = await wev.deleteFile(this_file);
       
       if (ok) {
         smslib.consoleLog(`delete_group: ${this_file} is deleted.`);
@@ -3119,8 +3115,8 @@ async function _deleteGroupAttachedFiles(attached_files) {
 
 
 exports.deleteMessageGroup = async function(msg_pool, group_id) {
-  var conn, ok;
-  var attached_files = [];
+  let conn, ok;
+  let attached_files = [];
   
   ok = true;
   
@@ -3166,7 +3162,7 @@ exports.deleteMessageGroup = async function(msg_pool, group_id) {
 
 
 exports.updateAutoDeleteSettings = async function(msg_pool, group_id, auto_delete, delete_after) {
-  var conn, sql, param;
+  let conn, sql, param;
   
   
   try {
@@ -3195,7 +3191,7 @@ exports.updateAutoDeleteSettings = async function(msg_pool, group_id, auto_delet
 
 
 async function _aliasHasBeenUsed(conn, user_id, alias) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` +
@@ -3217,7 +3213,7 @@ async function _aliasHasBeenUsed(conn, user_id, alias) {
 
 
 async function _saveUserAlias(conn, user_id, alias) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `UPDATE user_list ` +
@@ -3234,8 +3230,8 @@ async function _saveUserAlias(conn, user_id, alias) {
 
 
 exports.updateUserAlias = async function(msg_pool, user_id, alias) {
-  var conn;
-  var result = {ok: true, msg: ''};
+  let conn;
+  let result = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -3259,7 +3255,7 @@ exports.updateUserAlias = async function(msg_pool, user_id, alias) {
 
 
 async function _saveUserEmail(conn, user_id, email) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `UPDATE user_list ` + 
@@ -3276,8 +3272,8 @@ async function _saveUserEmail(conn, user_id, email) {
 
 
 exports.updateUserEmail = async function(msg_pool, user_id, email) {
-  var conn;
-  var result = {ok: true, msg: ''};
+  let conn;
+  let result = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));    
@@ -3295,7 +3291,7 @@ exports.updateUserEmail = async function(msg_pool, user_id, email) {
 
 
 async function _telegramIdBelongsToAnotherUser(conn, user_id, tg_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` +
@@ -3318,7 +3314,7 @@ async function _telegramIdBelongsToAnotherUser(conn, user_id, tg_id) {
 
 
 async function _saveUserTelegramId(conn, user_id, tg_id) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `UPDATE user_list ` + 
@@ -3335,8 +3331,8 @@ async function _saveUserTelegramId(conn, user_id, tg_id) {
 
 
 exports.updateUserTelegramId = async function(msg_pool, user_id, tg_id) {
-  var conn;
-  var result = {ok: true, msg: ''};
+  let conn;
+  let result = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -3360,7 +3356,7 @@ exports.updateUserTelegramId = async function(msg_pool, user_id, tg_id) {
 
 
 async function _equalUnhappyPassword(conn, user_id, happy_passwd) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT unhappy_passwd ` +
@@ -3386,8 +3382,8 @@ async function _equalUnhappyPassword(conn, user_id, happy_passwd) {
 
 
 exports.updateUserHappyPassword = async function(msg_pool, user_id, happy_passwd) {
-  var conn, sql, param, encrypt_happy_passwd;
-  var result = {ok: true, msg: ''};
+  let conn, sql, param, encrypt_happy_passwd;
+  let result = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -3418,7 +3414,7 @@ exports.updateUserHappyPassword = async function(msg_pool, user_id, happy_passwd
 
 
 async function _equalHappyPassword(conn, user_id, unhappy_passwd) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT happy_passwd ` +
@@ -3444,8 +3440,8 @@ async function _equalHappyPassword(conn, user_id, unhappy_passwd) {
 
 
 exports.updateUserUnhappyPassword = async function(msg_pool, user_id, unhappy_passwd) {
-  var conn, sql, param, encrypt_unhappy_passwd;
-  var result = {ok: true, msg: ''};
+  let conn, sql, param, encrypt_unhappy_passwd;
+  let result = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -3476,12 +3472,12 @@ exports.updateUserUnhappyPassword = async function(msg_pool, user_id, unhappy_pa
 
 
 async function _verifyMembers(conn, user_id, members) {
-  var sql, param, data;
-  var list = [];
+  let sql, param, data;
+  let list = [];
   
   try {
-    for (var i = 0; i < members.length; i++) {
-      var this_alias = members[i];
+    for (let i = 0; i < members.length; i++) {
+      let this_alias = members[i];
       
       sql = `SELECT user_id ` + 
             `  FROM user_list ` +
@@ -3492,9 +3488,9 @@ async function _verifyMembers(conn, user_id, members) {
       data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
       
       if (data.length > 0) {
-        var user_exist = false;
+        let user_exist = false;
         //-- Case 1: No duplicate user is allowed --//
-        for (var k = 0; k < list.length; k++) {
+        for (let k = 0; k < list.length; k++) {
           if (list[k] == data[0].user_id) {
             user_exist = true;
             break;
@@ -3521,7 +3517,7 @@ async function _verifyMembers(conn, user_id, members) {
 
 
 async function _addMessageGroup(conn, group_name, msg_auto_delete) {
-  var sql, param, data, group_id, encrypt_key;
+  let sql, param, data, group_id, encrypt_key;
   
   try {
     group_id = 0;
@@ -3552,7 +3548,7 @@ async function _addMessageGroup(conn, group_name, msg_auto_delete) {
 
 
 async function _addGroupMember(conn, group_id, user_id, final_list) {
-  var sql, param;
+  let sql, param;
   
   try {
     //-- This is the group administrator --//
@@ -3565,8 +3561,8 @@ async function _addGroupMember(conn, group_id, user_id, final_list) {
     await dbs.sqlExec(conn, sql, param);      
     
     //-- Add other group members --//
-    for (var i = 0; i < final_list.length; i++) {
-      var this_member_id = final_list[i];
+    for (let i = 0; i < final_list.length; i++) {
+      let this_member_id = final_list[i];
       
       sql = `INSERT INTO group_member ` +
             `(group_id, user_id, group_role) ` +
@@ -3584,7 +3580,7 @@ async function _addGroupMember(conn, group_id, user_id, final_list) {
 
 
 async function _sendMemberFirstMessage(conn, group_id, user_id, http_user_agent, ip_addr) {
-  var message;
+  let message;
   
   try {
     message = "You are invited to join this group.";
@@ -3597,9 +3593,9 @@ async function _sendMemberFirstMessage(conn, group_id, user_id, http_user_agent,
 
 
 exports.createMessageGroup = async function(msg_pool, user_id, group_name, msg_auto_delete, members, http_user_agent, ip_addr) {
-  var conn, group_id;
-  var final_list = [];
-  var result = {ok: true, msg: ''};
+  let conn, group_id;
+  let final_list = [];
+  let result = {ok: true, msg: ''};
 
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -3645,7 +3641,7 @@ exports.createMessageGroup = async function(msg_pool, user_id, group_name, msg_a
 
 
 async function _getMemberId(conn, member) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT user_id ` +
@@ -3672,7 +3668,7 @@ async function _getMemberId(conn, member) {
 
 
 async function _addPrivateGroup(conn, group_name, auto_delete, delete_after) {
-  var sql, param, data, group_id, encrypt_key;
+  let sql, param, data, group_id, encrypt_key;
   
   try {
     group_id = 0;
@@ -3703,8 +3699,8 @@ async function _addPrivateGroup(conn, group_name, auto_delete, delete_after) {
 
 
 async function _createPrivateMessageGroup(conn, user_id, group_name, member, auto_delete, delete_after, http_user_agent, ip_addr) {
-  var member_id, group_id;
-  var result = {ok: true, msg: ''};
+  let member_id, group_id;
+  let result = {ok: true, msg: ''};
   
   try {
     member_id = await _getMemberId(conn, member);
@@ -3720,7 +3716,7 @@ async function _createPrivateMessageGroup(conn, user_id, group_name, member, aut
         group_id = await _addPrivateGroup(conn, group_name, auto_delete, delete_after);
         
         if (group_id > 0) {
-          var member_list = [member_id];
+          let member_list = [member_id];
           await _addGroupMember(conn, group_id, user_id, member_list);                    
         }
         else {
@@ -3749,8 +3745,8 @@ async function _createPrivateMessageGroup(conn, user_id, group_name, member, aut
 
 
 exports.createPrivateMessageGroup = async function(msg_pool, user_id, group_name, member, auto_delete, delete_after, http_user_agent, ip_addr) {
-  var conn;
-  var result = {ok: true, msg: ''};
+  let conn;
+  let result = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));    
@@ -3768,7 +3764,7 @@ exports.createPrivateMessageGroup = async function(msg_pool, user_id, group_name
 
 
 exports.isSystemAdmin = async function(msg_pool, user_id) {
-  var conn, role, result;
+  let conn, role, result;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));    
@@ -3784,7 +3780,7 @@ exports.isSystemAdmin = async function(msg_pool, user_id) {
 
 
 exports.isTrustedUser = async function(msg_pool, user_id) {
-  var conn, role, result;
+  let conn, role, result;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));    
@@ -3800,8 +3796,8 @@ exports.isTrustedUser = async function(msg_pool, user_id) {
 
 
 exports.getAllMessageGroups = async function(conn) {
-  var sql, data;
-  var result = [];
+  let sql, data;
+  let result = [];
   
   try {
     sql = `SELECT group_id, group_name ` +
@@ -3810,8 +3806,8 @@ exports.getAllMessageGroups = async function(conn) {
           
     data = JSON.parse(await dbs.sqlQuery(conn, sql));
     
-    for (var i = 0; i < data.length; i++) {
-      var this_group = {group_id: data[i].group_id, group_name: data[i].group_name};
+    for (let i = 0; i < data.length; i++) {
+      let this_group = {group_id: data[i].group_id, group_name: data[i].group_name};
       result.push(this_group);
     }      
   }
@@ -3824,7 +3820,7 @@ exports.getAllMessageGroups = async function(conn) {
 
 
 async function _buildDeletedGroupMemberInformPage(conn, fail_cnt, inform_members) {
-  var html, m_site_dns, wspath, jsonInformMembers;
+  let html, m_site_dns, wspath, jsonInformMembers;
   
   try {
     jsonInformMembers = JSON.stringify(inform_members);
@@ -3942,7 +3938,7 @@ exports.deleteGroupByAdmin = async function(msg_pool, delete_groups) {
 
     fail_cnt = 0;
     sqlTxStarted = false;
-    for (var i = 0; i < delete_groups.length; i++) {    
+    for (let i = 0; i < delete_groups.length; i++) {    
       group_id = delete_groups[i];
       attached_files = [];
       group_members = [];
@@ -4022,7 +4018,7 @@ exports.deleteGroupByAdmin = async function(msg_pool, delete_groups) {
 
 
 async function _userHasExisted(conn, user) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` +
@@ -4043,7 +4039,7 @@ async function _userHasExisted(conn, user) {
 
 
 async function _aliasHasExisted(conn, alias) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` +
@@ -4064,8 +4060,8 @@ async function _aliasHasExisted(conn, alias) {
 
 
 async function _createUserAccount(conn, user_id, name, user, alias, email, happy_passwd, unhappy_passwd) {
-  var sql, param, data, crypted_happy_passwd, crypted_unhappy_passwd, new_user_id;
-  var result = {ok: true, msg: ''};
+  let sql, param, data, crypted_happy_passwd, crypted_unhappy_passwd, new_user_id;
+  let result = {ok: true, msg: ''};
   
   try {
     if (await _userHasExisted(conn, user)) {
@@ -4096,8 +4092,8 @@ async function _createUserAccount(conn, user_id, name, user, alias, email, happy
 
 
 exports.createUserAccount = async function(msg_pool, user_id, name, user, alias, email, happy_passwd, unhappy_passwd) {
-  var conn;
-  var result = {ok: true, msg: ''};
+  let conn;
+  let result = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));    
@@ -4115,8 +4111,8 @@ exports.createUserAccount = async function(msg_pool, user_id, name, user, alias,
 
 
 exports.checkReferrer = async function(msg_pool, refer) {
-  var conn, sql, param, data;
-  var result = {is_trusted: false, user_role: 0};
+  let conn, sql, param, data;
+  let result = {is_trusted: false, user_role: 0};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -4134,8 +4130,8 @@ exports.checkReferrer = async function(msg_pool, refer) {
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
     if (data.length > 0) {
-      var user_role = data[0].user_role;
-      var tg_id = (data[0].tg_id == null)? '' : data[0].tg_id;
+      let user_role = data[0].user_role;
+      let tg_id = (data[0].tg_id == null)? '' : data[0].tg_id;
       result.is_trusted = (user_role >= 1)? true : false;
       result.user_role = user_role;
       result.tg_id = tg_id;
@@ -4153,7 +4149,7 @@ exports.checkReferrer = async function(msg_pool, refer) {
 
 
 exports.saveApplicantInfo = async function(msg_pool, name, email, refer, remark) {
-  var conn, sql, param, key, paratext, algorithm, token_iv, token, enc_obj;
+  let conn, sql, param, key, paratext, algorithm, token_iv, token, enc_obj;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -4193,9 +4189,9 @@ exports.saveApplicantInfo = async function(msg_pool, name, email, refer, remark)
 
 
 exports.informReferrerToApproval = async function(msg_pool, name, refer, remark, token, tg_id) {
-  var conn, subject, site_dns, accept_url, reject_url, mail_body, html;
-  var smtp = {email: null, m_user: null, m_pass: null, smtp_server: null, port: 0};
-  var tg_profile = {};
+  let conn, subject, site_dns, accept_url, reject_url, mail_body, html;
+  let smtp = {email: null, m_user: null, m_pass: null, smtp_server: null, port: 0};
+  let tg_profile = {};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -4229,7 +4225,7 @@ exports.informReferrerToApproval = async function(msg_pool, name, refer, remark,
       } 
     }
     else {
-      var error = '';
+      let error = '';
       
       if (smtp.email == null) {
         error = 'Error: No SMTP server is found.';
@@ -4256,8 +4252,8 @@ exports.informReferrerToApproval = async function(msg_pool, name, refer, remark,
 
 
 async function _loadApplicantInfo(conn, token) {
-  var sql, param, data, apply_id, name, email, seed, algorithm, token_iv, apply_date;
-  var applicant = {};
+  let sql, param, data, apply_id, name, email, seed, algorithm, token_iv, apply_date;
+  let applicant = {};
   
   try {
     sql = `SELECT apply_id, name, email, seed, algorithm, token_iv, DATE_FORMAT(apply_date, '%Y-%m-%d %H:%i:%s') AS apply_date ` +
@@ -4298,16 +4294,16 @@ async function _loadApplicantInfo(conn, token) {
 
 
 function _extractParameters(paratext) {
-  var buffer = [];
-  var result = {name: '', email: '', seed: ''};
+  let buffer = [];
+  let result = {name: '', email: '', seed: ''};
   
   try {
     buffer = paratext.split('&');
-    for (var i = 0; i < buffer.length; i++) {
-      var this_param = buffer[i];
-      var parts = this_param.split('=');
-      var param_name = wev.allTrim(parts[0]);
-      var param_data = wev.allTrim(parts[1]);
+    for (let i = 0; i < buffer.length; i++) {
+      let this_param = buffer[i];
+      let parts = this_param.split('=');
+      let param_name = wev.allTrim(parts[0]);
+      let param_data = wev.allTrim(parts[1]);
       
       if (param_name.match(/name/)) {
         result.name = param_data;
@@ -4329,7 +4325,7 @@ function _extractParameters(paratext) {
 
 
 async function _verifyApplicantOk(name, email, seed, algorithm, token_iv, token) {
-  var decrypt_obj, paratext, chk_obj, result;
+  let decrypt_obj, paratext, chk_obj, result;
   
   try {
 		paratext = await cipher.aesDecryptBase64(algorithm, seed, token_iv, unescape(token));		      
@@ -4350,8 +4346,8 @@ async function _verifyApplicantOk(name, email, seed, algorithm, token_iv, token)
 
 
 async function _setApplicantStatus(conn, apply_id, decision) {
-  var sql, param;
-  var result = {ok: true, msg: ''};
+  let sql, param;
+  let result = {ok: true, msg: ''};
   
   try {
     sql = `UPDATE applicant ` +
@@ -4371,8 +4367,8 @@ async function _setApplicantStatus(conn, apply_id, decision) {
 
 
 async function _informApplicantToJoin(conn, name, email, token) {
-  var mail_worker, site_dns, subject, link, mail_body;
-  var result = {ok: true, msg: ''};
+  let mail_worker, site_dns, subject, link, mail_body;
+  let result = {ok: true, msg: ''};
   
   try {
     mail_worker = await telecom.getMailWorker(conn);
@@ -4404,8 +4400,8 @@ async function _informApplicantToJoin(conn, name, email, token) {
 
 
 async function _informSysAdminNewGuyAccepted(conn, apply_id) {
-  var sql, param, data, applicant, referer_username, referer_alias, referer_realname, subject, mail_content;
-  var result = {ok: true, msg: ''};
+  let sql, param, data, applicant, referer_username, referer_alias, referer_realname, subject, mail_content;
+  let result = {ok: true, msg: ''};
 
   try {
     sql = `SELECT a.name, b.user_name, b.user_alias, b.name AS refer_name ` +
@@ -4441,8 +4437,8 @@ async function _informSysAdminNewGuyAccepted(conn, apply_id) {
 
 
 exports.applicantApproval = async function(msg_pool, decision, token) {
-  var conn, applicant, retval;
-  var result = {ok: true, msg: ''};
+  let conn, applicant, retval;
+  let result = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -4489,8 +4485,8 @@ exports.applicantApproval = async function(msg_pool, decision, token) {
 
 
 async function _retrieveApplicantInfo(conn, token) {
-  var sql, param, data;
-  var applicant = {exist: false, apply_id: 0, status: ''};
+  let sql, param, data;
+  let applicant = {exist: false, apply_id: 0, status: ''};
   
   try {
     sql = `SELECT apply_id, DATE_FORMAT(apply_date, '%Y-%m-%d %H:%i:%s') AS apply_date, status ` +
@@ -4501,12 +4497,12 @@ async function _retrieveApplicantInfo(conn, token) {
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
     if (data.length > 0) {
-      var apply_id = data[0].apply_id;
-      var apply_date = data[0].apply_date;
-      var status = data[0].status;
+      let apply_id = data[0].apply_id;
+      let apply_date = data[0].apply_date;
+      let status = data[0].status;
       
       if (await smslib.isTimeLimitPassed(conn, apply_date, '7 00:00:00')) {        // Note: '7 00:00:00' means 7 days
-        var retval = await _setApplicantStatus(conn, apply_id, 'T');               // 'T' means to mark applicant record status as timeout.
+        let retval = await _setApplicantStatus(conn, apply_id, 'T');               // 'T' means to mark applicant record status as timeout.
         if (retval.ok) {
           applicant = {exist: true, apply_id: apply_id, status: 'T'};
         }
@@ -4528,8 +4524,8 @@ async function _retrieveApplicantInfo(conn, token) {
 
 
 exports.checkApplicantInfo = async function(msg_pool, token) {
-  var conn, applicant, html;
-  var result = {ok: true, msg: '', err_type: 0, apply_id: 0};
+  let conn, applicant, html;
+  let result = {ok: true, msg: '', err_type: 0, apply_id: 0};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -4541,7 +4537,7 @@ exports.checkApplicantInfo = async function(msg_pool, token) {
         //-- If everything is OK, turn applicant status to 'S' temporary, in order to ensure the same    --//
         //-- person to create his/her user account in the entire process. Note: Current applicant status --//
         //-- is 'A', it needs to change it to 'S' temporary.                                             --//        
-        var retval = await _setApplicantStatus(conn, applicant.apply_id, 'S');
+        let retval = await _setApplicantStatus(conn, applicant.apply_id, 'S');
         if (retval.ok) {        
           result.apply_id = applicant.apply_id;
           result.ok = true;
@@ -4587,7 +4583,7 @@ exports.checkApplicantInfo = async function(msg_pool, token) {
 
 
 exports.verifyApplicantToken = async function(msg_pool, token, apply_id) {
-  var conn, sql, param, data, is_valid_token;
+  let conn, sql, param, data, is_valid_token;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -4605,7 +4601,7 @@ exports.verifyApplicantToken = async function(msg_pool, token, apply_id) {
     
     if (is_valid_token) {
       //-- Correct token has been given, so turn applicant's status from 'S' to 'A' again. --//
-      var retval = await _setApplicantStatus(conn, apply_id, 'A');
+      let retval = await _setApplicantStatus(conn, apply_id, 'A');
       if (!retval.ok) {
         throw new Error('Unable to switch to user account creation ready mode, please contact your referrer now.');
       }
@@ -4623,7 +4619,7 @@ exports.verifyApplicantToken = async function(msg_pool, token, apply_id) {
 
 
 exports.checkApplicantToken = async function(msg_pool, token, apply_id) {
-  var conn, sql, param, data, is_valid_token;
+  let conn, sql, param, data, is_valid_token;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -4651,8 +4647,8 @@ exports.checkApplicantToken = async function(msg_pool, token, apply_id) {
 
 
 async function _getReferUserInfo(conn, apply_id) {
-  var sql, param, data;
-  var result = {user_id: 0, name: '', user_role: 0};
+  let sql, param, data;
+  let result = {user_id: 0, name: '', user_role: 0};
   
   try {
     sql = `SELECT a.user_id, a.user_alias, a.name, a.user_role ` + 
@@ -4668,7 +4664,7 @@ async function _getReferUserInfo(conn, apply_id) {
     if (data.length > 0) {
       //-- Note: It may have more than one record, but using same email address means they are referred to --//
       //--       the same person. So, just accept the first record is good enough.                         --// 
-      var name = (wev.allTrim(data[0].user_alias) != '')? data[0].user_alias : data[0].name;       
+      let name = (wev.allTrim(data[0].user_alias) != '')? data[0].user_alias : data[0].name;       
       result = {user_id: data[0].user_id, name: name, user_role: data[0].user_role};
     }      
     else {
@@ -4684,8 +4680,8 @@ async function _getReferUserInfo(conn, apply_id) {
 
 
 async function _informSysAdminNewUserIsCreated(conn, referrer, name, user, alias) {
-  var subject, mail_content;
-  var result = {ok: true, msg: ''};
+  let subject, mail_content;
+  let result = {ok: true, msg: ''};
 
   try {
     subject = "New member has joined";
@@ -4765,8 +4761,8 @@ exports.goCreateUserAccount = async function(msg_pool, apply_id, name, user, ali
 
 
 exports.confirmPromoteSelectedUsers = async function(msg_pool, op, promote_users) {
-  var conn, sql, param, sql_tx_on;
-  var retval = {ok: true, msg: ''};
+  let conn, sql, param, sql_tx_on;
+  let retval = {ok: true, msg: ''};
 
   sql_tx_on = false;
 
@@ -4776,8 +4772,8 @@ exports.confirmPromoteSelectedUsers = async function(msg_pool, op, promote_users
     if (await dbs.startTransaction(conn)) {
       sql_tx_on = true;
       
-      for (var i = 0; i < promote_users.length; i++) {
-        var this_user_id = promote_users[i];
+      for (let i = 0; i < promote_users.length; i++) {
+        let this_user_id = promote_users[i];
         
         sql = `UPDATE user_list ` +
               `  SET user_role = ? ` +
@@ -4806,8 +4802,8 @@ exports.confirmPromoteSelectedUsers = async function(msg_pool, op, promote_users
 
 
 exports.confirmDemoteSelectedUsers = async function(msg_pool, op, demote_users) {
-  var conn, sql, param, role, sql_tx_on;
-  var retval = {ok: true, msg: ''};
+  let conn, sql, param, role, sql_tx_on;
+  let retval = {ok: true, msg: ''};
 
   sql_tx_on = false;
   role = op - 1;
@@ -4818,8 +4814,8 @@ exports.confirmDemoteSelectedUsers = async function(msg_pool, op, demote_users) 
     if (await dbs.startTransaction(conn)) {
       sql_tx_on = true;
       
-      for (var i = 0; i < demote_users.length; i++) {
-        var this_user_id = demote_users[i];
+      for (let i = 0; i < demote_users.length; i++) {
+        let this_user_id = demote_users[i];
         
         sql = `UPDATE user_list ` +
               `  SET user_role = ? ` +
@@ -4856,8 +4852,8 @@ exports.confirmDemoteSelectedUsers = async function(msg_pool, op, demote_users) 
 
 
 exports.confirmLockUnlockSelectedUsers = async function(msg_pool, op, select_users) {
-  var conn, sql, param, status, sql_tx_on;
-  var retval = {ok: true, msg: ''};
+  let conn, sql, param, status, sql_tx_on;
+  let retval = {ok: true, msg: ''};
 
   sql_tx_on = false;
   status = (op == 1)? "D" : "A";
@@ -4868,8 +4864,8 @@ exports.confirmLockUnlockSelectedUsers = async function(msg_pool, op, select_use
     if (await dbs.startTransaction(conn)) {
       sql_tx_on = true;
       
-      for (var i = 0; i < select_users.length; i++) {
-        var this_user_id = select_users[i];
+      for (let i = 0; i < select_users.length; i++) {
+        let this_user_id = select_users[i];
         
         sql = `UPDATE user_list ` +
               `  SET status = ? ` +
@@ -4906,7 +4902,7 @@ exports.confirmLockUnlockSelectedUsers = async function(msg_pool, op, select_use
 
 
 async function _removeMainSites(conn) {
-  var sql;
+  let sql;
   
   try {
     sql = `DELETE FROM sites`;
@@ -4919,7 +4915,7 @@ async function _removeMainSites(conn) {
 
 
 async function _addSite(conn, site_dns, site_type) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `INSERT INTO sites ` +
@@ -4937,8 +4933,8 @@ async function _addSite(conn, site_dns, site_type) {
 
 
 exports.saveMainSites = async function(msg_pool, decoy_site, message_site) {
-  var conn, sql_tx_on;
-  var retval = {ok: true, msg: ''};
+  let conn, sql_tx_on;
+  let retval = {ok: true, msg: ''};
   
   sql_tx_on = false;
   
@@ -4969,7 +4965,7 @@ exports.saveMainSites = async function(msg_pool, decoy_site, message_site) {
 
 
 async function _addNewEmailSender(conn, email, m_user, m_pass, smtp_server, port) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `INSERT INTO sys_email_sender ` +
@@ -4987,7 +4983,7 @@ async function _addNewEmailSender(conn, email, m_user, m_pass, smtp_server, port
 
 
 async function _modifyEmailSender(conn, ms_id, email, m_user, m_pass, smtp_server, port) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `UPDATE sys_email_sender ` +
@@ -5008,7 +5004,7 @@ async function _modifyEmailSender(conn, ms_id, email, m_user, m_pass, smtp_serve
 
 
 async function _deleteEmailSender(conn, ms_id) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM sys_email_sender ` +
@@ -5024,8 +5020,8 @@ async function _deleteEmailSender(conn, ms_id) {
 
 
 exports.saveEmailSender = async function(msg_pool, op, ms_id, email, m_user, m_pass, smtp_server, port) {
-  var conn;
-  var retval = {ok: true, msg: ''};
+  let conn;
+  let retval = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -5065,7 +5061,7 @@ exports.saveEmailSender = async function(msg_pool, op, ms_id, email, m_user, m_p
 
 
 async function _isDecoySiteExist(conn, site_url) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` +
@@ -5086,7 +5082,7 @@ async function _isDecoySiteExist(conn, site_url) {
 
 
 async function _addNewDecoySite(conn, site_url, key_words) {
-  var sql, param;
+  let sql, param;
   
   try {
     if (await _isDecoySiteExist(conn, site_url)) {
@@ -5109,7 +5105,7 @@ async function _addNewDecoySite(conn, site_url, key_words) {
 
 
 async function _modifyDecoySite(conn, site_url_old, site_url, key_words) {
-  var sql_tx_on = false;
+  let sql_tx_on = false;
   
   try {
     site_url_old = wev.allTrim(site_url_old);    
@@ -5145,7 +5141,7 @@ async function _modifyDecoySite(conn, site_url_old, site_url, key_words) {
 
 
 async function _updateDecoySite(conn, site_url_old, site_url, key_words) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `UPDATE decoy_sites ` +
@@ -5163,7 +5159,7 @@ async function _updateDecoySite(conn, site_url_old, site_url, key_words) {
 
 
 async function _deleteDecoySite(conn, site_url) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM decoy_sites ` +
@@ -5179,8 +5175,8 @@ async function _deleteDecoySite(conn, site_url) {
 
 
 exports.saveDecoySite = async function(msg_pool, op, site_url_old, site_url, key_words) {
-  var conn;
-  var retval = {ok: true, msg: ''};
+  let conn;
+  let retval = {ok: true, msg: ''};
 
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -5210,7 +5206,7 @@ exports.saveDecoySite = async function(msg_pool, op, site_url_old, site_url, key
 
 
 async function _isFileTypeExist(conn, file_ext) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT ftype_id ` +
@@ -5236,7 +5232,7 @@ async function _isFileTypeExist(conn, file_ext) {
 
 
 async function _addFileType(conn, file_ext, file_type) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `INSERT INTO file_type ` +
@@ -5254,7 +5250,7 @@ async function _addFileType(conn, file_ext, file_type) {
 
 
 async function _addNewFileType(conn, file_ext, file_type) {
-  var ftype_id = 0;
+  let ftype_id = 0;
   
   try {
     ftype_id = await _isFileTypeExist(conn, file_ext);
@@ -5273,7 +5269,7 @@ async function _addNewFileType(conn, file_ext, file_type) {
 
 
 async function _updateFileType(conn, ftype_id, file_ext, file_type) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `UPDATE file_type ` +
@@ -5291,7 +5287,7 @@ async function _updateFileType(conn, ftype_id, file_ext, file_type) {
 
 
 async function _modifyFileType(conn, ftype_id, file_ext, file_type) {
-  var new_ftype_id, sql_tx_on;
+  let new_ftype_id, sql_tx_on;
   
   try {
     sql_tx_on = false;
@@ -5330,7 +5326,7 @@ async function _modifyFileType(conn, ftype_id, file_ext, file_type) {
 
 
 async function _deleteFileType(conn, ftype_id) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM file_type ` +
@@ -5346,8 +5342,8 @@ async function _deleteFileType(conn, ftype_id) {
 
 
 exports.saveFileTypes = async function(msg_pool, op, ftype_id, file_ext, file_type) {
-  var conn;
-  var retval = {ok: true, msg: ''};
+  let conn;
+  let retval = {ok: true, msg: ''};
 
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -5377,7 +5373,7 @@ exports.saveFileTypes = async function(msg_pool, op, ftype_id, file_ext, file_ty
 
 
 async function _modifySysSetting(conn, sys_key_old, sys_key, sys_value) {
-  var sql, param;
+  let sql, param;
   
   try {
     if (sys_key_old == sys_key) {
@@ -5399,8 +5395,8 @@ async function _modifySysSetting(conn, sys_key_old, sys_key, sys_value) {
 
 
 exports.saveSystemSetting = async function(msg_pool, op, sys_key_old, sys_key, sys_value) {
-  var conn;
-  var retval = {ok: true, msg: ''};
+  let conn;
+  let retval = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -5424,7 +5420,7 @@ exports.saveSystemSetting = async function(msg_pool, op, sys_key_old, sys_key, s
 
 
 async function _deleteBotProfile(conn) {
-  var sql;
+  let sql;
   
   try {
     sql = `DELETE FROM tg_bot_profile`;
@@ -5437,7 +5433,7 @@ async function _deleteBotProfile(conn) {
 
 
 async function _addBotProfile(conn, bot_name, bot_username, http_api_token) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `INSERT INTO tg_bot_profile ` +
@@ -5455,8 +5451,8 @@ async function _addBotProfile(conn, bot_name, bot_username, http_api_token) {
 
 
 exports.saveTelegramBotProfile = async function(msg_pool, bot_name, bot_username, http_api_token) {
-  var conn, sql_tx_on;
-  var retval = {ok: true, msg: ''};
+  let conn, sql_tx_on;
+  let retval = {ok: true, msg: ''};
   
   sql_tx_on = false;
   
@@ -5488,7 +5484,7 @@ exports.saveTelegramBotProfile = async function(msg_pool, bot_name, bot_username
 
 
 async function _deleteDatabase(conn, db_name) {
-  var sql, param, data;
+  let sql, param, data;
   
   try {
     sql = `SELECT table_name ` +
@@ -5499,8 +5495,8 @@ async function _deleteDatabase(conn, db_name) {
     param = [db_name];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
-    for (var i = 0; i < data.length; i++) {
-      var this_table = data[i].table_name;
+    for (let i = 0; i < data.length; i++) {
+      let this_table = data[i].table_name;
       
       sql = `DELETE FROM ${this_table}`;
       await dbs.sqlExec(conn, sql);
@@ -5520,7 +5516,7 @@ async function _deleteDatabase(conn, db_name) {
 
 
 async function _deleteAllFiles() {
-  var command, console_result;
+  let command, console_result;
   
   try {    
     command = "rm -rf /www/sms2/itnews/*";
@@ -5539,7 +5535,7 @@ async function _deleteAllFiles() {
 
 
 exports.destroyEntireSystem = async function(msg_pool, pda_pool) {
-  var conn_msg, conn_pda, ok;
+  let conn_msg, conn_pda, ok;
   
   try {
     ok = true;

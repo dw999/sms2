@@ -32,6 +32,7 @@
 // V2.0.03       2025-06-27      DW              Show timestamp on error message.
 // V2.0.04       2025-07-08      DW              Use database connection pool to avoid database 
 //                                               connection timeout issue.
+// V2.0.05       2026-01-30      DW              Refine scope of variables declare in this library.  
 //##########################################################################################
 
 "use strict";
@@ -45,7 +46,7 @@ var msg_pool = dbs.createConnectionPool('COOKIE_MSG', 1);
 
 
 async function _deleteInformRecordWithError(conn, error_limit) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM new_msg_inform ` +
@@ -61,8 +62,8 @@ async function _deleteInformRecordWithError(conn, error_limit) {
 
 
 async function _getInformRecords(conn) {
-  var sql, data;
-  var result = [];
+  let sql, data;
+  let result = [];
   
   try {
     sql = `SELECT a.user_id, DATE_FORMAT(a.period, '%Y-%m-%d %H:%i:%s') AS period, b.email, b.tg_id, b.status ` +
@@ -72,7 +73,7 @@ async function _getInformRecords(conn) {
           
     data = JSON.parse(await dbs.sqlQuery(conn, sql));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push({user_id: data[i].user_id, period: data[i].period, email: data[i].email, tg_id: data[i].tg_id, status: data[i].status});
     }      
   }
@@ -85,10 +86,10 @@ async function _getInformRecords(conn) {
 
 
 async function _hasBeenInformed(user_id, informed_users) {
-  var result = false;
+  let result = false;
   
   try {
-    for (var i = 0; i < informed_users.length; i++) {
+    for (let i = 0; i < informed_users.length; i++) {
       if (informed_users[i] == user_id) {
         result = true;
         break;
@@ -104,8 +105,8 @@ async function _hasBeenInformed(user_id, informed_users) {
 
 
 async function _isUserOnline(conn, user_id) {
-  var sql, param, data;
-  var result = false;
+  let sql, param, data;
+  let result = false;
   
   try {
     sql = `SELECT status, TIMESTAMPDIFF(second, CURRENT_TIMESTAMP(), sess_until) AS timeout  ` +
@@ -136,7 +137,7 @@ async function _isUserOnline(conn, user_id) {
 
 
 async function _deleteInformRecord(conn, user_id, period) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM new_msg_inform ` +
@@ -153,19 +154,19 @@ async function _deleteInformRecord(conn, user_id, period) {
 
 
 async function informUserHasNewMessage(interval) {
-  var scheduler_id;
+  let scheduler_id;
 
   //-- Run "_informUserHasNewMessage()" immediately, then put it into a scheduler. --//
   await _informUserHasNewMessage();
   scheduler_id = setInterval(_informUserHasNewMessage, interval);  
   
   async function _informUserHasNewMessage() {
-    var conn, url, subject, body, api, has_tg_bot, bot_ok;
-    var mail_worker = {email:'', m_user:'', m_pass:'', smtp_server:'', port:0};
-    var informed_user = {};
-    var tg_bot_profile = {bot_name:'', bot_username:'', http_api_token:''};
-    var inform_rec = [];
-    var informed_users = [];
+    let conn, url, subject, body, api, has_tg_bot, bot_ok;
+    let mail_worker = {email:'', m_user:'', m_pass:'', smtp_server:'', port:0};
+    let informed_user = {};
+    let tg_bot_profile = {bot_name:'', bot_username:'', http_api_token:''};
+    let inform_rec = [];
+    let informed_users = [];
     
     try {
       //conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
@@ -186,13 +187,13 @@ async function informUserHasNewMessage(interval) {
       
       inform_rec = await _getInformRecords(conn);
       
-      for (var i = 0; i < inform_rec.length; i++) {
-        var to_user_id = inform_rec[i].user_id;
-        var status = wev.allTrim(inform_rec[i].status);
-        var period = inform_rec[i].period;
-        var to_mail = wev.allTrim(inform_rec[i].email);
-        var tg_id = wev.allTrim(inform_rec[i].tg_id);          // It is the Telegram chat ID of this SMS user.
-        var tg_err_msg = '';
+      for (let i = 0; i < inform_rec.length; i++) {
+        let to_user_id = inform_rec[i].user_id;
+        let status = wev.allTrim(inform_rec[i].status);
+        let period = inform_rec[i].period;
+        let to_mail = wev.allTrim(inform_rec[i].email);
+        let tg_id = wev.allTrim(inform_rec[i].tg_id);          // It is the Telegram chat ID of this SMS user.
+        let tg_err_msg = '';
 
         console.log(wev.sayCurrentTime() + ` Processing user ${to_user_id} ....`);
 

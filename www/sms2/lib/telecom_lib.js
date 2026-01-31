@@ -27,6 +27,7 @@
 //                                               by the worker email server. 
 // V1.0.04       2025-07-07      DW              Include DNS name of SMS server on the data set as using remote email gateway to send
 //                                               out email.  
+// V1.0.05       2026-01-29      DW              Refine scope of variables declare in this library. 
 //#################################################################################################################################
 
 "use strict";
@@ -39,7 +40,7 @@ const cipher = require('../lib/cipher_lib.js');
 
 
 exports.telegramBotDefined = async function(conn) {
-  var tg_profile, bot_username, http_api_token, result;
+  let tg_profile, bot_username, http_api_token, result;
   
   try {
     tg_profile = await _getTelegramBotProfile(conn);
@@ -64,7 +65,7 @@ exports.telegramBotDefined = async function(conn) {
 
 
 exports.getTelegramBotApiToken = async function(conn) {
-  var tg_profile, result;
+  let tg_profile, result;
 
   try {
     tg_profile = await _getTelegramBotProfile(conn);    
@@ -80,8 +81,8 @@ exports.getTelegramBotApiToken = async function(conn) {
 
 
 async function _getTelegramBotProfile(conn) {
-  var sql, data;
-  var result = {bot_name: '', bot_username: '', http_api_token: ''};
+  let sql, data;
+  let result = {bot_name: '', bot_username: '', http_api_token: ''};
   
   try {
     sql = `SELECT bot_name, bot_username, http_api_token ` +
@@ -90,9 +91,9 @@ async function _getTelegramBotProfile(conn) {
     data = JSON.parse(await dbs.sqlQuery(conn, sql));
 
     if (data.length > 0) {
-      var bot_name = (data[0].bot_name != null)? data[0].bot_name : '';
-      var bot_username = (data[0].bot_username != null)? data[0].bot_username: '';
-      var http_api_token = (data[0].http_api_token != null)? data[0].http_api_token : '';
+      let bot_name = (data[0].bot_name != null)? data[0].bot_name : '';
+      let bot_username = (data[0].bot_username != null)? data[0].bot_username: '';
+      let http_api_token = (data[0].http_api_token != null)? data[0].http_api_token : '';
           
       result = {bot_name: bot_name, bot_username: bot_username, http_api_token: http_api_token};      
     }
@@ -106,7 +107,7 @@ async function _getTelegramBotProfile(conn) {
 
 
 exports.getTelegramBotProfile = async function(conn) {
-  var result = {bot_name: '', bot_username: '', http_api_token: ''};
+  let result = {bot_name: '', bot_username: '', http_api_token: ''};
   
   try {
     result = await _getTelegramBotProfile(conn);     
@@ -139,7 +140,7 @@ exports.sendTelegramMessage = async function(http_api_token, tg_id, message) {
 
 
 async function _selectMailWorker(conn) {
-  var sqlcmd, data, result;
+  let sqlcmd, data, result;
 
   try {
     sqlcmd = `SELECT ms_id ` +
@@ -154,8 +155,8 @@ async function _selectMailWorker(conn) {
       	result = data[0].ms_id;
       }
       else {
-        var work_list = new Array();
-        for (var i = 0; i < data.length; i++) {
+        let work_list = new Array();
+        for (let i = 0; i < data.length; i++) {
           work_list.push(data[i].ms_id);
         }
         //-- Select a email worker randomly --//
@@ -175,7 +176,7 @@ async function _selectMailWorker(conn) {
 
 
 exports.getMailWorker = async function(conn) {
-  var ms_id, sqlcmd, param, data, result;
+  let ms_id, sqlcmd, param, data, result;
 
   try {
     ms_id = await _selectMailWorker(conn);
@@ -305,7 +306,7 @@ async function _sendEmailViaGateway(email_gateway, master_passwd, site_dns, smtp
 
 
 async function _updateMasterPasswd(conn, sys_key, sys_value) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `UPDATE sys_settings ` +

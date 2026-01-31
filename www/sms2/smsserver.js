@@ -71,6 +71,10 @@
 //                                               deletion option is 'off'. Now, I set deletion option to 'on' by default.
 //
 // V2.0.15       2025-06-24      DW              Include 'user_id' into session validation checking.
+//
+// V2.0.16       2025-12-04      DW              Implement a "rolling key mechanism" in SMS to detect and prevent MITM attack.
+//
+// V2.0.17       2026-01-29      DW              Refine scope of variables declare in this main program and related libraries.             
 //#################################################################################################################################
   
 "use strict";
@@ -102,16 +106,16 @@ var port = 8444;
 var host = '127.0.0.1';
 process.argv.forEach((val, index) => {
   if (val.match(/port=/i)) {
-  	var params = val.split("=");
-  	var data = parseInt(params[1], 10);
+  	let params = val.split("=");
+  	let data = parseInt(params[1], 10);
   	if (data > 0 && data <= 65535) {
       port = data;
   	}
   }
   
   if (val.match(/ip=/i)) {
-    var params = val.split("=");
-    var data = params[1];
+    let params = val.split("=");
+    let data = params[1];
     if (isValidIp(data)) {
       host = data;
     }
@@ -120,15 +124,15 @@ process.argv.forEach((val, index) => {
 
 
 function isValidIp(ip) {
-  var valid = true;
-  var abcd = ip.split(".");
+  let valid = true;
+  let abcd = ip.split(".");
   
   if (abcd.length != 4) {
     valid = false;
   } 
   else {
-    for (var i = 0; i < abcd.length; i++) {
-      var data = parseInt(abcd[i], 10);
+    for (let i = 0; i < abcd.length; i++) {
+      let data = parseInt(abcd[i], 10);
       
       if (isNaN(data)) {
         valid = false;
@@ -638,8 +642,8 @@ app.post('/request-to-join', (req, res) => {
 
 
 app.get('/join_us', (req, res) => {
-  var decision = (typeof(req.query.S) == 'undefined')? '' : req.query.S;
-  var token = (typeof(req.query.tk) == 'undefined')? '' : req.query.tk;
+  let decision = (typeof(req.query.S) == 'undefined')? '' : req.query.S;
+  let token = (typeof(req.query.tk) == 'undefined')? '' : req.query.tk;
   
   if ((decision == 'A' || decision == 'R') && token != '') {
     //-- Note: 1. Original token contains no space characters, so that all space characters are actually '+'. --//
@@ -648,13 +652,13 @@ app.get('/join_us', (req, res) => {
     token = escape(token);  
             
     if (!wev.sqlInjectionDetect(token)) { 
-      var result = msglib.applicantApproval(msg_pool, decision, token);
+      let result = msglib.applicantApproval(msg_pool, decision, token);
       
       result.then((retval) => {
         if (retval.ok) {
-          var msg = (decision == 'A')? "Applicant is accepted, and confirmation email has been sent to him/her." : "Applicant is rejected";
+          let msg = (decision == 'A')? "Applicant is accepted, and confirmation email has been sent to him/her." : "Applicant is rejected";
           
-          var html = `
+          let html = `
           <script>
             alert("${msg}"); 
             var url = window.location.href;
@@ -666,7 +670,7 @@ app.get('/join_us', (req, res) => {
           res.send(html);                                                                                                      
         }
         else {
-          var html = `
+          let html = `
           <script>
             alert("${retval.msg}"); 
             var url = window.location.href;
@@ -680,7 +684,7 @@ app.get('/join_us', (req, res) => {
       }).catch((error) => {
         smslib.consoleLog(error);
         
-        var html = `
+        let html = `
         <script>
           alert("Error is found on applicant approval process. Error: ${error}"); 
           var url = window.location.href;
@@ -694,7 +698,7 @@ app.get('/join_us', (req, res) => {
     }
     else {
       //-- The sign of SQL injection attack is found, switch this guy away. --//
-      var result = smslib.selectSiteForHacker(msg_pool);
+      let result = smslib.selectSiteForHacker(msg_pool);
       
       result.then((url) => {
         res.redirect(url);
@@ -706,7 +710,7 @@ app.get('/join_us', (req, res) => {
   }
   else {
     //-- Arbitrary attack is found, switch this guy away. --//
-    var result = smslib.selectSiteForHacker(msg_pool);
+    let result = smslib.selectSiteForHacker(msg_pool);
     
     result.then((url) => {
       res.redirect(url);
@@ -1223,10 +1227,10 @@ app.get('/tools/notes', (req, res) => {
   let ip_addr = req.ip;
 
   if (user_id > 0 && sess_code != "") {
-    var sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
+    let sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
-        var result = smslib.printNotesList(pda_pool, user_id, list_filter);
+        let result = smslib.printNotesList(pda_pool, user_id, list_filter);
         
         result.then((html) => {
           res.send(html);
@@ -1271,38 +1275,38 @@ app.get('/tools/notes', (req, res) => {
 
 
 app.post('/tools/notes', (req, res) => {
-  var op = (typeof(req.body.op) != "string")? "" : req.body.op;        // A = Add new notes, E = Modify notes, D = Delete notes, R = Read notes, others = List notes.
-  var oper_mode = (typeof(req.body.oper_mode) != "string")? "" : req.body.oper_mode;
-  var notes_id  = (isNaN(parseInt(req.body.notes_id, 10)))? 0 : req.body.notes_id;    
-  var notes_title = (typeof(req.body.notes_title) != "string")? "" : req.body.notes_title;
-  var notes_content = (typeof(req.body.notes_content) != "string")? "" : req.body.notes_content;
-  var lstfilter = (typeof(req.body.lstfilter) != "string")? "" : req.body.lstfilter;
-  var cookie = req.cookies.PDA_USER;
-  var user_id = wev.getSessionUserId(cookie);
-  var sess_code = wev.getSessionCode(cookie);  
-  var http_user_agent = req.headers['user-agent'];
-  var ip_addr = req.ip;
+  let op = (typeof(req.body.op) != "string")? "" : req.body.op;        // A = Add new notes, E = Modify notes, D = Delete notes, R = Read notes, others = List notes.
+  let oper_mode = (typeof(req.body.oper_mode) != "string")? "" : req.body.oper_mode;
+  let notes_id  = (isNaN(parseInt(req.body.notes_id, 10)))? 0 : req.body.notes_id;    
+  let notes_title = (typeof(req.body.notes_title) != "string")? "" : req.body.notes_title;
+  let notes_content = (typeof(req.body.notes_content) != "string")? "" : req.body.notes_content;
+  let lstfilter = (typeof(req.body.lstfilter) != "string")? "" : req.body.lstfilter;
+  let cookie = req.cookies.PDA_USER;
+  let user_id = wev.getSessionUserId(cookie);
+  let sess_code = wev.getSessionCode(cookie);  
+  let http_user_agent = req.headers['user-agent'];
+  let ip_addr = req.ip;
 
   if (user_id > 0 && sess_code != "") {
-    var sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
+    let sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (op == 'A' || op == 'E' || op == 'D' || op == 'R') {        
-          var result = smslib.notesOperation(pda_pool, op, oper_mode, user_id, notes_id, notes_title, notes_content, lstfilter);
+          let result = smslib.notesOperation(pda_pool, op, oper_mode, user_id, notes_id, notes_title, notes_content, lstfilter);
           
           result.then((html) => {
             res.send(html);
           }).catch((error) => {
             smslib.consoleLog(error);
-            
-            var html = `<script>
-                          alert("Error: ${error}"); 
-                          var url = window.location.href;
-                          var host = url.split('/');
-                          location.href = host[0] + '//' + host[2] + '/tools/notes?list_filter=' + lstfilter;
-                        </script>`;
-          
-            res.send(html);                                                  
+
+            let param = {list_filter:lstfilter};
+            let result = smslib.switchToPage("/tools/notes", param, "GET", `Error: ${error}`);
+            result.then((html) => {
+              res.send(html);          
+            }).catch((error) => {
+              smslib.consoleLog(error);
+              res.redirect('/logout_pda');  
+            });
           })
         }
         else {
@@ -1311,19 +1315,24 @@ app.post('/tools/notes', (req, res) => {
       }
       else {
         //-- Invalid session, switch to login page. --//
-        res.redirect("/");                
+        let result = smslib.switchToPage("/logout_pda", null, "GET", "Session expired!");
+        result.then((html) => {
+          res.send(html);          
+        }).catch((error) => {
+          smslib.consoleLog(error);
+          res.redirect('/logout_pda');  
+        });
       }
     }).catch((error) => {
       smslib.consoleLog(error);
-      
-      var html = `<script>
-                    alert("Error is found as checking session validity, please login again. Error: ${error}"); 
-                    var url = window.location.href;
-                    var host = url.split('/');
-                    location.href = host[0] + '//' + host[2] + '/';
-                  </script>`;
-    
-      res.send(html);                                
+
+      let result = smslib.switchToPage("/logout_pda", null, "GET", `Error is found as checking session validity, please login again. Error: ${error}`);
+      result.then((html) => {
+        res.send(html);          
+      }).catch((error) => {
+        smslib.consoleLog(error);
+        res.redirect('/logout_pda');  
+      });
     });
   }
   else {
@@ -1334,53 +1343,57 @@ app.post('/tools/notes', (req, res) => {
 
 //-- Scheduler for the decoy site --//
 app.get('/tools/scheduler', (req, res) => {
-  var what_year = (typeof(req.query.what_year) != "string")? 0 : req.query.what_year;
-  var what_month = (typeof(req.query.what_month) != "string")? 0 : req.query.what_month;
-  var op = (typeof(req.query.op) != "string")? "" : req.query.op;
-  var event_id = (typeof(req.query.event_id) != "string")? 0 : req.query.event_id;
-  var call_by = (typeof(req.query.call_by) != "string")? "" : req.query.call_by;                   // Call by who?   
-  var cookie = req.cookies.PDA_USER;
-  var user_id = wev.getSessionUserId(cookie);
-  var sess_code = wev.getSessionCode(cookie);  
-  var http_user_agent = req.headers['user-agent'];
-  var ip_addr = req.ip;
+  let what_year = (typeof(req.query.what_year) != "string")? 0 : req.query.what_year;
+  let what_month = (typeof(req.query.what_month) != "string")? 0 : req.query.what_month;
+  let op = (typeof(req.query.op) != "string")? "" : req.query.op;
+  let event_id = (typeof(req.query.event_id) != "string")? 0 : req.query.event_id;
+  let call_by = (typeof(req.query.call_by) != "string")? "" : req.query.call_by;                   // Call by who?   
+  let cookie = req.cookies.PDA_USER;
+  let user_id = wev.getSessionUserId(cookie);
+  let sess_code = wev.getSessionCode(cookie);  
+  let http_user_agent = req.headers['user-agent'];
+  let ip_addr = req.ip;
 
   if (user_id > 0 && sess_code != "") {
-    var sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
+    let sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
-        var result = smslib.printCalendar(pda_pool, user_id, what_year, what_month, op, event_id, call_by);
+        let result = smslib.printCalendar(pda_pool, user_id, what_year, what_month, op, event_id, call_by);
         
         result.then((html) => {
           res.send(html);
         }).catch((error) => {
           smslib.consoleLog(error);
-          
-          var html = `<script>
-                        alert("Error is found as create scheduler page. Error: ${error}"); 
-                        var url = window.location.href;
-                        var host = url.split('/');
-                        location.href = host[0] + '//' + host[2] + '/select_tools';
-                      </script>`;
-        
-          res.send(html);                                                  
+
+          let result = smslib.switchToPage("/select_tools", null, "GET", `Error is found as create scheduler page. Error: ${error}`);
+          result.then((html) => {
+            res.send(html);          
+          }).catch((error) => {
+            smslib.consoleLog(error);
+            res.redirect('/logout_pda');  
+          });
         });
       }
       else {
         //-- Invalid session, switch to login page. --//
-        res.redirect("/");                        
+        let result = smslib.switchToPage("/logout_pda", null, "GET", "Session expired!");
+        result.then((html) => {
+          res.send(html);          
+        }).catch((error) => {
+          smslib.consoleLog(error);
+          res.redirect('/logout_pda');  
+        });
       }
     }).catch((error) => {
       smslib.consoleLog(error);
-      
-      var html = `<script>
-                    alert("Error is found as checking session validity, please login again. Error: ${error}"); 
-                    var url = window.location.href;
-                    var host = url.split('/');
-                    location.href = host[0] + '//' + host[2] + '/';
-                  </script>`;
-    
-      res.send(html);                                      
+
+      let result = smslib.switchToPage("/logout_pda", null, "GET", `Error is found as checking session validity, please login again. Error: ${error}`);
+      result.then((html) => {
+        res.send(html);          
+      }).catch((error) => {
+        smslib.consoleLog(error);
+        res.redirect('/logout_pda');  
+      });
     });
   }
   else {
@@ -1390,19 +1403,19 @@ app.get('/tools/scheduler', (req, res) => {
 
 
 function _getEventReminder(op, req) {
-  var result = [];
+  let result = [];
   
-  var keys = Object.keys(req.body);
-  for (var i = 0; i < keys.length; i++) {
-    var this_key = keys[i];
+  let keys = Object.keys(req.body);
+  for (let i = 0; i < keys.length; i++) {
+    let this_key = keys[i];
     if (this_key.match(/rd_value_/)) {
-      var idx = this_key;
+      let idx = this_key;
       idx = parseInt(idx.replace(/rd_value_/, ""), 10); 
       
       if (idx > 0) {
-        var this_rd_value = parseInt(req.body[this_key], 10);
-        var this_rd_unit = wev.allTrim(req.body['rd_unit_' + idx]);
-        var this_rd_id = (op == "E")? req.body['rd_id_' + idx] : 0;
+        let this_rd_value = parseInt(req.body[this_key], 10);
+        let this_rd_unit = wev.allTrim(req.body['rd_unit_' + idx]);
+        let this_rd_id = (op == "E")? req.body['rd_id_' + idx] : 0;
         
         if (this_rd_value > 0 && this_rd_unit != "") {
           result.push({rd_value: this_rd_value, rd_unit: this_rd_unit, rd_id: this_rd_id});
@@ -1416,34 +1429,34 @@ function _getEventReminder(op, req) {
 
 
 app.post('/tools/scheduler', (req, res) => {
-  var what_year = (typeof(req.body.what_year) != "string")? 0 : req.body.what_year;
-  var what_month = (typeof(req.body.what_month) != "string")? 0 : req.body.what_month;
-  var op = (typeof(req.body.op) != "string")? "" : req.body.op;                                  // 'A' = Add new event, 'E' = Modify event, 'D' = Delete event, 'R' = Read event, 'L' = List events, 'S' = Search event, others = Show calender.
-  var oper_mode = (typeof(req.body.oper_mode) != "string")? "" : req.body.oper_mode;             // 'S' = Save
-  var list_filter = (typeof(req.body.list_filter) != "string")? "" : req.body.list_filter;       // Key words filter on event's title for event searching.
-  var search_phase = (typeof(req.body.search_phase) != "string")? "" : wev.allTrim(req.body.search_phase);    // Text phase is used for event searching.
-  var event_id = (typeof(req.body.event_id) != "string")? 0 : req.body.event_id;
-  var event_title = (typeof(req.body.event_title) != "string")? "" : req.body.event_title; 
-  var event_detail = (typeof(req.body.event_detail) != "string")? "" : req.body.event_detail;
-  var event_start = (typeof(req.body.event_start) != "string")? "" : req.body.event_start;
-  var event_end = (typeof(req.body.event_end) != "string")? "" : req.body.event_end;
-  var has_reminder = (typeof(req.body.has_reminder) != "string")? 0 : parseInt(req.body.has_reminder, 10);    // 0 = No reminder, 1 = has reminder.
-  var reminder = (has_reminder == 1)? _getEventReminder(op, req) : [];
-  var call_by = (typeof(req.body.call_by) != "string")? "" : req.body.call_by;                   // Call by who?   
+  let what_year = (typeof(req.body.what_year) != "string")? 0 : req.body.what_year;
+  let what_month = (typeof(req.body.what_month) != "string")? 0 : req.body.what_month;
+  let op = (typeof(req.body.op) != "string")? "" : req.body.op;                                  // 'A' = Add new event, 'E' = Modify event, 'D' = Delete event, 'R' = Read event, 'L' = List events, 'S' = Search event, others = Show calender.
+  let oper_mode = (typeof(req.body.oper_mode) != "string")? "" : req.body.oper_mode;             // 'S' = Save
+  let list_filter = (typeof(req.body.list_filter) != "string")? "" : req.body.list_filter;       // Key words filter on event's title for event searching.
+  let search_phase = (typeof(req.body.search_phase) != "string")? "" : wev.allTrim(req.body.search_phase);    // Text phase is used for event searching.
+  let event_id = (typeof(req.body.event_id) != "string")? 0 : req.body.event_id;
+  let event_title = (typeof(req.body.event_title) != "string")? "" : req.body.event_title; 
+  let event_detail = (typeof(req.body.event_detail) != "string")? "" : req.body.event_detail;
+  let event_start = (typeof(req.body.event_start) != "string")? "" : req.body.event_start;
+  let event_end = (typeof(req.body.event_end) != "string")? "" : req.body.event_end;
+  let has_reminder = (typeof(req.body.has_reminder) != "string")? 0 : parseInt(req.body.has_reminder, 10);    // 0 = No reminder, 1 = has reminder.
+  let reminder = (has_reminder == 1)? _getEventReminder(op, req) : [];
+  let call_by = (typeof(req.body.call_by) != "string")? "" : req.body.call_by;                   // Call by who?   
   //-- Below variables are taken from the cookie --//  
-  var cookie = req.cookies.PDA_USER;
-  var user_id = wev.getSessionUserId(cookie);
-  var sess_code = wev.getSessionCode(cookie);  
-  var http_user_agent = req.headers['user-agent'];
-  var ip_addr = req.ip;
+  let cookie = req.cookies.PDA_USER;
+  let user_id = wev.getSessionUserId(cookie);
+  let sess_code = wev.getSessionCode(cookie);  
+  let http_user_agent = req.headers['user-agent'];
+  let ip_addr = req.ip;
 
   if (user_id > 0 && sess_code != "") {
-    var sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
+    let sess_checker = smslib.isSessionValid(pda_pool, user_id, sess_code, true, 'PDA');
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (op == "A") {
           if (oper_mode == 'S') {
-            var result = smslib.addNewEvent(pda_pool, user_id, event_title, event_detail, event_start, event_end, reminder);
+            let result = smslib.addNewEvent(pda_pool, user_id, event_title, event_detail, event_start, event_end, reminder);
             
             result.then((retval) => {
               if (retval.ok) {
@@ -1452,7 +1465,7 @@ app.post('/tools/scheduler', (req, res) => {
               else {
                 smslib.consoleLog(retval.msg);
                 
-                var html = `<script>
+                let html = `<script>
                               alert("Unable to add new event. Error: ${retval.msg}"); 
                               var url = window.location.href;
                               var host = url.split('/');
@@ -1464,7 +1477,7 @@ app.post('/tools/scheduler', (req, res) => {
             }).catch((error) => {
               smslib.consoleLog(error);
               
-              var html = `<script>
+              let html = `<script>
                             alert("Error is found as adding new event. Error: ${error}"); 
                             var url = window.location.href;
                             var host = url.split('/');
@@ -1475,14 +1488,14 @@ app.post('/tools/scheduler', (req, res) => {
             });            
           }
           else {
-            var result = smslib.printAddEventForm(pda_pool, user_id, op, oper_mode, what_year, what_month, event_start, event_end, event_title, event_detail);
+            let result = smslib.printAddEventForm(pda_pool, user_id, op, oper_mode, what_year, what_month, event_start, event_end, event_title, event_detail);
             
             result.then((html) => {
               res.send(html);
             }).catch((error) => {
               smslib.consoleLog(error);
               
-              var html = `<script>
+              let html = `<script>
                             alert("Error is found as build event adding form. Error: ${error}"); 
                             var url = window.location.href;
                             var host = url.split('/');
@@ -1495,7 +1508,7 @@ app.post('/tools/scheduler', (req, res) => {
         }
         else if (op == "E") {
           if (oper_mode == "S") {
-            var result = smslib.updateEvent(pda_pool, user_id, event_id, event_title, event_detail, event_start, event_end, reminder);
+            let result = smslib.updateEvent(pda_pool, user_id, event_id, event_title, event_detail, event_start, event_end, reminder);
             
             result.then((retval) => {
               if (retval.ok) {
@@ -1504,7 +1517,7 @@ app.post('/tools/scheduler', (req, res) => {
               else {
                 smslib.consoleLog(retval.msg);
                 
-                var html = `<script>
+                let html = `<script>
                               alert("Error is found as update event. Error: ${retval.msg}"); 
                               var url = window.location.href;
                               var host = url.split('/');
@@ -1516,7 +1529,7 @@ app.post('/tools/scheduler', (req, res) => {
             }).catch((error) => {
               smslib.consoleLog(error);
               
-              var html = `<script>
+              let html = `<script>
                             alert("Error is found as update event. Error: ${error}"); 
                             var url = window.location.href;
                             var host = url.split('/');
@@ -1527,14 +1540,14 @@ app.post('/tools/scheduler', (req, res) => {
             });              
           }
           else {
-            var result = smslib.printEditEventForm(pda_pool, user_id, op, oper_mode, what_year, what_month, event_id, has_reminder, call_by);
+            let result = smslib.printEditEventForm(pda_pool, user_id, op, oper_mode, what_year, what_month, event_id, has_reminder, call_by);
             
             result.then((html) => {
               res.send(html);
             }).catch((error) => {
               smslib.consoleLog(error);
               
-              var html = `<script>
+              let html = `<script>
                             alert("Error is found as build event editing form. Error: ${error}"); 
                             var url = window.location.href;
                             var host = url.split('/');
@@ -1546,7 +1559,7 @@ app.post('/tools/scheduler', (req, res) => {
           }
         }
         else if (op == "D") {
-          var result = smslib.deleteEvent(pda_pool, event_id);
+          let result = smslib.deleteEvent(pda_pool, event_id);
           
           result.then((retval) => {
             if (retval.ok) {
@@ -1555,7 +1568,7 @@ app.post('/tools/scheduler', (req, res) => {
             else {
               smslib.consoleLog(error);
               
-              var html = `<script>
+              let html = `<script>
                             alert("Error is found as delete scheduled event. Error: ${retval.msg}"); 
                             var url = window.location.href;
                             var host = url.split('/');
@@ -1567,7 +1580,7 @@ app.post('/tools/scheduler', (req, res) => {
           }).catch((error) => {
             smslib.consoleLog(error);
             
-            var html = `<script>
+            let html = `<script>
                           alert("Unable to delete scheduled event. Error: ${error}"); 
                           var url = window.location.href;
                           var host = url.split('/');
@@ -1578,14 +1591,14 @@ app.post('/tools/scheduler', (req, res) => {
           });          
         }
         else if (op == "R") {
-          var result = smslib.printReadEventForm(pda_pool, user_id, op, oper_mode, what_year, what_month, event_id, has_reminder, call_by, search_phase);
+          let result = smslib.printReadEventForm(pda_pool, user_id, op, oper_mode, what_year, what_month, event_id, has_reminder, call_by, search_phase);
           
           result.then((html) => {
             res.send(html);
           }).catch((error) => {
             smslib.consoleLog(error);
             
-            var html = `<script>
+            let html = `<script>
                           alert("Error is found as build event reading page. Error: ${error}"); 
                           var url = window.location.href;
                           var host = url.split('/');
@@ -1596,14 +1609,14 @@ app.post('/tools/scheduler', (req, res) => {
           });
         }
         else if (op == "L") {
-          var result = smslib.printEventList(pda_pool, op, oper_mode, user_id, what_year, what_month);
+          let result = smslib.printEventList(pda_pool, op, oper_mode, user_id, what_year, what_month);
           
           result.then((html) => {
             res.send(html);
           }).catch((error) => {
             smslib.consoleLog(error);
             
-            var html = `<script>
+            let html = `<script>
                           alert("Error is found as build event listing page. Error: ${error}"); 
                           var url = window.location.href;
                           var host = url.split('/');
@@ -1615,14 +1628,14 @@ app.post('/tools/scheduler', (req, res) => {
         }
         else if (op == "S") {
           if (search_phase != "") {
-            var result = smslib.printSearchResult(pda_pool, op, user_id, what_year, what_month, search_phase);
+            let result = smslib.printSearchResult(pda_pool, op, user_id, what_year, what_month, search_phase);
             
             result.then((html) => {
               res.send(html);
             }).catch((error) => {
               smslib.consoleLog(error);
               
-              var html = `<script>
+              let html = `<script>
                             alert("Error is found as build event searching result. Error: ${error}"); 
                             var url = window.location.href;
                             var host = url.split('/');
@@ -1633,14 +1646,14 @@ app.post('/tools/scheduler', (req, res) => {
             });
           }
           else {
-            var result = smslib.printSearchForm(op, what_year, what_month);
+            let result = smslib.printSearchForm(op, what_year, what_month);
             
             result.then((html) => {
               res.send(html);
             }).catch((error) => {
               smslib.consoleLog(error);
               
-              var html = `<script>
+              let html = `<script>
                             alert("Error is found as build event searching page. Error: ${error}"); 
                             var url = window.location.href;
                             var host = url.split('/');
@@ -1656,19 +1669,25 @@ app.post('/tools/scheduler', (req, res) => {
         }        
       }
       else {
-        res.redirect("/");  
+        //-- Invalid session, switch to login page. --//
+        let result = smslib.switchToPage("/logout_pda", null, "GET", "Session expired!");
+        result.then((html) => {
+          res.send(html);          
+        }).catch((error) => {
+          smslib.consoleLog(error);
+          res.redirect('/logout_pda');  
+        });
       }
     }).catch((error) => {
       smslib.consoleLog(error);
-      
-      var html = `<script>
-                    alert("Error is found as checking session validity, please login again. Error: ${error}"); 
-                    var url = window.location.href;
-                    var host = url.split('/');
-                    location.href = host[0] + '//' + host[2] + '/';
-                  </script>`;
-    
-      res.send(html);                                      
+
+      let result = smslib.switchToPage("/logout_pda", null, "GET", `Error is found as checking session validity, please login again. Error: ${error}`);
+      result.then((html) => {
+        res.send(html);          
+      }).catch((error) => {
+        smslib.consoleLog(error);
+        res.redirect('/logout_pda');  
+      });
     });
   }
   else {
@@ -3918,7 +3937,7 @@ app.post('/demote_select_user', (req, res) => {
               });
             }
             else {
-              var result = smslib.printDemoteSelectUserForm(msg_pool, op, user_id);
+              let result = smslib.printDemoteSelectUserForm(msg_pool, op, user_id);
               
               result.then((html) => {
                 res.send(html);
@@ -4020,7 +4039,7 @@ app.post('/demote_confirm_user', (req, res) => {
     let sess_checker = smslib.isSessionValidEx(msg_pool, user_id, sess_code, enc_roll_rec, true, 'MSG');    
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
-        var checker = msglib.isSystemAdmin(msg_pool, user_id);
+        let checker = msglib.isSystemAdmin(msg_pool, user_id);
         
         checker.then((is_sys_admin) => {
           if (is_sys_admin) {
@@ -4042,7 +4061,7 @@ app.post('/demote_confirm_user', (req, res) => {
                   //--       locates in a page which is no websocket connection, then he/she won't be forced logout      --//
                   //--       immediately. However, since his/her session record has been deleted, he/she can't perform   --//
                   //--       further action, and once he/she switch page, he/she will be sent to login page immediately. --// 
-                  var result = smslib.buildForceLogoutHTML(msg_pool, demote_users, "Users are demoted successfully.", "/message");
+                  let result = smslib.buildForceLogoutHTML(msg_pool, demote_users, "Users are demoted successfully.", "/message");
                   
                   result.then((html) => {
                     res.send(html);
@@ -6324,9 +6343,9 @@ app.post('/admin/modify_sys_setting', (req, res) => {
           }
           else {
             //-- It is a suspicious activity, log it down and logout this user. --//
-            var msg = `modify_sys_setting: User ${user_id} tries to use this function to amend system settings, but he/she is not system administrator! Check for it.`;          
+            let msg = `modify_sys_setting: User ${user_id} tries to use this function to amend system settings, but he/she is not system administrator! Check for it.`;          
             smslib.consoleLog(msg);
-            var result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
+            let result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
             result.then((ok) => {
               res.redirect('/logout_msg');  
             }).catch((error) => {
@@ -7292,9 +7311,9 @@ app.post('/load_message', (req, res) => {
         }
         else {
           //-- It is a suspicious activity, log it down and logout this user. --//
-          var msg = `load_message: User ${user_id} tries to steal messages from another user ${curr_user_id}! Check for it.`;          
+          let msg = `load_message: User ${user_id} tries to steal messages from another user ${curr_user_id}! Check for it.`;          
           smslib.consoleLog(msg);
-          var result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
+          let result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
           result.then((ok) => {
             let message = [];
             message.push("You have no right to read messages of another user!");
@@ -7326,58 +7345,66 @@ app.post('/load_message', (req, res) => {
 
 
 app.post('/check_message_update_token', (req, res) => {
-  var group_id = req.body.group_id;
-  var curr_user_id = req.body.user_id;
-  var cookie = req.cookies.MSG_USER;
-  var user_id = wev.getSessionUserId(cookie);  
-  var sess_code = wev.getSessionCode(cookie);  
-  var http_user_agent = req.headers['user-agent'];
-  var ip_addr = req.ip;
+  let group_id = req.body.group_id;
+  let curr_user_id = req.body.user_id;
+  let roll_rec = (typeof(req.body.roll_rec) == "undefined")? '' : wev.allTrim(req.body.roll_rec);
+  let iv_roll_rec = (typeof(req.body.iv_roll_rec) == "undefined")? '' : wev.allTrim(req.body.iv_roll_rec);
+  let roll_rec_sum = (typeof(req.body.roll_rec_sum) == "undefined")? '' : wev.allTrim(req.body.roll_rec_sum);  
+  let enc_roll_rec = {encrypted: roll_rec, iv: iv_roll_rec, digest: roll_rec_sum};  
+  let cookie = req.cookies.MSG_USER;
+  let user_id = wev.getSessionUserId(cookie);  
+  let sess_code = wev.getSessionCode(cookie);  
+  let http_user_agent = req.headers['user-agent'];
+  let ip_addr = req.ip;
     
   group_id = (typeof(group_id) == 'undefined' || group_id == null)? 0 : parseInt(group_id, 10);
   user_id = (typeof(user_id) == 'undefined' || user_id == null)? 0 : parseInt(user_id, 10);
   
   if (sess_code != '' && user_id > 0) {  
-    var sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, false, 'MSG');
+    //let sess_checker = smslib.isSessionValid(msg_pool, user_id, sess_code, false, 'MSG');
+    let sess_checker = smslib.isSessionValidEx(msg_pool, user_id, sess_code, enc_roll_rec, false, 'MSG');    
     sess_checker.then((sess_valid) => {
       if (sess_valid) {
         if (curr_user_id == user_id) {
-          var checker = msglib.checkMessageUpdateToken(msg_pool, group_id, user_id);
+          let checker = msglib.checkMessageUpdateToken(msg_pool, group_id, user_id);
           
           checker.then((token) => {
             res.send(JSON.stringify(token));          
           }).catch((error) => {
             smslib.consoleLog(error);
-            var result = {mg_status: {update_token: 'error'}};
+            let result = {mg_status: {update_token: 'error', error: error}};
             res.send(JSON.stringify(result));                                        
           });
         }
         else {
           //-- It is a suspicious activity, log it down and logout this user. --//
-          var msg = `check_message_update_token: User ${user_id} tries to pretend another user ${curr_user_id}! Check for it.`;          
+          let msg = `check_message_update_token: User ${user_id} tries to pretend another user ${curr_user_id}! Check for it.`;          
           smslib.consoleLog(msg);
-          var result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
+          let result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
           result.then((ok) => {
-            res.redirect('/logout_msg');  
+            let result = {mg_status: {update_token: 'force_logout'}};
+            res.send(JSON.stringify(result));
           }).catch((error) => {
             smslib.consoleLog(error);
-            res.redirect('/logout_msg');
+            let result = {mg_status: {update_token: 'force_logout'}};
+            res.send(JSON.stringify(result));
           });
         }        
       }
       else {
-        var result = {mg_status: {update_token: 'expired'}};
+        let result = {mg_status: {update_token: 'expired'}};
         res.send(JSON.stringify(result));
       }
     }).catch((error) => {
       smslib.consoleLog(error);
-      var result = {mg_status: {update_token: 'error'}};
+      let result = {mg_status: {update_token: 'invalid_session'}};
       res.send(JSON.stringify(result));                              
     });
   }
   else {
     //-- No session cookie is found or invalid user ID is given, return to login page immediately. --//
-    res.redirect('/');        
+    let result = {mg_status: {update_token: 'no_cookie'}};
+    res.send(JSON.stringify(result));
   }
 });
 
@@ -9937,9 +9964,9 @@ app.post('/delete_message', (req, res) => {
           }
           else {
             //-- It is a suspicious activity, log it down and logout this user. --//
-            var msg = `delete_message: User ${user_id} tries to use this function to delete message for another group ${group_id} but he/she is not member! Check for it.`;          
+            let msg = `delete_message: User ${user_id} tries to use this function to delete message for another group ${group_id} but he/she is not member! Check for it.`;          
             smslib.consoleLog(msg);
-            var result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
+            let result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
             result.then((ok) => {
               let ret_data = {mg_status: {update_token: 'hacking'}};
               res.send(JSON.stringify(ret_data));  
@@ -9952,12 +9979,12 @@ app.post('/delete_message', (req, res) => {
         });
       }
       else {
-        var ret_data = {mg_status: {update_token: 'sess_expired'}};
+        let ret_data = {mg_status: {update_token: 'sess_expired'}};
         res.send(JSON.stringify(ret_data));        
       }
     }).catch((error) => {
       smslib.consoleLog(error);
-      var ret_data = {mg_status: {update_token: 'error'}};
+      let ret_data = {mg_status: {update_token: 'error'}};
       res.send(JSON.stringify(ret_data));              
     });
   }  
@@ -10122,19 +10149,19 @@ app.get('/logout_msg', (req, res) => {
 
 
 app.get('/logout_pda', (req, res) => {
-  var cookie = req.cookies.PDA_USER;    
+  let cookie = req.cookies.PDA_USER;    
   //-- Check 'cookie' before perform JSON parsing to prevent runtime error, in case the cookie is lost. --//
-  var session = (typeof(cookie) != 'string' || wev.allTrim(cookie) == '')? {user_id: 0, sess_code: ''} : JSON.parse(cookie);   
-  var user_id = parseInt(session.user_id, 10);
-  var sess_code = session.sess_code.trim();
+  let session = (typeof(cookie) != 'string' || wev.allTrim(cookie) == '')? {user_id: 0, sess_code: ''} : JSON.parse(cookie);   
+  let user_id = parseInt(session.user_id, 10);
+  let sess_code = session.sess_code.trim();
 
   //-- Prepare an empty cookie which will be expired immediately to replace the current session cookie. --//
-  var options = {path:'/', maxAge:0, httpOnly:true, secure:true};                 
-  var values = {user_id: 0, sess_code: ''};
+  let options = {path:'/', maxAge:0, httpOnly:true, secure:true};                 
+  let values = {user_id: 0, sess_code: ''};
   values = JSON.stringify(values);
   res.cookie(COOKIE_PDA, values, options);                          // Note: COOKIE_PDA = 'PDA_USER'     
 
-  var result = smslib.deleteSession(pda_pool, sess_code, 'PDA'); 
+  let result = smslib.deleteSession(pda_pool, sess_code, 'PDA'); 
   result.then((url) => {
     res.redirect(url);    
   }).catch((error) => {
@@ -10253,10 +10280,10 @@ const wss = new ws.Server({
     if (typeof(info.req.headers['cookie']) == 'string') {   
       //-- Note: Ensure the argument which pass into 'cookie.parse' is a string, or else it will cause a runtime error --//
       //--       to crash the application.                                                                             --//      
-      var parsed_cookie = cookie.parse(info.req.headers['cookie']);
-      var cookie_value = JSON.parse(parsed_cookie.MSG_USER);
-      var user_id = parseInt(cookie_value.user_id, 10);
-      var sess_code = cookie_value.sess_code.trim();  
+      let parsed_cookie = cookie.parse(info.req.headers['cookie']);
+      let cookie_value = JSON.parse(parsed_cookie.MSG_USER);
+      let user_id = parseInt(cookie_value.user_id, 10);
+      let sess_code = cookie_value.sess_code.trim();  
 
       if (user_id > 0 && sess_code != '') {
         smslib.checkSession(msg_pool, user_id, sess_code, (error, is_valid) => {
@@ -10276,8 +10303,8 @@ const wss = new ws.Server({
 
 function wsSend(user_id, type, content) {  
   try {
-    var this_client = clients.get(user_id);
-    var clientSocket = this_client.socket;
+    let this_client = clients.get(user_id);
+    let clientSocket = this_client.socket;
     
     if (typeof(clientSocket) != 'undefined') {     
       if (clientSocket.readyState == ws.OPEN) {
@@ -10300,7 +10327,7 @@ function informUserToRefreshMessage(type, op, group_id, my_user_id) {
     msglib.getOtherGroupMembers(msg_pool, group_id, my_user_id, (error, members) => {
       if (!error) {
         if (Array.isArray(members)) {
-          for (var i = 0; i < members.length; i++) {
+          for (let i = 0; i < members.length; i++) {
             if (clients.containsKey(members[i])) {
               smslib.consoleLog(`${host}: Inform user ${members[i]} to refresh message group ${group_id}`); 
               var this_content = {op: op, group_id: group_id};
@@ -10320,9 +10347,9 @@ function informUserToRefreshMessage(type, op, group_id, my_user_id) {
 function informUserGroupDeleted(type, op, group_id, members) {
   try {
     if (Array.isArray(members)) {
-      for (var i = 0; i < members.length; i++) {
+      for (let i = 0; i < members.length; i++) {
         if (clients.containsKey(members[i].user_id)) {
-          var this_content = {op: op, group_id: group_id};
+          let this_content = {op: op, group_id: group_id};
           smslib.consoleLog(`${host}: Inform user ` + members[i].user_id + ` the message group ${group_id} has been deleted.`);
           wsSend(members[i].user_id, type, this_content); 
         }      
@@ -10338,9 +10365,9 @@ function informUserGroupDeleted(type, op, group_id, members) {
 function informUserForceLogout(type, op, users) {
   try {
     if (Array.isArray(users)) {
-      for (var i = 0; i < users.length; i++) {
+      for (let i = 0; i < users.length; i++) {
         if (clients.containsKey(users[i])) {
-          var this_content = {op: op};
+          let this_content = {op: op};
           smslib.consoleLog(`${host}: Inform user ` + users[i] + ` to logout.`);
           wsSend(users[i], type, this_content);            
         }
@@ -10362,26 +10389,26 @@ async function runNotificator() {
 
 function noticeHandler(notice) {
   if (typeof(notice) == 'object') {
-    var op = notice.op;
-    var content = notice.content;
+    let op = notice.op;
+    let content = notice.content;
     
     if (op == 'msg_refresh') {
-      var type = content.type;
-      var group_id = content.group_id;
-      var my_user_id = content.my_user_id;
+      let type = content.type;
+      let group_id = content.group_id;
+      let my_user_id = content.my_user_id;
       
       informUserToRefreshMessage(type, op, group_id, my_user_id);
     }    
     else if (op == 'group_deleted') {
-      var type = content.type;
-      var group_id = content.group_id;
-      var members = content.members;
+      let type = content.type;
+      let group_id = content.group_id;
+      let members = content.members;
       
       informUserGroupDeleted(type, op, group_id, members);
     }
     else if (op == 'force_logout') {
-      var type = content.type;
-      var users = content.users;
+      let type = content.type;
+      let users = content.users;
       
       informUserForceLogout(type, op, users);
     }
@@ -10392,32 +10419,32 @@ function noticeHandler(notice) {
 runNotificator();
 
 wss.on('connection', (socket, request) => {
-  var parsed_cookie = cookie.parse(request.headers['cookie']);
-  var cookie_value = JSON.parse(parsed_cookie.MSG_USER);
-  //-- Note: Don't create any variables named 'user_id' or 'sess_code' within this block (even they are in different scope), or else --//
-  //--       the value stored on 'user_id' or 'sess_code' will be lost.                                                              --//
-  var user_id = cookie_value.user_id;
-  var sess_code = cookie_value.sess_code;
+  let parsed_cookie = cookie.parse(request.headers['cookie']);
+  let cookie_value = JSON.parse(parsed_cookie.MSG_USER);
+  //-- Note: Don't create any other variables named 'user_id' or 'sess_code' within this block (even they are in different scope), or --//
+  //--       else the value stored on 'user_id' or 'sess_code' will be lost.                                                          --//
+  let user_id = cookie_value.user_id;
+  let sess_code = cookie_value.sess_code;
     
   //-- Save current websocket and session details to a hash table --//
   //-- Note: User id is the record key.                           --//               
-  var session = {sess_code: sess_code, socket: socket};
+  let session = {sess_code: sess_code, socket: socket};
   clients.put(user_id, session);
   
   //-- Acknowledge client side with session code, it will be used for data encryption later.  --//
   //-- Notes: 1. It also triggers the messages loading when client enter a message group.     --//
   //--        2. The data encryption key is the secure key stored in web session now, session --//
   //--           code is no longer used for data encryption.                                  --// 
-  var content = {op: 'sess_code', content: sess_code};
+  let content = {op: 'sess_code', content: sess_code};
   wsSend(user_id, 'cmd', content); 
   
   smslib.consoleLog('Websocket is connected: user_id = ' + user_id);
            
   socket.on('message', (message) => {
-    var msg = JSON.parse(message);
+    let msg = JSON.parse(message);
 
     if (msg.type == 'cmd') {
-      var msg_content = msg.content;
+      let msg_content = msg.content;
       
       if (typeof(msg_content) == 'string') {      
         if (msg.content.trim() == 'ping') {        
@@ -10447,17 +10474,17 @@ wss.on('connection', (socket, request) => {
       }
       else if (typeof(msg_content) == 'object') {
         if (msg_content.op == 'group_deleted') {
-          var group_id = msg_content.group_id;
-          var members = msg_content.members;      // members is an array
+          let group_id = msg_content.group_id;
+          let members = msg_content.members;      // members is an array
           
-          var notice = {op: msg_content.op, content: {type: msg.type, group_id: group_id, members: members}};
+          let notice = {op: msg_content.op, content: {type: msg.type, group_id: group_id, members: members}};
           notificator.notify(notice);
           smslib.consoleLog("group_deleted: User " + user_id + " has sent 'group_deleted' to notificator");
         }
         else if (msg_content.op == 'force_logout') {
-          var users = msg_content.users;          // users is an array
+          let users = msg_content.users;          // users is an array
           
-          var notice = {op: msg_content.op, content: {type: msg.type, users: users}};
+          let notice = {op: msg_content.op, content: {type: msg.type, users: users}};
           notificator.notify(notice);
           smslib.consoleLog("force_logout: User " + user_id + " has sent 'force_logout' to notificator");
         }
@@ -10465,15 +10492,15 @@ wss.on('connection', (socket, request) => {
     }
     else if (msg.type == 'msg') {
       //-- Process message related operations in here. Note: 'content' is usually an object, not plain text. --//
-      var content = msg.content;
+      let content = msg.content;
       
       if (content.op == 'msg_refresh') {
-        var group_id = content.group_id;
-        var my_user_id = content.user_id;
+        let group_id = content.group_id;
+        let my_user_id = content.user_id;
         
         //-- Inform users on all app servers to handle message refresh operation which is initiated by --//
         //-- user of this app server.                                                                  --//
-        var notice = {op: content.op, content: {type: msg.type, group_id: group_id, my_user_id: my_user_id}};
+        let notice = {op: content.op, content: {type: msg.type, group_id: group_id, my_user_id: my_user_id}};
         notificator.notify(notice);
         smslib.consoleLog("User " + my_user_id + " has sent 'msg_refresh' to notificator");
         
@@ -10487,7 +10514,7 @@ wss.on('connection', (socket, request) => {
     }    
   });
       
-  var closeSocket = function(customMessage) {
+  let closeSocket = function(customMessage) {
     smslib.consoleLog('User ' + user_id + ' has disconnected');    
     clients.remove(user_id);     // Remove disconnected user from the hash table of clients.
   }

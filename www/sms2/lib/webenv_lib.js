@@ -28,6 +28,7 @@
 // V1.0.04       2024-03-20      DW              Add functions "base64Encode" and "base64Decode".
 // V1.0.05       2025-03-13      DW              Add function "minifyJS" which is used to compress JavaScript code block.
 // V1.0.06       2025-06-09      DW              Fix a syntax error on function '_isLeapYear'.
+// V1.0.07       2026-01-29      DW              Refine scope of variables declare in this library.
 //#################################################################################################################################
 
 "use strict";
@@ -43,7 +44,7 @@ const cipher = require('../lib/cipher_lib.js');
 
 //*** Note: These system parameters should be put on database later ***//
 function _getGlobalValue(option) {
-  var value;
+  let value;
   
   switch (option.toUpperCase()) {
     case 'COOKIE_PDA':
@@ -221,7 +222,7 @@ exports.padRight = function(str, size, filler) {
 
 
 exports.back = function() {
-  var result = `<script language="javascript" type="text/javascript">
+  let result = `<script language="javascript" type="text/javascript">
                   history.go(-1);
                 </script>`;
 
@@ -236,11 +237,11 @@ function _getRandomInt(max) {
 
 //-- This function is phased out, and replaced by cipher.generateTrueRandomStr --//
 function _generateRandomStr(option, max_len) {
-  var result = '';
-  var ascii_list = new Array();
-  var max_ascii_value = 0; 
-  var stop_run = 0;
-  var cnt = 0;
+  let result = '';
+  let ascii_list = new Array();
+  let max_ascii_value = 0; 
+  let stop_run = 0;
+  let cnt = 0;
 
 	//*-- Valid options are: 'A' = Alphanumeric, 'N' = Numeric only, 'S' = English characters only. --*//
   if (typeof(option) != 'string') {
@@ -264,33 +265,33 @@ function _generateRandomStr(option, max_len) {
   
 
   if (option == 'N') {
-    for (var i = 48; i <= 57; i++) {
+    for (let i = 48; i <= 57; i++) {
     	ascii_list.push(i);
     }
 
     max_ascii_value = 57;    
   } 
   else if (option == 'S') {
-    for (var i = 65; i <= 90; i++) {
+    for (let i = 65; i <= 90; i++) {
     	ascii_list.push(i);
     }
 
-    for (var i = 97; i <= 122; i++) {
+    for (let i = 97; i <= 122; i++) {
     	ascii_list.push(i);
     }
 
     max_ascii_value = 122;
   }
   else {
-    for (var i = 48; i <= 57; i++) {
+    for (let i = 48; i <= 57; i++) {
     	ascii_list.push(i);
     }
 
-    for (var i = 65; i <= 90; i++) {
+    for (let i = 65; i <= 90; i++) {
     	ascii_list.push(i);
     }
 
-    for (var i = 97; i <= 122; i++) {
+    for (let i = 97; i <= 122; i++) {
     	ascii_list.push(i);
     }
 
@@ -298,8 +299,8 @@ function _generateRandomStr(option, max_len) {
   }
   
   while (stop_run == 0) {
-    var this_ascii = _getRandomInt(max_ascii_value);
-    var valid_value = 0;
+    let this_ascii = _getRandomInt(max_ascii_value);
+    let valid_value = 0;
 
     if (ascii_list.includes(this_ascii)) {
       result += String.fromCharCode(this_ascii);
@@ -329,10 +330,10 @@ exports.generateRandomStr = function(option, max_len) {
 
 
 exports.reverseStr = function (str) {
-  var result = '';
+  let result = '';
   
   if (typeof(str) === 'string') {
-    for (var i = str.length - 1; i >= 0; i--) {
+    for (let i = str.length - 1; i >= 0; i--) {
 	    result = result + str.charAt(i);
     }
   }
@@ -342,10 +343,10 @@ exports.reverseStr = function (str) {
 
 
 exports.asciiToHex = function(str) {
-	var arr1 = [];
+	let arr1 = [];
   
-	for (var n = 0, l = str.length; n < l; n ++) {
-		var hex = Number(str.charCodeAt(n)).toString(16);
+	for (let n = 0, l = str.length; n < l; n ++) {
+		let hex = Number(str.charCodeAt(n)).toString(16);
 		arr1.push(hex.toUpperCase());
   }
   
@@ -354,7 +355,7 @@ exports.asciiToHex = function(str) {
 
 
 async function _getSysSettingValue(conn, sys_key) {
-  var sqlcmd, param, data, result;
+  let sqlcmd, param, data, result;
   
   try {
     sqlcmd = `SELECT sys_value ` +
@@ -372,7 +373,7 @@ async function _getSysSettingValue(conn, sys_key) {
     }               
   }
   catch(e) {
-		var msg = 'Error: ' + e.message;
+		let msg = 'Error: ' + e.message;
     console.log(msg);
     result = '';    
   }
@@ -387,7 +388,7 @@ exports.getSysSettingValue = async function(conn, sys_key) {
 
 
 async function _generateSessionCode(conn, option, max_len) {  
-  var sqlcmd, param, data, stop_run, cnt, rec_cnt, sess_code;
+  let sqlcmd, param, data, stop_run, cnt, rec_cnt, sess_code;
   
   sess_code = '';
   
@@ -478,7 +479,7 @@ exports.isLeapYear = function(year) {
 
 
 async function _setSessionValidTime() {
-  var conn, sqlcmd, param, data, year, month, day, hour, min, sec, session_period, session_time_limit;
+  let conn, sqlcmd, param, data, year, month, day, hour, min, sec, session_period, session_time_limit;
   
   session_time_limit = '';
   
@@ -502,8 +503,8 @@ async function _setSessionValidTime() {
     
     //-- Last resort --//
     if (session_time_limit == '') {
-      var days_in_month = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-      var today = new Date();
+      let days_in_month = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      let today = new Date();
       year = today.getFullYear();  
       month = today.getMonth() + 1;
       day = today.getDate();
@@ -552,7 +553,7 @@ exports.setSessionValidTime = async function() {
 
 
 exports.createSessionRecord = async function(conn, user_id, aes_key, rolling_key, http_user_agent, ip_addr) {
-  var sqlcmd, param, data, sess_code, secure_key, valid_until, ip_address, result;
+  let sqlcmd, param, data, sess_code, secure_key, valid_until, ip_address, result;
 
   result = {ok: false, msg: '', sess_code: ''};
 
@@ -591,7 +592,7 @@ exports.createSessionRecord = async function(conn, user_id, aes_key, rolling_key
 
 
 exports.getSiteDNS = async function(conn, type) {
-  var sqlcmd, param, data, site_type, site_dns
+  let sqlcmd, param, data, site_type, site_dns
   
   try {
     type = _allTrim(type.toUpperCase());
@@ -628,10 +629,10 @@ exports.getSiteDNS = async function(conn, type) {
 
 
 exports.getSessionCode = function(cookie) {
-  var sess_code = '';
+  let sess_code = '';
   
   try {
-    var session = JSON.parse(cookie);
+    let session = JSON.parse(cookie);
     sess_code = session.sess_code;
   }
   catch(e) {
@@ -643,10 +644,10 @@ exports.getSessionCode = function(cookie) {
 
 
 exports.getSessionUserId = function(cookie) {
-  var user_id = 0;
+  let user_id = 0;
   
   try {
-    var session = JSON.parse(cookie);
+    let session = JSON.parse(cookie);
     user_id = parseInt(session.user_id, 10);
   }
   catch(e) {
@@ -658,14 +659,14 @@ exports.getSessionUserId = function(cookie) {
 
 
 async function _fileNameParser(file) {
-  var filename, dirs, ext;
-  var result = {filename: '', dirs: '', ext: ''};
+  let filename, dirs, ext;
+  let result = {filename: '', dirs: '', ext: ''};
   
   try {
     if (_allTrim(file) != '') {    
       //-- Note: 'filename' is the file name without extension --//
-      var fullname = path.basename(file);
-      var parts = fullname.split('.');    
+      let fullname = path.basename(file);
+      let parts = fullname.split('.');    
       if (parts.length == 1) {
         filename = fullname;
       }
@@ -674,7 +675,7 @@ async function _fileNameParser(file) {
       }
       else if (parts.length >= 3) {
         filename = parts[0];
-        for (var i = 1; i < parts.length - 1; i++) {
+        for (let i = 1; i < parts.length - 1; i++) {
           filename += '.' + parts[i];
         }
       }
@@ -694,7 +695,7 @@ async function _fileNameParser(file) {
 
 
 exports.fileNameParser = async function(file) {
-  var result = {filename: '', dirs: '', ext: ''};
+  let result = {filename: '', dirs: '', ext: ''};
   
   try {    
     result = await _fileNameParser(file);
@@ -708,7 +709,7 @@ exports.fileNameParser = async function(file) {
 
 
 exports.findFileType = async function(conn, file_ext) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   result = '';
   file_ext = file_ext.replace('.', '');
@@ -735,7 +736,7 @@ exports.findFileType = async function(conn, file_ext) {
 
 
 async function _fileExist(file) {
-  var result;
+  let result;
   
   try {
     if (fs.existsSync(file)) {
@@ -755,7 +756,7 @@ async function _fileExist(file) {
 
 
 exports.fileExist = async function(file) {
-  var result;
+  let result;
   
   try {
     result = await _fileExist(file); 
@@ -768,7 +769,7 @@ exports.fileExist = async function(file) {
 
 
 function _fileSize(file) {
-  var size = 0;
+  let size = 0;
 
   try {
     stats = fs.statSync(file);
@@ -784,7 +785,7 @@ function _fileSize(file) {
 
 
 async function _deleteFile(file) {
-  var result = true;
+  let result = true;
   
   try {
     if (_allTrim(file) != '') {
@@ -803,7 +804,7 @@ async function _deleteFile(file) {
 
 
 exports.deleteFile = async function(file) {
-  var result = true;
+  let result = true;
   
   try {
     result = await _deleteFile(file);
@@ -817,7 +818,7 @@ exports.deleteFile = async function(file) {
 
 
 exports.copyFile = async function(src, dest) {
-  var result = true;
+  let result = true;
   
   try {
     if (_fileExist(src)) {
@@ -845,7 +846,7 @@ exports.copyFile = async function(src, dest) {
 
 
 exports.fileUpload = async function (upload_file, file_path) {
-  var file, filename;  
+  let file, filename;  
 
   try {
     file = upload_file.ul_file; 
@@ -855,15 +856,15 @@ exports.fileUpload = async function (upload_file, file_path) {
     filename = file_path + '/' + decodeURIComponent(escape(file.name));
     
     if (await _fileExist(filename)) {
-      var new_filename = new Date().getTime() + '_' + decodeURIComponent(escape(file.name)); 
+      let new_filename = new Date().getTime() + '_' + decodeURIComponent(escape(file.name)); 
       filename = file_path + '/' +  new_filename;            
     }
     else {
       //-- Change file name if it is too short. It is work-around a mysterious bug as upload a new image --//
       //-- but old image with name 'image.jpg' shown on client side.                                     --//
-      var this_filename = decodeURIComponent(escape(file.name));
+      let this_filename = decodeURIComponent(escape(file.name));
       if (this_filename.length < 12) {
-        var new_filename = new Date().getTime() + '_' + decodeURIComponent(escape(file.name)); 
+        let new_filename = new Date().getTime() + '_' + decodeURIComponent(escape(file.name)); 
         filename = file_path + '/' +  new_filename;                    
       }      
     }
@@ -891,10 +892,10 @@ exports.fileUpload = async function (upload_file, file_path) {
 
 
 exports.createThumbnail = async function(src_filename, thumbnail_path) {
-  var filename, ext, tn_filename, options, thumbnail;
+  let filename, ext, tn_filename, options, thumbnail;
   
   try {
-    var fileinfo = await _fileNameParser(src_filename);
+    let fileinfo = await _fileNameParser(src_filename);
     filename = _allTrim(fileinfo.filename);
     ext = _allTrim(fileinfo.ext);
     tn_filename = thumbnail_path + '/' + filename + '.jpg';
@@ -916,7 +917,7 @@ exports.createThumbnail = async function(src_filename, thumbnail_path) {
 
 
 async function _checkFileConversionResult(input_file, output_file) {
-  var result = '';
+  let result = '';
   
   try {
     if (await _fileExist(output_file)) {
@@ -938,11 +939,11 @@ async function _checkFileConversionResult(input_file, output_file) {
 
 
 exports.convertAudioFile = async function(audio_converter, input_file) {
-  var f_name, dirs, output_file;
+  let f_name, dirs, output_file;
   
   try {
     if (await _fileExist(input_file)) {
-      var fileinfo = await _fileNameParser(input_file);
+      let fileinfo = await _fileNameParser(input_file);
       f_name = _allTrim(fileinfo.filename);
       dirs = _allTrim(fileinfo.dirs);
       output_file = `${dirs}${f_name}.ogg`;
@@ -953,7 +954,7 @@ exports.convertAudioFile = async function(audio_converter, input_file) {
       audio_converter = audio_converter.replace(/{input_file}/g, input_file).replace(/{output_file}/g, output_file);
       
       //-- Creates a new shell and executes command 'audio_converter' --//
-      var console_result = execSync(audio_converter, {timeout:120000});
+      let console_result = execSync(audio_converter, {timeout:120000});
       //console.log(console_result.toString());    // This line for debug only.
       //-- Command 'audio_converter' is executed successfully, then check the file conversion result. --//
       //-- Note: Key word 'await' can't be used within the 'exec' block directly, because it is not an async function.      --//
@@ -980,7 +981,7 @@ exports.makeUrlAlive = function(webpage) {
 
 
 exports.printHeader = function(title) {
-  var html;
+  let html;
   
   title = (typeof(title) != 'string')? '' : title;
   
@@ -999,7 +1000,7 @@ exports.printHeader = function(title) {
 
 
 async function _getDecoyCompanyName(conn) {
-  var result;
+  let result;
   
   try {
     result = await _getSysSettingValue(conn, 'decoy_company_name');
@@ -1016,7 +1017,7 @@ async function _getDecoyCompanyName(conn) {
 
 
 exports.getDecoyCompanyName = async function(conn) {
-  var result;
+  let result;
   
   try {
     result = await _getDecoyCompanyName(conn);
@@ -1030,7 +1031,7 @@ exports.getDecoyCompanyName = async function(conn) {
 
 
 exports.getDecoySiteCopyRight = async function(conn) {
-  var company_name, year, result;
+  let company_name, year, result;
   
   try {
     company_name = await _getDecoyCompanyName(conn);
@@ -1047,7 +1048,7 @@ exports.getDecoySiteCopyRight = async function(conn) {
 
 
 function _sqlInjectionDetect(str) {
-  var result = false;
+  let result = false;
   
   //-- Clearly, this function is not suitable to check a message block --//
   //-- which is freely input by users.                                 --//
@@ -1159,8 +1160,8 @@ exports.disableEmbedJavascript = function(text) {
 
 
 exports.informSystemAdmin = async function(conn, subject, mail_content) {
-  var sql, data, mail_worker;
-  var result = {ok: true, msg: ''};
+  let sql, data, mail_worker;
+  let result = {ok: true, msg: ''};
   
   try {
     mail_worker = await telecom.getMailWorker(conn);
@@ -1173,13 +1174,13 @@ exports.informSystemAdmin = async function(conn, subject, mail_content) {
             
       data = JSON.parse(await dbs.sqlQuery(conn, sql));
       
-      for (var i = 0; i < data.length; i++) {
+      for (let i = 0; i < data.length; i++) {
         //-- Note: User alias is a more secretive data, so it should not be put on email unless user name is blank. --//
-        var this_admin = (_allTrim(data[i].name) != '')? data[i].name : data[i].user_alias;    
-        var this_email = _allTrim(data[i].email);
+        let this_admin = (_allTrim(data[i].name) != '')? data[i].name : data[i].user_alias;    
+        let this_email = _allTrim(data[i].email);
         
         if (typeof(this_email) == 'string' && this_email != '') {
-          var mail_body = `Hi ${this_admin}, \n\n` +
+          let mail_body = `Hi ${this_admin}, \n\n` +
                           `${mail_content} \n\n` +
                           `Best Regards, \n` +
                           `Information Team.\n`;
@@ -1202,8 +1203,8 @@ exports.informSystemAdmin = async function(conn, subject, mail_content) {
 
 
 exports.informMember = async function(conn, user_id, subject, mail_content) {
-  var sql, data, mail_worker;
-  var result = {ok: true, msg: ''};
+  let sql, data, mail_worker;
+  let result = {ok: true, msg: ''};
 
   try {
     mail_worker = await telecom.getMailWorker(conn);
@@ -1219,11 +1220,11 @@ exports.informMember = async function(conn, user_id, subject, mail_content) {
       
       if (data.length > 0) {
         //-- Note: User alias is a more secretive data, so it should not be put on email unless user name is blank. --//
-        var this_name = (_allTrim(data[i].name) != '')? data[i].name : data[i].user_alias;    
-        var this_email = _allTrim(data[i].email);
+        let this_name = (_allTrim(data[i].name) != '')? data[i].name : data[i].user_alias;    
+        let this_email = _allTrim(data[i].email);
         
         if (typeof(this_email) == 'string' && this_email != '') {
-          var mail_body = `Hi ${this_name}, \n\n` +
+          let mail_body = `Hi ${this_name}, \n\n` +
                           `${mail_content} \n\n` +
                           `Best Regards, \n` +
                           `Information Team.\n`;
@@ -1252,7 +1253,7 @@ exports.informMember = async function(conn, user_id, subject, mail_content) {
 
 
 function _sayCurrentTime() {
-  var today, curr_time;
+  let today, curr_time;
   
   try {
     today = new Date();
@@ -1268,7 +1269,7 @@ function _sayCurrentTime() {
  
 
 exports.sayCurrentTime = function() {
-  var today, curr_time;
+  let today, curr_time;
   
   try {
     curr_time = _sayCurrentTime();    
@@ -1282,7 +1283,7 @@ exports.sayCurrentTime = function() {
 
 
 function _stripSecondAway(date_time, type) {
-  var dt_parts, time, time_parts, result;
+  let dt_parts, time, time_parts, result;
   
   try {
     if (type == "DT") {        // Data type is DATETIME
@@ -1307,7 +1308,7 @@ function _stripSecondAway(date_time, type) {
 
 
 exports.getCurrentDateTime = async function(conn, options) {
-  var sql, data, result;
+  let sql, data, result;
   
   try {
     options = (typeof(options) != "object" || typeof(options) == "undefined")? {no_sec: false} : (typeof(options.no_sec) != "boolean")? {no_sec: false} : options;
@@ -1334,7 +1335,7 @@ exports.getCurrentDateTime = async function(conn, options) {
 
 
 exports.getCurrentTime = async function(conn, options) {  
-  var sql, data, result;
+  let sql, data, result;
   
   try {
     options = (typeof(options) != "object" || typeof(options) == "undefined")? {no_sec: false} : (typeof(options.no_sec) != "boolean")? {no_sec: false} : options;
@@ -1349,8 +1350,8 @@ exports.getCurrentTime = async function(conn, options) {
   }
   catch(e) {
     //-- The last resort --//
-    var current_datetime = _sayCurrentTime();
-    var datetime_parts = current_datetime.split(" ");
+    let current_datetime = _sayCurrentTime();
+    let datetime_parts = current_datetime.split(" ");
     result = _allTrim(datetime_parts[1]);
     
     if (options.no_sec) {
@@ -1363,7 +1364,7 @@ exports.getCurrentTime = async function(conn, options) {
 
 
 exports.setHoursLater = async function(conn, datetime, hour) {
-  var sql, param, data, time_add, result;
+  let sql, param, data, time_add, result;
   
   try {
     time_add = wev.padLeft(hour, 2, "0") + ":00:00";
@@ -1376,9 +1377,9 @@ exports.setHoursLater = async function(conn, datetime, hour) {
   }
   catch(e) {
     //-- Last resort --//
-    var dt_parts = datetime.split(" ");
-    var time = _allTrim(dt_parts[1]);
-    var time_parts = time.split(":");
+    let dt_parts = datetime.split(" ");
+    let time = _allTrim(dt_parts[1]);
+    let time_parts = time.split(":");
     
     if (parseInt(time_parts[0], 10) + hour <= 23) {
       time_parts[0] = _padLeft(parseInt(time_parts[0], 10) + hour, 2, "0");       

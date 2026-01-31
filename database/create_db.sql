@@ -41,6 +41,9 @@
 --                                               for user password encryption and verification is changed.
 -- V1.0.11       2025-06-12      DW              Add three more system settings. They are 'use_email_gateway',
 --                                               'email_gateway' and 'master_passwd'.  
+-- V1.0.12       2025-12-04      DW              - Add a new field 'rolling_key varchar(128)' to tables 
+--                                                 'login_token_queue' and 'web_session'.
+--                                               - Create a new table 'sess_roll_key'. 
 --
 -- Remark: It is part of SMS installation program.
 -----------------------------------------------------------------------------------------------------
@@ -341,7 +344,7 @@ CREATE OR REPLACE TABLE sms_version
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 LOCK TABLES `sms_version` WRITE;
-INSERT INTO `sms_version` VALUES ("2.0.18", "2.0", "18", "20260128", "2026-01-28 23:59:59");
+INSERT INTO `sms_version` VALUES ("2.0.19", "2.0", "19", "20260130", "2026-01-30 23:59:59");
 UNLOCK TABLES;
 
 --=========================================================================================================================================================--

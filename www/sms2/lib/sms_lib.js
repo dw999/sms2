@@ -61,6 +61,7 @@
 //                                               The error is caused by forgetting to load secure key before send out audio file.  
 // V1.0.22       2025-12-04      DW              Add function 'isSessionValidEx'. It is the key part of a rolling key mechanism to prevent
 //                                               and detect MITM attacking.
+// V2.0.23       2026-01-29      DW              Refine scope of variables declare in this library.
 //#################################################################################################################################
 
 "use strict";
@@ -79,7 +80,7 @@ const _key_len = wev.getGlobalValue('AES_KEY_LEN');                   // AES-256
 
 
 async function _logSystemError(conn, user_id, detail_msg, brief_msg, browser_signature) {
-  var sqlcmd, param, data, result;
+  let sqlcmd, param, data, result;
   
   try {
     user_id = (typeof(user_id) === 'number' && !Number.isNaN(user_id))? parseInt(user_id, 10) : 0;
@@ -97,7 +98,7 @@ async function _logSystemError(conn, user_id, detail_msg, brief_msg, browser_sig
     data = JSON.parse(data);
     
     if (parseInt(data.affectedRows, 10) == 0) {
-      var message = `No record is added to the system error log, please check for it.\n` +
+      let message = `No record is added to the system error log, please check for it.\n` +
                     `SQL: ` + sqlcmd + `\n` +
                     `user_id: ` + user_id.toString() + `\n` +
                     `brief_msg: ` + brief_msg + `\n` +
@@ -121,7 +122,7 @@ async function _logSystemError(conn, user_id, detail_msg, brief_msg, browser_sig
 
 
 exports.logSystemError = async function(conn, user_id, detail_msg, brief_msg, browser_signature) {
-  var open_conn, result;
+  let open_conn, result;
   
   open_conn = (typeof(conn) == 'undefined' || conn == null)? true : false;
   
@@ -146,7 +147,7 @@ exports.logSystemError = async function(conn, user_id, detail_msg, brief_msg, br
 
 
 exports.logSystemEvent = async function(msg_pool, user_id, detail_msg, brief_msg, browser_signature) {
-  var conn, result;
+  let conn, result;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));    
@@ -179,7 +180,7 @@ exports.consoleLog = function(message) {
 
 
 async function _getDecoyCompanyName(conn) {
-  var result;
+  let result;
   
   try {
     result = await wev.getSysSettingValue(conn, 'decoy_company_name');
@@ -376,7 +377,7 @@ async function _getKyberKeyData(conn) {
 
 
 exports.showLoginPage = async function(msg_pool) {
-  var conn, html, company_name, join_us, connect_mode, key_id, rsa_keys, public_pem, public_pem_b64, algorithm, algorithm_b64, public_sha256sum;
+  let conn, html, company_name, join_us, connect_mode, key_id, rsa_keys, public_pem, public_pem_b64, algorithm, algorithm_b64, public_sha256sum;
   
   html = '';
   company_name = '';
@@ -833,7 +834,7 @@ exports.extractClientAESkey = async function(msg_pool, kyber_id, kyber_ct, aes_a
 
 
 async function _getCurrentTimestamp(conn) {
-  var sqlcmd, data, result;
+  let sqlcmd, data, result;
   
   try {
     sqlcmd = `SELECT DATE_FORMAT(CURRENT_TIMESTAMP(), '%Y-%m-%d %H:%i:%s') AS time`;
@@ -984,7 +985,7 @@ async function _sendMessageAccessLinkMail(conn, user_id, email, aes_key, rolling
 
 
 async function _buildLoginLink(conn, token) {
-  var ok, msg, site_dns, login_url, result;
+  let ok, msg, site_dns, login_url, result;
   
   ok = true;
   msg = '';
@@ -1013,7 +1014,7 @@ async function _buildLoginLink(conn, token) {
 
 
 async function _buildMessageAccessLink(conn, user_id, aes_key, rolling_key) {
-  var message, algorithm, plaintext, token_iv, token, key, add_time, seed, login_url, result;
+  let message, algorithm, plaintext, token_iv, token, key, add_time, seed, login_url, result;
   
   message = '';
   algorithm = 'AES-GCM';
@@ -1084,7 +1085,7 @@ async function _buildMessageAccessLink(conn, user_id, aes_key, rolling_key) {
 
 
 async function _beCracked(conn, user_id) {
-  var sqlcmd, param, data, result;
+  let sqlcmd, param, data, result;
  
   try {
     user_id = parseInt(user_id, 10);
@@ -1109,8 +1110,8 @@ async function _beCracked(conn, user_id) {
 
 
 async function _informAdminUnhappyUserIsCracked(conn, user) {
-  var sqlcmd, data, subject, body, from_mail, from_user, from_pass, smtp_server, port, cracked_user; 
-  var admins = [];
+  let sqlcmd, data, subject, body, from_mail, from_user, from_pass, smtp_server, port, cracked_user; 
+  let admins = [];
   
   try {
     sqlcmd = `SELECT user_name, user_alias, email ` +
@@ -1120,16 +1121,16 @@ async function _informAdminUnhappyUserIsCracked(conn, user) {
     data = await dbs.sqlQuery(conn, sqlcmd);
     data = JSON.parse(data);
     
-    for (var i = 0; i < data.length; i++) {
-      var name = data[i].user_name;
-      var alias = data[i].user_alias;
-      var email = data[i].email;
-      var record = {name: name, alias: alias, email: email};
+    for (let i = 0; i < data.length; i++) {
+      let name = data[i].user_name;
+      let alias = data[i].user_alias;
+      let email = data[i].email;
+      let record = {name: name, alias: alias, email: email};
       admins.push(record);
     }
 
     if (admins.length > 0) {
-      var worker = await telecom.getMailWorker(conn);
+      let worker = await telecom.getMailWorker(conn);
       from_mail = worker.email;
       from_user = worker.m_user;
       from_pass = worker.m_pass; 
@@ -1137,9 +1138,9 @@ async function _informAdminUnhappyUserIsCracked(conn, user) {
       port = worker.port;
       subject = 'Cracking News';
       
-      for (var i = 0; i < admins.length; i++) {
-        var this_admin = (wev.allTrim(admins[i].alias) != '')? admins[i].alias : admins[i].name;
-        var this_email = admins[i].email;
+      for (let i = 0; i < admins.length; i++) {
+        let this_admin = (wev.allTrim(admins[i].alias) != '')? admins[i].alias : admins[i].name;
+        let this_email = admins[i].email;
         
         body = `Hi ` + this_admin + `, \n\n` +
                `Please note that ` + user + ` has been cracked. Be careful. \n\n` +
@@ -1157,7 +1158,7 @@ async function _informAdminUnhappyUserIsCracked(conn, user) {
 
 
 async function _logCrackedEvent(conn, user_id) {
-  var sqlcmd, param;
+  let sqlcmd, param;
   
   user_id = parseInt(user_id, 10);
   
@@ -1176,7 +1177,7 @@ async function _logCrackedEvent(conn, user_id) {
 
 
 async function _logUnhappyLoginTime(conn, user_id, http_user_agent) {
-  var sqlcmd, param, data;
+  let sqlcmd, param, data;
 
   user_id = parseInt(user_id, 10);
   
@@ -1197,8 +1198,8 @@ async function _logUnhappyLoginTime(conn, user_id, http_user_agent) {
 
 
 async function _informAdminSystemProblem(conn, user, subject, content) {
-  var sqlcmd, data, body, from_mail, from_user, from_pass, smtp_server, port;
-  var admins = [];
+  let sqlcmd, data, body, from_mail, from_user, from_pass, smtp_server, port;
+  let admins = [];
   
   try {
     sqlcmd = `SELECT user_name, user_alias, email ` +
@@ -1209,17 +1210,17 @@ async function _informAdminSystemProblem(conn, user, subject, content) {
     data = await dbs.sqlQuery(conn, sqlcmd);
     data = JSON.parse(data);
     
-    for (var i = 0; i < data.length; i++) {
-      var name = data[i].user_name;
-      var alias = data[i].user_alias;
-      var email = data[i].email;
-      var record = {name: name, alias: alias, email: email};
+    for (let i = 0; i < data.length; i++) {
+      let name = data[i].user_name;
+      let alias = data[i].user_alias;
+      let email = data[i].email;
+      let record = {name: name, alias: alias, email: email};
       
       admins.push(record);
     }
     
     if (admins.length > 0) {
-      var worker = await telecom.getMailWorker(conn);
+      let worker = await telecom.getMailWorker(conn);
       from_mail = worker.email;
       from_user = worker.m_user;
       from_pass = worker.m_pass; 
@@ -1227,9 +1228,9 @@ async function _informAdminSystemProblem(conn, user, subject, content) {
       port = worker.port;
       subject = (wev.allTrim(subject) == '')? 'System Problem' : subject; 
       
-      for (var i = 0; i < admins.length; i++) {
-        var this_admin = (wev.allTrim(admins[i].alias) != '')? admins[i].alias : admins[i].name;
-        var this_email = admins[i].email;
+      for (let i = 0; i < admins.length; i++) {
+        let this_admin = (wev.allTrim(admins[i].alias) != '')? admins[i].alias : admins[i].name;
+        let this_email = admins[i].email;
         
         body = `Hi ` + this_admin + `, \n\n` +
               ((wev.allTrim(content) == '')? `Something unusual of this user <` + user + `> is found, please take a look. \n\n` : content + `\n\n`) +
@@ -1247,7 +1248,7 @@ async function _informAdminSystemProblem(conn, user, subject, content) {
 
 
 async function _isFirstUnhappyLogin(conn, user_id) {
-  var sqlcmd, param, data, result;
+  let sqlcmd, param, data, result;
   
   user_id = parseInt(user_id, 10);
   
@@ -1270,7 +1271,7 @@ async function _isFirstUnhappyLogin(conn, user_id) {
 
 
 async function _markUserStatusAsUnhappy(conn, user_id) {
-  var sqlcmd, param, data;
+  let sqlcmd, param, data;
 
   user_id = parseInt(user_id, 10);  
 
@@ -1290,8 +1291,8 @@ async function _markUserStatusAsUnhappy(conn, user_id) {
 
 
 async function _informRelatedGroupMembers(conn, user_id) {
-  var sqlcmd, param, data, message;
-  var msg_groups = [];
+  let sqlcmd, param, data, message;
+  let msg_groups = [];
   
   message = 'I am very unhappy, please help.';
 
@@ -1305,13 +1306,13 @@ async function _informRelatedGroupMembers(conn, user_id) {
     data = await dbs.sqlQuery(conn, sqlcmd, param);
     data = JSON.parse(data);
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       msg_groups.push(data[i].group_id);
     }
     
     //-- Then send the message to all groups on behalf of this user --//
-    for (var i = 0; i < msg_groups.length; i++) {
-      var group_id = msg_groups[i];      
+    for (let i = 0; i < msg_groups.length; i++) {
+      let group_id = msg_groups[i];      
       await msglib.sendMessage(group_id, user_id, message, '', '', 0, '', '', '');
     }
   }
@@ -1323,8 +1324,8 @@ async function _informRelatedGroupMembers(conn, user_id) {
 
 
 async function _informAllRelatedParties(conn, user_id, user) {
-  var sqlcmd, param, data, subject, body, from_mail, from_user, from_pass, smtp_server, port;
-  var inform_users = [];
+  let sqlcmd, param, data, subject, body, from_mail, from_user, from_pass, smtp_server, port;
+  let inform_users = [];
 
   user_id = parseInt(user_id, 10);
 
@@ -1344,8 +1345,8 @@ async function _informAllRelatedParties(conn, user_id, user) {
     data = await dbs.sqlQuery(conn, sqlcmd, param);
     data = JSON.parse(data);
      
-    for (var i = 0; i < data.length; i++) {
-      var record = {name: data[i].user_name, alias: data[i].user_alias, email: data[i].email};
+    for (let i = 0; i < data.length; i++) {
+      let record = {name: data[i].user_name, alias: data[i].user_alias, email: data[i].email};
       inform_users.push(record);
     }
      
@@ -1358,14 +1359,14 @@ async function _informAllRelatedParties(conn, user_id, user) {
     data = await dbs.sqlQuery(conn, sqlcmd);
     data = JSON.parse(data);
      
-    for (var i = 0; i < data.length; i++) {
-      var record = {name: data[i].user_name, alias: data[i].user_alias, email: data[i].email};
+    for (let i = 0; i < data.length; i++) {
+      let record = {name: data[i].user_name, alias: data[i].user_alias, email: data[i].email};
       inform_users.push(record);
     }
      
     //-- Step 3: Send out email --//
     if (inform_users.length > 0) {
-      var worker = await telecom.getMailWorker(conn);
+      let worker = await telecom.getMailWorker(conn);
       from_mail = worker.email;
       from_user = worker.m_user;
       from_pass = worker.m_pass; 
@@ -1373,9 +1374,9 @@ async function _informAllRelatedParties(conn, user_id, user) {
       port = worker.port;
       subject = 'Unhappy News'; 
        
-      for (var i = 0; i < inform_users.length; i++) {
-        var this_user = (wev.allTrim(inform_users.alias) != '')? inform_users.alias : inform_users.name;
-        var this_email = inform_users.email;
+      for (let i = 0; i < inform_users.length; i++) {
+        let this_user = (wev.allTrim(inform_users.alias) != '')? inform_users.alias : inform_users.name;
+        let this_email = inform_users.email;
          
         body = `Hi ` + this_user + `, \n\n` +
                user + ` is very unhappy now, be careful about it. \n\n` +
@@ -1394,7 +1395,7 @@ async function _informAllRelatedParties(conn, user_id, user) {
 
 
 async function _selectSysAdminInCharge(conn) {
-  var sqlcmd, data, result;
+  let sqlcmd, data, result;
   
   try {
     sqlcmd = `SELECT a.user_id, count(*) AS cnt ` +
@@ -1443,8 +1444,8 @@ async function _selectSysAdminInCharge(conn) {
 
 
 async function _isSoleGroupAdmin(conn, group_id, user_id) {
-  var sqlcmd, param, data, cnt, result;
-  var members = [];
+  let sqlcmd, param, data, cnt, result;
+  let members = [];
 
   result = true;            // Assume he/she is the sole group administrator.
   
@@ -1465,7 +1466,7 @@ async function _isSoleGroupAdmin(conn, group_id, user_id) {
     data = await dbs.sqlQuery(conn, sqlcmd, param);
     data = JSON.parse(data);
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       if (data[i].group_role == '1') {
         //-- Another group administrator is found. --//
         result = false;
@@ -1478,7 +1479,7 @@ async function _isSoleGroupAdmin(conn, group_id, user_id) {
     
     if (result == true && members.length > 0) {
       //-- If no another group administrator is found, promote the first found system administrator as group administrator. --//
-      var this_user_id = members[0];
+      let this_user_id = members[0];
       
       sqlcmd = `UPDATE group_member ` +
                `  SET group_role = '1' ` +
@@ -1499,7 +1500,7 @@ async function _isSoleGroupAdmin(conn, group_id, user_id) {
 
 
 async function _addSysAdminToGroup(conn, group_id, user_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   result = {ok: true, msg: ''};  
   
@@ -1522,8 +1523,8 @@ async function _addSysAdminToGroup(conn, group_id, user_id) {
 
 
 exports.loadGroupMeesagesForNewMember = async function(conn, group_id, user_id) {
-  var sqlcmd, param, data, result;
-  var miss_messages = [];
+  let sqlcmd, param, data, result;
+  let miss_messages = [];
   
   result = {ok: true, msg: ''};
   
@@ -1539,13 +1540,13 @@ exports.loadGroupMeesagesForNewMember = async function(conn, group_id, user_id) 
     data = await dbs.sqlQuery(conn, sqlcmd, param);
     data = JSON.parse(data);
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       miss_messages.push(data[i].msg_id);      
     }
     
     //-- Step 2: Recreate message delivery transaction records for the new member --//
-    for (var i = 0; i < miss_messages.length; i++) {
-      var this_msg_id = miss_messages[i];
+    for (let i = 0; i < miss_messages.length; i++) {
+      let this_msg_id = miss_messages[i];
       
       sqlcmd = `INSERT INTO msg_tx ` +
                `(msg_id, receiver_id, read_status) ` +
@@ -1566,7 +1567,7 @@ exports.loadGroupMeesagesForNewMember = async function(conn, group_id, user_id) 
 
 
 async function _kickOutFromGroup(conn, group_id, user_id) {
-  var sqlcmd, param, msg;
+  let sqlcmd, param, msg;
 
   user_id = parseInt(user_id, 10);
 
@@ -1588,7 +1589,7 @@ async function _kickOutFromGroup(conn, group_id, user_id) {
 
 
 async function _kickOut(conn, user_id) {
-  var sqlcmd, param, msg;
+  let sqlcmd, param, msg;
   
   user_id = parseInt(user_id, 10);
 
@@ -1609,8 +1610,8 @@ async function _kickOut(conn, user_id) {
 
 
 async function _kickOutFromMessageGroups(conn, user_id) {
-  var sqlcmd, param, data, ok, msg, is_group_admin, sys_admin_id;
-  var msg_groups = [];
+  let sqlcmd, param, data, ok, msg, is_group_admin, sys_admin_id;
+  let msg_groups = [];
   
   user_id = parseInt(user_id, 10);
   
@@ -1628,8 +1629,8 @@ async function _kickOutFromMessageGroups(conn, user_id) {
     data = await dbs.sqlQuery(conn, sqlcmd, param);
     data = JSON.parse(data);
     
-    for (var i = 0; i < data.length; i++) {
-      var rec = {group_id: data[i].group_id, group_role: data[i].group_role};
+    for (let i = 0; i < data.length; i++) {
+      let rec = {group_id: data[i].group_id, group_role: data[i].group_role};
       msg_groups.push(rec);
       //-- Check whether this user is administrator of at least one message group --//
       is_group_admin = (data[i].group_role == 1)? true : is_group_admin;
@@ -1646,13 +1647,13 @@ async function _kickOutFromMessageGroups(conn, user_id) {
     }
     
     if (is_group_admin && sys_admin_id > 0) {
-      for (var i = 0; i < msg_groups.length; i++) {
-        var this_group_id = msg_groups[i].group_id;
-        var this_group_role = msg_groups[i].group_role;
+      for (let i = 0; i < msg_groups.length; i++) {
+        let this_group_id = msg_groups[i].group_id;
+        let this_group_role = msg_groups[i].group_role;
       
         if (this_group_role == 1) {
           if (await _isSoleGroupAdmin(conn, this_group_id, user_id)) {
-            var result = await _addSysAdminToGroup(conn, this_group_id, sys_admin_id);
+            let result = await _addSysAdminToGroup(conn, this_group_id, sys_admin_id);
             if (result.ok) {
               await loadGroupMeesagesForNewMember(conn, this_group_id, sys_admin_id); 
             }            
@@ -1674,7 +1675,7 @@ async function _kickOutFromMessageGroups(conn, user_id) {
 
 
 async function _increaseLoginFailureCounter(conn, user_id) {
-  var sqlcmd, param, data;
+  let sqlcmd, param, data;
   
   user_id = parseInt(user_id, 10);
   
@@ -1694,7 +1695,7 @@ async function _increaseLoginFailureCounter(conn, user_id) {
 
 
 async function _logHackingHistory(conn, user_id, ip_addr) {
-  var sqlcmd, param, data, cnt;
+  let sqlcmd, param, data, cnt;
   
   user_id = parseInt(user_id, 10);
   ip_addr = (typeof(ip_addr) != 'string')? '' : ip_addr.trim();
@@ -1742,8 +1743,8 @@ async function _logHackingHistory(conn, user_id, ip_addr) {
 
 
 exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, password, rolling_key, aes_key, http_user_agent, ip_addr) {
-  var connh, connp, sqlcmd, param, data, user_id, happy_passwd, unhappy_passwd, email, status, connection_mode, login_status, message, redirect_url, result;
-  var private_key;
+  let connh, connp, sqlcmd, param, data, user_id, happy_passwd, unhappy_passwd, email, status, connection_mode, login_status, message;
+  let redirect_url, result, private_key;
   
   login_status = 1;
   message = '';
@@ -1777,12 +1778,12 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
             // Normal user //
             if (connection_mode == 0) {
               //-- Login in via email --//
-              var sent_mail_result = await _sendMessageAccessLinkMail(connh, user_id, email, aes_key, rolling_key);
+              let sent_mail_result = await _sendMessageAccessLinkMail(connh, user_id, email, aes_key, rolling_key);
               login_status = sent_mail_result.login_status;
               message = sent_mail_result.message;
               
               if (login_status == 1) {
-                var sess_object = await wev.createSessionRecord(connp, user_id, null, null, http_user_agent, ip_addr);
+                let sess_object = await wev.createSessionRecord(connp, user_id, null, null, http_user_agent, ip_addr);
                 redirect_url = '/pdatools?user=' + username + '&sess_code=' + sess_object.sess_code;
               }
               else {
@@ -1793,7 +1794,7 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
             }
             else if (connection_mode == 1) {
               //-- Login directly --//
-              var login_object = await _buildMessageAccessLink(connh, user_id, aes_key, rolling_key);
+              let login_object = await _buildMessageAccessLink(connh, user_id, aes_key, rolling_key);
               login_status = login_object.login_status;
               message = login_object.message;
               redirect_url = login_object.redirect_url;
@@ -1801,7 +1802,7 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
             }
             else if (connection_mode == 2) {
               //-- Login directly --//
-              var login_object = await _buildMessageAccessLink(connh, user_id, aes_key, rolling_key);
+              let login_object = await _buildMessageAccessLink(connh, user_id, aes_key, rolling_key);
               login_status = login_object.login_status;
               message = login_object.message;
               redirect_url = login_object.redirect_url;               
@@ -1809,12 +1810,12 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
             }
             else if (connection_mode == 3) {
               //-- Login in via email --//
-              var sent_mail_result = await _sendMessageAccessLinkMail(connh, user_id, email, aes_key, rolling_key);
+              let sent_mail_result = await _sendMessageAccessLinkMail(connh, user_id, email, aes_key, rolling_key);
               login_status = sent_mail_result.login_status;
               message = sent_mail_result.message;
               
               if (login_status == 1) {
-                var sess_object = await wev.createSessionRecord(connp, user_id, null, null, http_user_agent, ip_addr);
+                let sess_object = await wev.createSessionRecord(connp, user_id, null, null, http_user_agent, ip_addr);
                 redirect_url = '/pdatools?user=' + username + '&sess_code=' + sess_object.sess_code;
               }
               else {
@@ -1826,8 +1827,8 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
             else {
               //-- Value of system setting 'connection_mode' is invalid --//
               user_id = (typeof(user_id) == 'number' && Number.isSafeInteger(user_id))? user_id : 0;
-              var brief_msg = `Invalid system setting`;
-              var detail_msg = `Value of system setting 'connection_mode' is invalid. It is now ` + connection_mode.toString();
+              let brief_msg = `Invalid system setting`;
+              let detail_msg = `Value of system setting 'connection_mode' is invalid. It is now ` + connection_mode.toString();
               await _logSystemError(connh, user_id, detail_msg, brief_msg, http_user_agent);
               _consoleLog(detail_msg);
               
@@ -1855,7 +1856,7 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
             await _logUnhappyLoginTime(connh, user_id, http_user_agent);
             
             login_status = 1;
-            var sess_object = await wev.createSessionRecord(connp, user_id, null, null, http_user_agent, ip_addr);
+            let sess_object = await wev.createSessionRecord(connp, user_id, null, null, http_user_agent, ip_addr);
             redirect_url = '/pdatools?user=' + username + '&sess_code=' + sess_object.sess_code;
             result = {ok: login_status, msg: message, url: redirect_url};            
             break;  
@@ -1863,8 +1864,8 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
           default:
             // Invalid user status value //
             user_id = (typeof(user_id) == 'number' && Number.isSafeInteger(user_id))? user_id : 0;
-            var brief_msg = `Invalid user status: ` + status;
-            var detail_msg = `The system find that user status of ` + username + ` is abnormal, please take a look.`;
+            let brief_msg = `Invalid user status: ` + status;
+            let detail_msg = `The system find that user status of ` + username + ` is abnormal, please take a look.`;
             await _logSystemError(connh, user_id, detail_msg, brief_msg, http_user_agent);            
             await _informAdminSystemProblem(connh, username, brief_msg, detail_msg);
             _consoleLog(detail_msg);
@@ -1893,7 +1894,7 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
         
         await _logUnhappyLoginTime(connh, user_id, http_user_agent);
         login_status = 1;
-        var sess_object = await wev.createSessionRecord(connp, user_id, null, null, http_user_agent, ip_addr);         
+        let sess_object = await wev.createSessionRecord(connp, user_id, null, null, http_user_agent, ip_addr);         
         redirect_url = '/pdatools?user=' + username + '&sess_code=' + sess_object.sess_code;             
         result = {ok: login_status, msg: message, url: redirect_url};     
       }
@@ -1918,8 +1919,8 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
   catch(e) {
     //-- Unexpected error --//    
     user_id = (typeof(user_id) == 'number' && Number.isSafeInteger(user_id))? user_id : 0;
-    var brief_msg = 'Login process error';
-    var detail_msg = e.message;
+    let brief_msg = 'Login process error';
+    let detail_msg = e.message;
     await _logSystemError(connh, user_id, detail_msg, brief_msg, http_user_agent);
     _consoleLog(detail_msg);
     
@@ -1938,16 +1939,16 @@ exports.authenticateLoginUser = async function(msg_pool, pda_pool, username, pas
 
 
 async function _resolvePassParameters(decrypted) {
-  var user_id, seed, result;
+  let user_id, seed, result;
   
   user_id = 0;
   seed = '';
   
-  var buffer = decrypted.split('&');
-  for (var i = 0; i < buffer.length; i++) {
-    var parts = buffer[i].split('=');
-    var param_name = parts[0].trim();
-    var param_data = parts[1].trim();
+  let buffer = decrypted.split('&');
+  for (let i = 0; i < buffer.length; i++) {
+    let parts = buffer[i].split('=');
+    let param_name = parts[0].trim();
+    let param_data = parts[1].trim();
     
     if (param_name.match(/user_id/gi) != null) {
       user_id = parseInt(param_data, 10);
@@ -1965,7 +1966,7 @@ async function _resolvePassParameters(decrypted) {
 
 // Note: Time interval 'interval' is in MariaDB time format
 async function _isTimeLimitPassed(conn, timestamp, interval) {  
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT TIMESTAMPDIFF(second, CURRENT_TIMESTAMP(), ADDTIME(?, ?)) AS tdi`;
@@ -1984,12 +1985,12 @@ async function _isTimeLimitPassed(conn, timestamp, interval) {
 
 
 exports.isTimeLimitPassed = async function(conn, timestamp, interval) {
-  var result = _isTimeLimitPassed(conn, timestamp, interval);
+  let result = _isTimeLimitPassed(conn, timestamp, interval);
 }
 
 
 async function _markLoginTokenStatus(conn, token, status) {
-  var sqlcmd, param;
+  let sqlcmd, param;
   
   try {
     sqlcmd = `UPDATE login_token_queue ` +
@@ -2096,8 +2097,8 @@ async function isTokenValid(conn, token) {
 
 
 async function _selectSiteForVisitor(conn) {
-  var sqlcmd, data, cnt, rows, stop_run, idx, max_cnt, result;
-  var sites = []; 
+  let sqlcmd, data, cnt, rows, stop_run, idx, max_cnt, result;
+  let sites = []; 
   
   //-- Default value --//
   result = 'https://www.microsoft.com';
@@ -2107,7 +2108,7 @@ async function _selectSiteForVisitor(conn) {
              `  FROM decoy_sites`;
     data = JSON.parse(await dbs.sqlQuery(conn, sqlcmd));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       sites.push(data[i].site_url);
     }         
     
@@ -2118,7 +2119,7 @@ async function _selectSiteForVisitor(conn) {
       
       while (!stop_run) {
         //-- Return a random number between 1 and 'rows + arbitrary' --//
-        var arbitrary = Math.floor((Math.random() * rows * 2) + 1);
+        let arbitrary = Math.floor((Math.random() * rows * 2) + 1);
         cnt = Math.floor((Math.random() * (rows + arbitrary)) + 1);
         
         if (cnt >= 1 && cnt <= rows) {
@@ -2145,7 +2146,7 @@ async function _selectSiteForVisitor(conn) {
 
 
 exports.selectSiteForHacker = async function(msg_pool) {
-  var conn, url;
+  let conn, url;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));    
@@ -2163,7 +2164,7 @@ exports.selectSiteForHacker = async function(msg_pool) {
 
 
 exports.loginAgent = async function(msg_pool, token) {
-  var conn, url;
+  let conn, url;
   
   url = '';
   
@@ -2267,7 +2268,7 @@ async function _setLoginTokenUsed(conn, token) {
 
 
 async function _setUserInformFlag(conn, user_id, flag) {
-  var sqlcmd, param, result;
+  let sqlcmd, param, result;
   
   result = {ok: true, msg: ''};
   
@@ -2289,7 +2290,7 @@ async function _setUserInformFlag(conn, user_id, flag) {
 
 
 async function _deleteUserInformRecord(conn, user_id) {
-  var sqlcmd, param, result;
+  let sqlcmd, param, result;
   
   result = {ok: true, msg: ''};
   
@@ -2373,7 +2374,7 @@ async function _goLogonProcess(conn, user_id, aes_key, rolling_key, http_user_ag
 
 
 exports.finalizeLoginProcess = async function(msg_pool, token, http_user_agent, ip_addr) {
-  var conn, user_id, keys, url, result;
+  let conn, user_id, keys, url, result;
   
   result = {ok: false, msg: '', user_id: 0, sess_code: '', url: ''};
   
@@ -2407,7 +2408,7 @@ exports.finalizeLoginProcess = async function(msg_pool, token, http_user_agent, 
 
 
 async function _extendSessionValidTime(conn, sess_code) {
-  var sql, param, sess_until;
+  let sql, param, sess_until;
   
   try {
     sess_until = await wev.setSessionValidTime();
@@ -2426,7 +2427,7 @@ async function _extendSessionValidTime(conn, sess_code) {
 
 
 async function _deleteSession(conn, sess_code) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM web_session ` + 
@@ -2441,9 +2442,8 @@ async function _deleteSession(conn, sess_code) {
 }
 
 
-// 2025-12-04: This function will be phased out after rolling key mechanism is implemented and deplyed // 
 exports.isSessionValid = async function(db_pool, user_id, sess_code, extend_session, conn_option) {
-  var conn, sqlcmd, param, data, sess_until, sess_valid;
+  let conn, sqlcmd, param, data, sess_until, sess_valid;
   
   sess_valid = false;
   
@@ -2452,7 +2452,10 @@ exports.isSessionValid = async function(db_pool, user_id, sess_code, extend_sess
     //--           'conn_option' is blank or undefined, then that would be no last resort to be provided as database --//
     //--           pool connection is failure.                                                                       --//
     //--        2. 'conn_option' is used as last resort as this function can't get a connection from the pool, and   --//
-    //--           valid values of 'conn_option' are 'MSG' and 'PDA', others may cause runtime error.                --//           
+    //--           valid values of 'conn_option' are 'MSG' and 'PDA', others may cause runtime error.                --//   
+    //--                                                                                                             --//
+    //-- 2026-01-28: After rolling key mechanism is implemented and deployed, this function is solely used by decoy  --//
+    //--             site functions. i.e. only database 'pdadb' will be accessed.                                    --//   
     conn_option = (typeof(conn_option) != "string")? "" : dbs.selectCookie(conn_option);       
     conn = await dbs.getPoolConn(db_pool, conn_option);              
     
@@ -2695,7 +2698,7 @@ exports.isSessionValidEx = async function(db_pool, user_id, sess_code, enc_roll_
 
 //-- For websocket connection request verification and websocket operations only --//
 exports.checkSession = async function(msg_pool, user_id, sess_code, callback) {     // 'callback' is a function to return the result and error (if any) to the caller.
-  var conn, sqlcmd, param, data, error, result;
+  let conn, sqlcmd, param, data, error, result;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -2732,7 +2735,7 @@ exports.checkSession = async function(msg_pool, user_id, sess_code, callback) { 
 
 //-- This function is valid for MySQL and MariaDB only --//
 async function isTableExist(conn, tablename) {
-  var sqlcmd, param, data, result;
+  let sqlcmd, param, data, result;
   
   try {
     sqlcmd = `SELECT COUNT(*) AS cnt ` +
@@ -2760,8 +2763,9 @@ async function isTableExist(conn, tablename) {
 }
 
 
-async function extendSession(conn, sess_code) {
-  var conx, sqlcmd, param, data, close_conx, session_period;
+//-- Note: This subroutine may duplicate the function of another subroutine '_extendSessionValidTime', check for it later. --//
+async function _extendSession(conn, sess_code) {
+  let conx, sqlcmd, param, data, close_conx, session_period;
   
   try {
     //-- Note: Table 'sys_settings' is located on database 'msgdb' only, so it needs to ensure --//
@@ -2776,7 +2780,7 @@ async function extendSession(conn, sess_code) {
     }  
     
     //-- Step 1: Get system defined session period, if it can't be found, let it be 2 hours. --//
-    var sys_value = await wev.getSysSettingValue(conx, 'session_period');
+    let sys_value = await wev.getSysSettingValue(conx, 'session_period');
     session_period = (sys_value.trim() != '')? sys_value : '02:00:00';
     
     //-- Step 2: Extend session expiry time --//
@@ -2799,7 +2803,7 @@ async function extendSession(conn, sess_code) {
 
 
 async function getUserIdFromSession(conn, sess_code) {
-  var sqlcmd, param, data, user_id;
+  let sqlcmd, param, data, user_id;
   
   try {
     sqlcmd = `SELECT user_id ` +
@@ -2827,7 +2831,7 @@ async function getUserIdFromSession(conn, sess_code) {
 
 
 async function getUserRole(conn, user_id) {
-  var sqlcmd, param, data, user_role;
+  let sqlcmd, param, data, user_role;
   
   user_role = 0;
   
@@ -2862,7 +2866,7 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
     
-    await extendSession(conn, sess_code);   // Extend session period 
+    await _extendSession(conn, sess_code);   // Extend session period 
     user_id = await getUserIdFromSession(conn, sess_code);
     user_role = await getUserRole(conn, user_id);
     msgrp = await msglib.getMessageGroup(conn, user_id);
@@ -3465,7 +3469,7 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
 
 
 async function _getUserAlias(conn, user_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT user_alias ` + 
@@ -3533,7 +3537,7 @@ async function _printUserProfileJavascriptSection(conn, sess_code, option) {
   let html;
 
   try {
-    await extendSession(conn, sess_code);   // Extend session period 
+    await _extendSession(conn, sess_code);   // Extend session period 
   
 	  html = `
 	  <!doctype html>
@@ -3955,7 +3959,7 @@ async function _printUserProfileJavascriptSection(conn, sess_code, option) {
 
 
 function _editUserAliasForm(user_id) {
-  var html;
+  let html;
   
   html = `
   <form id="frmEditProfile" name="frmEditProfile" action="" method="post">
@@ -3989,7 +3993,7 @@ function _editUserAliasForm(user_id) {
 
 
 exports.printEditAliasForm = async function(msg_pool, user_id, sess_code) {
-  var conn, html;
+  let conn, html;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));   
@@ -4008,7 +4012,7 @@ exports.printEditAliasForm = async function(msg_pool, user_id, sess_code) {
  
 
 async function _getUserEmail(conn, user_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT email ` + 
@@ -4034,7 +4038,7 @@ async function _getUserEmail(conn, user_id) {
 
 
 function _editEmailForm(user_id) {
-  var html;
+  let html;
   
   html = `
   <form id="frmEditProfile" name="frmEditProfile" action="" method="post">
@@ -4068,7 +4072,7 @@ function _editEmailForm(user_id) {
 
 
 exports.printEditEmailForm = async function(msg_pool, user_id, sess_code) {
-  var conn, html;
+  let conn, html;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -4088,7 +4092,7 @@ exports.printEditEmailForm = async function(msg_pool, user_id, sess_code) {
 
 
 async function _getUserTelegramId(conn, user_id) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT tg_id ` +
@@ -4114,7 +4118,7 @@ async function _getUserTelegramId(conn, user_id) {
 
 
 function _editTelegramIdForm(user_id, tg_bot, client_device_info) {
-  var bot_link, warning_html, bot_add_html, html;
+  let bot_link, warning_html, bot_add_html, html;
     
   if (client_device_info.os.name != 'iOS' && client_device_info.os.name != 'Android') {
     warning_html = `
@@ -4200,7 +4204,7 @@ function _editTelegramIdForm(user_id, tg_bot, client_device_info) {
 
 
 exports.printEditTelegramIdForm = async function(msg_pool, user_id, sess_code, client_device_info) {
-  var conn, tg_bot, html;
+  let conn, tg_bot, html;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -4221,7 +4225,7 @@ exports.printEditTelegramIdForm = async function(msg_pool, user_id, sess_code, c
 
 
 function _editHappyPasswdForm(user_id) {
-  var html;
+  let html;
   
   html = `
   <form id="frmEditProfile" name="frmEditProfile" action="" method="post">
@@ -4257,7 +4261,7 @@ function _editHappyPasswdForm(user_id) {
 
 
 exports.printEditHappyPasswdForm = async function(msg_pool, user_id, sess_code) {
-  var conn, html;
+  let conn, html;
   
   try {
 		conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
@@ -4276,7 +4280,7 @@ exports.printEditHappyPasswdForm = async function(msg_pool, user_id, sess_code) 
 
 
 function _editUnhappyPasswdForm(user_id) {
-  var html;
+  let html;
   
   html = `
   <form id="frmEditProfile" name="frmEditProfile" action="" method="post">
@@ -4312,7 +4316,7 @@ function _editUnhappyPasswdForm(user_id) {
 
 
 exports.printEditUnhappyPasswdForm = async function(msg_pool, user_id, sess_code) {
-  var conn, html;
+  let conn, html;
   
   try {
 		conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
@@ -4331,7 +4335,7 @@ exports.printEditUnhappyPasswdForm = async function(msg_pool, user_id, sess_code
 
 
 function _printAddGroupJavascriptSection(sess_code) {
-  var html;
+  let html;
   
   html = `
 	<link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
@@ -4438,7 +4442,7 @@ function _printAddGroupJavascriptSection(sess_code) {
 
 
 function _printAddGroupForm(user_id, group_name) {
-  var html;
+  let html;
   
   html = `
   <form id="frmAddGrp" name="frmAddGrp" action="" method="post">
@@ -4494,7 +4498,7 @@ function _printAddGroupForm(user_id, group_name) {
 
 
 exports.printAddGroupForm = async function(user_id, group_name, sess_code) {
-  var html;
+  let html;
   
   try {
     html = wev.printHeader('Add Group');
@@ -4510,7 +4514,7 @@ exports.printAddGroupForm = async function(user_id, group_name, sess_code) {
 
 
 function _printAddPrivateGroupJavascriptSection(sess_code) {
-  var html;
+  let html;
   
   html = `
 	<link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
@@ -4596,7 +4600,7 @@ function _printAddPrivateGroupJavascriptSection(sess_code) {
 
 
 function _printAddPrivateGroupForm(user_id, group_name, auto_delete, member) {
-  var html, checked;
+  let html, checked;
   
   checked = (auto_delete == 1)? 'checked' : '';
   
@@ -5172,13 +5176,12 @@ exports.printActionOptionForm = async function(message) {
 
 
 exports.checkNewMessageCount = async function(msg_pool, user_id, sess_code) {
-  var conn;
-  var result = [];  
+  let conn, result = [];  
       
   try {
     user_id = parseInt(user_id, 10);        
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));    
-    await extendSession(conn, sess_code);   // Extend session period 
+    await _extendSession(conn, sess_code);   // Extend session period 
     result = await msglib.getMessageGroup(conn, user_id);       
   }
   catch(e) {
@@ -5193,7 +5196,7 @@ exports.checkNewMessageCount = async function(msg_pool, user_id, sess_code) {
 
 
 async function getUserRole(conn, user_id) {
-  var sqlcmd, param, data, result;
+  let sqlcmd, param, data, result;
   
   result = 0;
   
@@ -5222,7 +5225,7 @@ async function getUserRole(conn, user_id) {
 
 
 async function getMessageBlockSize(conn) {
-  var block_size, result;
+  let block_size, result;
 
   try {
     block_size = parseInt(await wev.getSysSettingValue(conn, 'msg_block_size'), 10);
@@ -5237,7 +5240,7 @@ async function getMessageBlockSize(conn) {
 
 
 async function _printStyleDoSMSpage() {
-  var html = '';
+  let html = '';
   
   try {
     html = `
@@ -5609,12 +5612,23 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
     //  scheduler_id = setInterval(checkMessage, 2000);          
     //}
     
-    function checkMessage() {
+    async function checkMessage() {
+      await prepareRollingKey(${_key_len});               // Defined on crypto-lib.js
+      let roll_rec = document.getElementById("roll_rec").value;
+      let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+      let roll_rec_sum = document.getElementById("roll_rec_sum").value;          
+    
       $.ajax({
         type: 'POST',
         url: '/check_message_update_token',
         dataType: 'html',
-        data: {group_id: ${group_id}, user_id: ${user_id}},
+        data: {
+          group_id: ${group_id}, 
+          user_id: ${user_id},
+          roll_rec: roll_rec,
+          iv_roll_rec: iv_roll_rec,
+          roll_rec_sum: roll_rec_sum
+        },
         success: function(ret_data) {
           var result = JSON.parse(ret_data);                  // Note: Return data is in JSON format.
           var mg_status = result.mg_status;
@@ -5627,20 +5641,32 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
             }
             else if (new_token == "group_deleted") {
               //-- Message group has been deleted by someone, go to message group main page now. --//
+              clearLocalData();
               goHome();
-              //clearLocalData();
-              //window.location.href = "${message_url}";                                  
             }
             else if (new_token == "user_locked") {
               //-- User has been locked, force logout him/her immediately. --//
+              clearLocalData();              
               logoutSMS();      
             }
             else if (new_token == "not_group_member") {
               //-- User has been kicked from the group, redirect him/her to message group main page immediately. --//
+              clearLocalData();
               goHome();
-              //clearLocalData();
-              //window.location.href = "${message_url}"; 
             }              
+            else if (new_token == "force_logout") {
+              clearLocalData();              
+              logoutSMS();                
+            }
+            else if (new_token == "invalid_session") {
+              alert("Unable to verify your session, please login again.");
+              clearLocalData();              
+              logoutSMS();                
+            }            
+            else if (new_token == "no_cookie") {
+              clearLocalData();
+              window.location.href = "/";
+            }            
             else if (new_token == "error") {
               var err_msg = mg_status.error;
               //-- System error is found, show user what is wrong. --//
@@ -7312,7 +7338,7 @@ async function _printMessagesDoSMSpage(conn, group_id, group_name, group_type, g
 
 
 exports.getUserName = async function(conn, user_id) {
-  var sql, param, data, user_name;
+  let sql, param, data, user_name;
   
   user_name = '';
   
@@ -7341,14 +7367,14 @@ exports.getUserName = async function(conn, user_id) {
 
 
 exports.showDoSMSpage = async function(msg_pool, user_id, group_id, f_m_id, top_id, client_device_info, http_user_agent) {
-  var conn, user_role, group_name, update_token, group_role, group_type, rows_limit, m_site_dns, wspath, html;
-  var my_msg_colour = '#F5EDB3';              // Background colour of my message.
-  var rv_msg_colour = '#CFF3F9';              // Background colour of received message.
+  let conn, user_role, group_name, update_token, group_role, group_type, rows_limit, m_site_dns, wspath, html;
+  let my_msg_colour = '#F5EDB3';              // Background colour of my message.
+  let rv_msg_colour = '#CFF3F9';              // Background colour of received message.
   //-- Let message and identation width percentage be two variables to simplify program maintenance. --//
-  var msg_width = 90;                         // Message width percentage.
-  var indentation = 100 - msg_width;          // Indentation width percentage.
-  var m_params = {};
-  var message = [];
+  let msg_width = 90;                         // Message width percentage.
+  let indentation = 100 - msg_width;          // Indentation width percentage.
+  let m_params = {};
+  let message = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, 'COOKIE_MSG');
@@ -7452,8 +7478,8 @@ exports.getRandomSiteForVisitor = async function(msg_pool) {
 
 
 async function _getGroupsCouldBeForwarded(conn, user_id) {
-  var sql, param, data;
-  var result = [];
+  let sql, param, data;
+  let result = [];
 
   try {
     sql = `SELECT a.group_id, a.group_name, a.group_type ` +
@@ -7465,7 +7491,7 @@ async function _getGroupsCouldBeForwarded(conn, user_id) {
     param = [user_id];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push({group_id: data[i].group_id, group_name: data[i].group_name, group_type: data[i].group_type});
     }      
   }
@@ -7572,7 +7598,7 @@ async function _printFwMsgJavaScriptSection(sess_code) {
 
 
 async function _printFwMsgStyleSection() {
-  var html;
+  let html;
   
   try {
     html = `<style>
@@ -7592,7 +7618,7 @@ async function _printFwMsgStyleSection() {
 
 
 async function _printFwMsgGroupSelectionForm(from_group_id, user_id, msg_id, groups) {
-  var html, private_group_marker, cnt;
+  let html, private_group_marker, cnt;
   
   try {
     private_group_marker = "<img src='/images/lock.png' height='15px'>";
@@ -7626,10 +7652,10 @@ async function _printFwMsgGroupSelectionForm(from_group_id, user_id, msg_id, gro
                 <tbody>`;
     
     cnt = 0;
-    for (var i = 0; i < groups.length; i++) {
-      var this_group_id = groups[i].group_id;
-      var this_group_name = groups[i].group_name;
-      var this_group_marker = (parseInt(groups[i].group_type, 10) == 1)? private_group_marker : '';
+    for (let i = 0; i < groups.length; i++) {
+      let this_group_id = groups[i].group_id;
+      let this_group_name = groups[i].group_name;
+      let this_group_marker = (parseInt(groups[i].group_type, 10) == 1)? private_group_marker : '';
       
       cnt++;
       html += `<tr style="background-color:lightyellow">
@@ -7671,8 +7697,7 @@ async function _printFwMsgGroupSelectionForm(from_group_id, user_id, msg_id, gro
 
 
 exports.showForwardMessageForm = async function(msg_pool, from_group_id, user_id, msg_id, sess_code, http_user_agent, ip_addr) {
-  var conn, html;
-  var groups = [];
+  let conn, html, groups = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -7754,7 +7779,7 @@ exports.returnToSMSpageHTML = async function(group_id, message) {
 
 
 function _includeJsLib(title) {
-  var html;
+  let html;
   
   html = `
   <!DOCTYPE html>
@@ -7779,7 +7804,7 @@ function _includeJsLib(title) {
 
 
 exports.showGroupNameAmendPage = async function(msg_pool, group_id) {
-  var conn, group_name, html;
+  let conn, group_name, html;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -7852,7 +7877,7 @@ exports.showGroupNameAmendPage = async function(msg_pool, group_id) {
 
 
 exports.updateGroupName = async function(msg_pool, group_id, group_name) {
-  var conn, sql, param;
+  let conn, sql, param;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -7874,8 +7899,7 @@ exports.updateGroupName = async function(msg_pool, group_id, group_name) {
 
 
 exports.listGroupMember = async function(msg_pool, group_id) {
-  var conn, html;
-  var members = [];
+  let conn, html, members = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -7922,9 +7946,9 @@ exports.listGroupMember = async function(msg_pool, group_id) {
         </thead>
         <tbody>`;
         
-    for (var i = 0; i < members.length; i++) {
-      var this_member = (wev.allTrim(members[i].alias) == '')? members[i].username : members[i].alias;
-      var this_group_role = (parseInt(members[i].group_role, 10) == 1)? 'Group Admin' : '';
+    for (let i = 0; i < members.length; i++) {
+      let this_member = (wev.allTrim(members[i].alias) == '')? members[i].username : members[i].alias;
+      let this_group_role = (parseInt(members[i].group_role, 10) == 1)? 'Group Admin' : '';
 
       html += `
         <tr style="background-color:lightyellow">
@@ -7952,7 +7976,7 @@ exports.listGroupMember = async function(msg_pool, group_id) {
 
 
 exports.quitMessageGroup = async function(msg_pool, group_id, member_id) {
-  var conn, sql, param, data;  
+  let conn, sql, param, data;  
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -7975,7 +7999,7 @@ exports.quitMessageGroup = async function(msg_pool, group_id, member_id) {
     param = [group_id, member_id];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       sql = `DELETE FROM msg_tx ` +
             `  WHERE hex(msg_id) = ? ` +
             `    AND receiver_id = ?`;
@@ -7994,7 +8018,7 @@ exports.quitMessageGroup = async function(msg_pool, group_id, member_id) {
 
 
 exports.showAddGroupMemberPage = async function(group_id) {
-  var html;
+  let html;
   
   try {
     html = _includeJsLib('Add New Member');
@@ -8248,8 +8272,7 @@ exports.showDeleteGroupMemberPage = async function(msg_pool, group_id, user_id) 
 
 
 exports.showPromoteGroupMemberPage = async function(msg_pool, group_id, user_id) {
-  var conn, cnt, html;
-  var members = [];
+  let conn, cnt, html, members = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -8328,10 +8351,10 @@ exports.showPromoteGroupMemberPage = async function(msg_pool, group_id, user_id)
         <tbody>`;
     
     cnt = 0;
-    for (var i = 0; i < members.length; i++) {
-      var this_user_id = members[i].user_id;
-      var this_member = (wev.allTrim(members[i].alias) == '')? wev.allTrim(members[i].username) : wev.allTrim(members[i].alias);
-      var this_group_role = parseInt(members[i].group_role, 10);       
+    for (let i = 0; i < members.length; i++) {
+      let this_user_id = members[i].user_id;
+      let this_member = (wev.allTrim(members[i].alias) == '')? wev.allTrim(members[i].username) : wev.allTrim(members[i].alias);
+      let this_group_role = parseInt(members[i].group_role, 10);       
 
       if (this_user_id != user_id && this_group_role == 0) {  // Don't promote yourself, and only ordinary member(s) can be promoted to group admin.
         cnt++;
@@ -8379,8 +8402,7 @@ exports.showPromoteGroupMemberPage = async function(msg_pool, group_id, user_id)
 
 
 exports.showDemoteGroupAdminPage = async function(msg_pool, group_id, user_id) {
-  var conn, cnt, html;
-  var members = [];
+  let conn, cnt, html, members = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -8459,10 +8481,10 @@ exports.showDemoteGroupAdminPage = async function(msg_pool, group_id, user_id) {
         <tbody>`;
     
     cnt = 0;
-    for (var i = 0; i < members.length; i++) {
-      var this_user_id = members[i].user_id;
-      var this_member = (wev.allTrim(members[i].alias) == '')? wev.allTrim(members[i].username) : wev.allTrim(members[i].alias);
-      var this_group_role = parseInt(members[i].group_role, 10);       
+    for (let i = 0; i < members.length; i++) {
+      let this_user_id = members[i].user_id;
+      let this_member = (wev.allTrim(members[i].alias) == '')? wev.allTrim(members[i].username) : wev.allTrim(members[i].alias);
+      let this_group_role = parseInt(members[i].group_role, 10);       
 
       if (this_user_id != user_id && this_group_role == 1) {   // Don't demote yourself, and only group administrator can be demoted.
         cnt++;
@@ -8510,7 +8532,7 @@ exports.showDemoteGroupAdminPage = async function(msg_pool, group_id, user_id) {
 
 
 exports.showManualInformMemberPage = async function(group_id) {
-  var html, inform_message;
+  let html, inform_message;
   
   try {
     inform_message = "You have important message, please check for it ASAP.";
@@ -8601,7 +8623,7 @@ exports.showManualInformMemberPage = async function(group_id) {
 
 
 exports.buildGroupDeletedInformHTML = async function(msg_pool, group_id, members) {
-  var conn, html, jsonMembers, m_site_dns, wspath;
+  let conn, html, jsonMembers, m_site_dns, wspath;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -8880,7 +8902,7 @@ exports.showAutoDeleteSetupForm = async function(msg_pool, group_id) {
 
 
 async function _printJoinUsJavascriptSection(conn) {
-  var html, key_id, rsa_keys, public_pem, public_pem_b64, algorithm, algorithm_b64, public_sha256sum;
+  let html, key_id, rsa_keys, public_pem, public_pem_b64, algorithm, algorithm_b64, public_sha256sum;
   
   try {
     // Step 1: Obtain an existing RSA public key or generate a new RSA key pair. //
@@ -9143,7 +9165,7 @@ async function _printJoinUsJavascriptSection(conn) {
 
 
 async function _printRequestToJoinForm(conn) {
-  var red_dot, pda_bg_color, copy_right, html;
+  let red_dot, pda_bg_color, copy_right, html;
   
   try {
     red_dot = "<font color='red'>*</font>";
@@ -9218,7 +9240,7 @@ async function _printRequestToJoinForm(conn) {
 
 
 exports.printRequestToJoinForm = async function(msg_pool, name, email, refer) {
-  var conn, html;
+  let conn, html;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -9258,7 +9280,7 @@ exports.decryptRequestToJoinData = async function(algorithm, aes_key, data) {
 
 
 function _printRegisteredJavascriptSection() {
-  var html = `
+  let html = `
 	<link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
 	<link rel="shortcut icon" href="/favicon.ico">
 	<script src="/js/jquery.min.js"></script>
@@ -9271,7 +9293,7 @@ function _printRegisteredJavascriptSection() {
 
 
 async function _printRequestedOkPage(conn, name) {
-  var message, company_name, copy_right, pda_bg_color, html;
+  let message, company_name, copy_right, pda_bg_color, html;
   
   try {
     pda_bg_color = wev.getGlobalValue('PDA_BG_COLOR');
@@ -9320,7 +9342,7 @@ async function _printRequestedOkPage(conn, name) {
 
 
 exports.printRegistedOkPage = async function(msg_pool, name) {
-  var conn, html;
+  let conn, html;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -9341,8 +9363,8 @@ exports.printRegistedOkPage = async function(msg_pool, name) {
 
 
 async function _getApplicantInfo(conn, apply_id) {
-  var sql, param, data;
-  var applicant = {apply_id: 0, token: '', name: '', email: ''};
+  let sql, param, data;
+  let applicant = {apply_id: 0, token: '', name: '', email: ''};
   
   try {
     sql = `SELECT token, name, email ` +
@@ -9369,7 +9391,7 @@ async function _getApplicantInfo(conn, apply_id) {
 
 
 async function _userNameHasBeenUsed(conn, username) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` + 
@@ -9390,7 +9412,7 @@ async function _userNameHasBeenUsed(conn, username) {
 
 
 async function _suggestUserName(conn, name, email) {
-  var username, uname_bkup, stop_run, cnt;
+  let username, uname_bkup, stop_run, cnt;
   
   try {
     username = '';
@@ -9398,7 +9420,7 @@ async function _suggestUserName(conn, name, email) {
     cnt = 0;
 
     //-- Try to use email first --//
-    var parts = email.split('@');
+    let parts = email.split('@');
     if (parts.length >= 1) {
       username = parts[0].toLowerCase();
     } 
@@ -9723,7 +9745,7 @@ async function _printAddUserAccountJavascriptSection(conn) {
 
 
 async function _printAddUserAccountForm(conn, username, apply_id, applicant) {
-  var html, red_dot, message, spaces, copy_right, pda_bg_color;
+  let html, red_dot, message, spaces, copy_right, pda_bg_color;
   
   try {
     red_dot = "<font color='red'>*</font>";
@@ -9835,7 +9857,7 @@ async function _printAddUserAccountForm(conn, username, apply_id, applicant) {
 
 
 exports.showUserCreationForm = async function(msg_pool, token, apply_id) {
-  var conn, applicant, username, html;
+  let conn, applicant, username, html;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -9880,7 +9902,7 @@ exports.decryptUserAccountDataSet = async function(algorithm, aes_key, data) {
 
 
 function _promoteUserJavascriptSection(op) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -9964,7 +9986,7 @@ function _promoteUserJavascriptSection(op) {
 
 
 function _printPromoteSelectOperationForm(op) {
-  var html, tu_check, sa_check;
+  let html, tu_check, sa_check;
 
   try {  
     if (op == 1) {
@@ -10008,7 +10030,7 @@ function _printPromoteSelectOperationForm(op) {
 
 
 exports.printPromoteSelectOperationForm = async function(op) {
-  var html;
+  let html;
   
   try {    
     html = wev.printHeader("Promote User");
@@ -10024,8 +10046,7 @@ exports.printPromoteSelectOperationForm = async function(op) {
 
 
 async function _getAvailableUsersToPromote(conn, op) {
-  var sql, data, filter;
-  var result = [];
+  let sql, data, filter, result = [];
   
   try {
     filter = (op == 1)? "0" : "0, 1";
@@ -10038,7 +10059,7 @@ async function _getAvailableUsersToPromote(conn, op) {
           
     data = JSON.parse(await dbs.sqlQuery(conn, sql));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push({user_id: data[i].user_id, username: data[i].user_name, alias: data[i].user_alias, role: data[i].user_role});
     }    
   }
@@ -10051,8 +10072,7 @@ async function _getAvailableUsersToPromote(conn, op) {
 
 
 async function _printPromoteSelectUserForm(conn, op) {
-  var html, cnt;
-  var users = [];
+  let html, cnt, users = [];
   
   try {
     users = await _getAvailableUsersToPromote(conn, op);
@@ -10082,12 +10102,12 @@ async function _printPromoteSelectUserForm(conn, op) {
     `;
     
     cnt = 0;    
-    for (var i = 0; i < users.length; i++) {
-      var this_user_id = users[i].user_id;
-      var this_username = wev.allTrim(users[i].username);
-      var this_alias = wev.allTrim(users[i].alias);
-      var this_user = (this_alias != '')? this_alias : this_username;
-      var this_role = (users[i].role == 0)? 'Common User' : ((users[i].role == 1)? 'Trusted User' : 'System Admin');
+    for (let i = 0; i < users.length; i++) {
+      let this_user_id = users[i].user_id;
+      let this_username = wev.allTrim(users[i].username);
+      let this_alias = wev.allTrim(users[i].alias);
+      let this_user = (this_alias != '')? this_alias : this_username;
+      let this_role = (users[i].role == 0)? 'Common User' : ((users[i].role == 1)? 'Trusted User' : 'System Admin');
       
       cnt++;
       html += `
@@ -10122,7 +10142,7 @@ async function _printPromoteSelectUserForm(conn, op) {
       `;  
     }
     else {
-      var post = (op == 1)? 'trusted user' : 'system administrator';
+      let post = (op == 1)? 'trusted user' : 'system administrator';
       
       html += `
         <tr style="background-color:lightyellow"><td colspan=2>No user is available to promote to ${post}</td></tr>
@@ -10146,7 +10166,7 @@ async function _printPromoteSelectUserForm(conn, op) {
 
 
 exports.printPromoteSelectUserForm = async function(msg_pool, op) {
-  var conn, html;
+  let conn, html;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -10167,7 +10187,7 @@ exports.printPromoteSelectUserForm = async function(msg_pool, op) {
 
 
 function _demoteUserJavascriptSection(op) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -10252,7 +10272,7 @@ function _demoteUserJavascriptSection(op) {
 
 
 function _printDemoteSelectOperationForm(op) {
-  var html, cu_check, tu_check;
+  let html, cu_check, tu_check;
   
   try {
     if (op == 1) {
@@ -10296,7 +10316,7 @@ function _printDemoteSelectOperationForm(op) {
 
 
 exports.printDemoteSelectOperationForm = async function(op) {
-  var html;
+  let html;
   
   try {    
     html = wev.printHeader("Demote User");
@@ -10312,8 +10332,7 @@ exports.printDemoteSelectOperationForm = async function(op) {
 
 
 async function _getAvailableUsersToDemote(conn, op, user_id) {
-  var sql, param, data, filter;
-  var result = [];
+  let sql, param, data, filter, result = [];
   
   try {
     filter = (op == 1)? "1, 2" : "2";
@@ -10328,7 +10347,7 @@ async function _getAvailableUsersToDemote(conn, op, user_id) {
     param = [user_id];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push({user_id: data[i].user_id, username: data[i].user_name, alias: data[i].user_alias, role: data[i].user_role});
     }    
   }
@@ -10341,8 +10360,7 @@ async function _getAvailableUsersToDemote(conn, op, user_id) {
 
 
 async function _printDemoteSelectUserForm(conn, op, user_id) {
-  var html, cnt;
-  var users = [];
+  let html, cnt, users = [];
 
   try {
     users = await _getAvailableUsersToDemote(conn, op, user_id);
@@ -10372,12 +10390,12 @@ async function _printDemoteSelectUserForm(conn, op, user_id) {
     `;
 
     cnt = 0;
-    for (var i = 0; i < users.length; i++) {
-      var this_user_id = users[i].user_id;
-      var this_username = wev.allTrim(users[i].username);
-      var this_alias = wev.allTrim(users[i].alias);
-      var this_user = (this_alias != '')? this_alias : this_username;
-      var this_role = (users[i].role == 0)? 'Common User' : ((users[i].role == 1)? 'Trusted User' : 'System Admin');
+    for (let i = 0; i < users.length; i++) {
+      let this_user_id = users[i].user_id;
+      let this_username = wev.allTrim(users[i].username);
+      let this_alias = wev.allTrim(users[i].alias);
+      let this_user = (this_alias != '')? this_alias : this_username;
+      let this_role = (users[i].role == 0)? 'Common User' : ((users[i].role == 1)? 'Trusted User' : 'System Admin');
       
       cnt++;
       html += `
@@ -10412,7 +10430,7 @@ async function _printDemoteSelectUserForm(conn, op, user_id) {
       `;
     }
     else {
-      var post = (op == 1)? 'common user' : 'trusted user'; 
+      let post = (op == 1)? 'common user' : 'trusted user'; 
 
       html += `
         <tr style="background-color:lightyellow"><td colspan=2>No user is available to demote to ${post}</td></tr>
@@ -10436,7 +10454,7 @@ async function _printDemoteSelectUserForm(conn, op, user_id) {
 
 
 exports.printDemoteSelectUserForm = async function(msg_pool, op, user_id) {
-  var conn, html;
+  let conn, html;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -10457,7 +10475,7 @@ exports.printDemoteSelectUserForm = async function(msg_pool, op, user_id) {
 
 
 function _lockUserJavascriptSection(op) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -10542,7 +10560,7 @@ function _lockUserJavascriptSection(op) {
 
 
 function _printLockUnlockOptionForm(op) {
-  var html, lock_check, unlock_check;
+  let html, lock_check, unlock_check;
   
   try {
     if (op == 1) {
@@ -10586,7 +10604,7 @@ function _printLockUnlockOptionForm(op) {
 
 
 exports.printLockUnlockOptionForm = async function(op) {
-  var html;
+  let html;
   
   try {
     html = wev.printHeader("Lock/Unlock User");
@@ -10602,8 +10620,7 @@ exports.printLockUnlockOptionForm = async function(op) {
 
 
 async function _getAvailableUsersToLockUnlock(conn, op, user_id) {
-  var sql, param, data, status;
-  var users = [];
+  let sql, param, data, status, users = [];
   
   try {
     status = (op == 1)? "A" : "D";
@@ -10618,7 +10635,7 @@ async function _getAvailableUsersToLockUnlock(conn, op, user_id) {
     param = [status, user_id];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       users.push({user_id: data[i].user_id, 'username': data[i].user_name, 'alias': data[i].user_alias, 'status': data[i].status});
     }
   }
@@ -10631,8 +10648,7 @@ async function _getAvailableUsersToLockUnlock(conn, op, user_id) {
 
 
 async function _printLockUnlockSelectUserForm(conn, op, user_id) {
-  var html, cnt, prompt;
-  var users = [];
+  let html, cnt, prompt, users = [];
   
   try {
     users = await _getAvailableUsersToLockUnlock(conn, op, user_id);
@@ -10663,12 +10679,12 @@ async function _printLockUnlockSelectUserForm(conn, op, user_id) {
     `;
     
     cnt = 0;
-    for (var i = 0; i < users.length; i++) {
-      var this_user_id = users[i].user_id;
-      var this_username = wev.allTrim(users[i].username);
-      var this_alias = wev.allTrim(users[i].alias);
-      var this_user = (this_alias != '')? this_alias : this_username;
-      var this_status = (users[i].status == 'A')? "Active" : "Locked";
+    for (let i = 0; i < users.length; i++) {
+      let this_user_id = users[i].user_id;
+      let this_username = wev.allTrim(users[i].username);
+      let this_alias = wev.allTrim(users[i].alias);
+      let this_user = (this_alias != '')? this_alias : this_username;
+      let this_status = (users[i].status == 'A')? "Active" : "Locked";
 
       cnt++;
       html += `
@@ -10703,7 +10719,7 @@ async function _printLockUnlockSelectUserForm(conn, op, user_id) {
       `;
     }
     else {
-      var action = (op == 1)? 'be locked' : 'be unlocked'; 
+      let action = (op == 1)? 'be locked' : 'be unlocked'; 
       
       html += `
         <tr style="background-color:lightyellow"><td colspan=2>No user is available to ${action}</td></tr>
@@ -10727,7 +10743,7 @@ async function _printLockUnlockSelectUserForm(conn, op, user_id) {
 
 
 exports.printLockUnlockSelectUserForm = async function(msg_pool, op, user_id) {
-  var conn, html;
+  let conn, html;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -10748,7 +10764,7 @@ exports.printLockUnlockSelectUserForm = async function(msg_pool, op, user_id) {
  
 
 exports.buildForceLogoutHTML = async function(msg_pool, users, alert_message, landing_page) {
-  var conn, html, jsonUsers, m_site_dns, wspath;
+  let conn, html, jsonUsers, m_site_dns, wspath;
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -10898,7 +10914,7 @@ exports.buildForceLogoutHTML = async function(msg_pool, users, alert_message, la
 
 
 function _printSysSetupJavascriptSection() {
-  var html;
+  let html;
   
   try {
     html = `
@@ -11006,7 +11022,7 @@ function _printSysSetupJavascriptSection() {
 
 
 function _printSystemSetupMenu() {
-  var warning, html;
+  let warning, html;
   
   try {
     warning = `<font color="red"><b>Warning:</b><br>Incorrect settings change may cause system malfunction and data lost!</font>`;
@@ -11049,7 +11065,7 @@ function _printSystemSetupMenu() {
 
 
 exports.printSystemSetupMenu = async function() {
-  var html;
+  let html;
   
   try {
     html = wev.printHeader("System Config");
@@ -11065,8 +11081,8 @@ exports.printSystemSetupMenu = async function() {
 
 
 async function _getMainSites(conn) {
-  var sql, data;
-  var result = {decoy_site: '', message_site: ''};
+  let sql, data;
+  let result = {decoy_site: '', message_site: ''};
   
   try {    
     sql = `SELECT site_type, site_dns ` +
@@ -11075,8 +11091,8 @@ async function _getMainSites(conn) {
     
     data = JSON.parse(await dbs.sqlQuery(conn, sql));
 
-    for (var i = 0; i < data.length; i++) {
-      var this_site_type = data[i].site_type.toUpperCase();
+    for (let i = 0; i < data.length; i++) {
+      let this_site_type = data[i].site_type.toUpperCase();
       
       if (this_site_type == "DECOY") {
         result.decoy_site = data[i].site_dns;
@@ -11095,7 +11111,7 @@ async function _getMainSites(conn) {
 
 
 function _printMainSitesMaintainJavascriptSection() {
-  var html;
+  let html;
   
   try {
     html = `
@@ -11165,7 +11181,7 @@ function _printMainSitesMaintainJavascriptSection() {
 
 
 function _printMainSitesMaintainForm(main_sites) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -11203,8 +11219,8 @@ function _printMainSitesMaintainForm(main_sites) {
 
 
 exports.printMainSitesMaintainForm = async function(msg_pool) {
-  var conn, html;
-  var main_sites = {decoy_site: '', message_site: ''};
+  let conn, html;
+  let main_sites = {decoy_site: '', message_site: ''};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -11227,8 +11243,8 @@ exports.printMainSitesMaintainForm = async function(msg_pool) {
 
 
 async function _getEmailSenderList(conn) {
-  var sql, data;
-  var result = [];
+  let sql, data;
+  let result = [];
   
   try {
     sql = `SELECT ms_id, email ` +
@@ -11238,7 +11254,7 @@ async function _getEmailSenderList(conn) {
           
     data = JSON.parse(await dbs.sqlQuery(conn, sql));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push({ms_id: data[i].ms_id, email: data[i].email});
     }      
   }
@@ -11254,7 +11270,7 @@ async function _printEmailSenderListJavascriptSection(conn, sess_code, op, ms_id
   let html;
   
   try {
-    await extendSession(conn, sess_code);   // Extend session period 
+    await _extendSession(conn, sess_code);   // Extend session period 
 				
     html = `
     <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
@@ -11600,7 +11616,7 @@ async function _printEmailSenderListJavascriptSection(conn, sess_code, op, ms_id
 
 
 function _printEmailSenderList(ms_list) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -11629,9 +11645,9 @@ function _printEmailSenderList(ms_list) {
         </thead>
         <tbody>`;
     
-    for (var i = 0; i < ms_list.length; i++) {
-      var this_ms_id = ms_list[i].ms_id;
-      var this_email = ms_list[i].email;
+    for (let i = 0; i < ms_list.length; i++) {
+      let this_ms_id = ms_list[i].ms_id;
+      let this_email = ms_list[i].email;
       
       html += `
       <tr style="background-color:lightyellow">
@@ -11658,8 +11674,7 @@ function _printEmailSenderList(ms_list) {
 
 
 exports.printEmailSenderList = async function(msg_pool, sess_code) {
-  var conn, html;
-  var ms_list = [];
+  let conn, html, ms_list = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -11682,7 +11697,7 @@ exports.printEmailSenderList = async function(msg_pool, sess_code) {
 
 
 function _printNewEmailSenderForm(op) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -11736,7 +11751,7 @@ function _printNewEmailSenderForm(op) {
 
 
 exports.printNewEmailSenderForm = async function(msg_pool, op, sess_code) {
-  var conn, html;
+  let conn, html;
   
   try {
 		conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
@@ -11757,8 +11772,7 @@ exports.printNewEmailSenderForm = async function(msg_pool, op, sess_code) {
 
 
 async function _getEmailSenderDetails(conn, ms_id) {
-  var sql, param, data;
-  var email_worker = {};
+  let sql, param, data, email_worker = {};
   
   try {
     sql = `SELECT email, m_user, m_pass, smtp_server, port ` +
@@ -11828,7 +11842,7 @@ exports.getEmailSenderDetails = async function(msg_pool, ms_id, user_id, sess_co
 
 
 function _printEmailSenderEditForm(op, ms_id) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -11923,8 +11937,7 @@ exports.decryptEmailAccountDataSet = async function(algorithm, aes_key, data) {
 
 
 async function _getDecoySiteList(conn) {
-  var sql, data;
-  var site_list = [];
+  let sql, data, site_list = [];
   
   try {
     sql = `SELECT site_url ` +
@@ -11933,7 +11946,7 @@ async function _getDecoySiteList(conn) {
     
     data = JSON.parse(await dbs.sqlQuery(conn, sql));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       site_list.push(data[i].site_url);
     } 
   }
@@ -11946,7 +11959,7 @@ async function _getDecoySiteList(conn) {
 
 
 function _printDecoySiteListJavascriptSection() {
-  var html;
+  let html;
   
   try {
     html = `
@@ -12063,7 +12076,7 @@ function _printDecoySiteListJavascriptSection() {
 
 
 function _printDecoySiteList(site_list) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -12093,8 +12106,8 @@ function _printDecoySiteList(site_list) {
         <tbody>    
     `;
     
-    for (var i = 0; i < site_list.length; i++) {
-      var this_site_url = site_list[i];
+    for (let i = 0; i < site_list.length; i++) {
+      let this_site_url = site_list[i];
       
       html += `
           <tr style="background-color:lightyellow">
@@ -12135,8 +12148,7 @@ function _printDecoySiteList(site_list) {
 
 
 exports.printDecoySiteList = async function(msg_pool) {
-  var conn, html;
-  var site_list = [];
+  let conn, html, site_list = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -12159,7 +12171,7 @@ exports.printDecoySiteList = async function(msg_pool) {
 
 
 function _printNewDecoySiteForm(op) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -12200,7 +12212,7 @@ function _printNewDecoySiteForm(op) {
 
 
 exports.printNewDecoySiteForm = async function(op) {
-  var html;
+  let html;
   
   try {
     html = wev.printHeader("Add decoy site");
@@ -12216,8 +12228,7 @@ exports.printNewDecoySiteForm = async function(op) {
 
 
 async function _getDecoySiteDetails(conn, site_url) {
-  var sql, param, data;
-  var result = {};
+  let sql, param, data, result = {};
   
   try {
     sql = `SELECT key_words ` +
@@ -12243,7 +12254,7 @@ async function _getDecoySiteDetails(conn, site_url) {
 
 
 function _printDecoySiteEditForm(op, decoy_site) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -12285,8 +12296,7 @@ function _printDecoySiteEditForm(op, decoy_site) {
 
 
 exports.printDecoySiteEditForm = async function(msg_pool, op, site_url) {
-  var conn, html;
-  var decoy_site = {};
+  let conn, html, decoy_site = {};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -12309,8 +12319,7 @@ exports.printDecoySiteEditForm = async function(msg_pool, op, site_url) {
 
 
 async function _getFileTypeList(conn) {
-  var sql, data;
-  var result = [];
+  let sql, data, result = [];
   
   try {
     sql = `SELECT ftype_id, file_ext, file_type ` +
@@ -12319,7 +12328,7 @@ async function _getFileTypeList(conn) {
           
     data = JSON.parse(await dbs.sqlQuery(conn, sql));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push({ftype_id: data[i].ftype_id, file_ext: data[i].file_ext, file_type: data[i].file_type});
     }      
   }
@@ -12332,7 +12341,7 @@ async function _getFileTypeList(conn) {
 
 
 function _printFileTypeListJS() {
-  var html;
+  let html;
   
   try {
     html = `
@@ -12458,7 +12467,7 @@ function _printFileTypeListJS() {
 
 
 function _printFileTypeList(ftype_list) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -12489,10 +12498,10 @@ function _printFileTypeList(ftype_list) {
         <tbody>    
     `;
     
-    for (var i = 0; i < ftype_list.length; i++) {
-      var this_ftype_id = ftype_list[i].ftype_id;
-      var this_file_ext = ftype_list[i].file_ext;
-      var this_file_type = ftype_list[i].file_type;
+    for (let i = 0; i < ftype_list.length; i++) {
+      let this_ftype_id = ftype_list[i].ftype_id;
+      let this_file_ext = ftype_list[i].file_ext;
+      let this_file_type = ftype_list[i].file_type;
             
       html += `
           <tr style="background-color:lightyellow">
@@ -12534,8 +12543,7 @@ function _printFileTypeList(ftype_list) {
 
 
 exports.printFileTypeList = async function(msg_pool) {
-  var conn, html;
-  var ftype_list = [];
+  let conn, html, ftype_list = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -12558,8 +12566,7 @@ exports.printFileTypeList = async function(msg_pool) {
 
 
 async function _getExistFileTypes(conn) {
-  var sql, data;
-  var result = [];
+  let sql, data, result = [];
   
   try {
     sql = `SELECT DISTINCT file_type ` +
@@ -12568,7 +12575,7 @@ async function _getExistFileTypes(conn) {
           
     data = JSON.parse(await dbs.sqlQuery(conn, sql));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push(data[i].file_type);
     }          
   }
@@ -12581,11 +12588,11 @@ async function _getExistFileTypes(conn) {
 
 
 function _printNewFileTypeForm(op, file_types) {
-  var file_type_options, html;
+  let file_type_options, html;
   
   try {
     file_type_options = "";
-    for (var i = 0; i < file_types.length; i++) {
+    for (let i = 0; i < file_types.length; i++) {
       file_type_options += `
       <option>${file_types[i]}</option>
       `;
@@ -12638,8 +12645,7 @@ function _printNewFileTypeForm(op, file_types) {
 
 
 exports.printNewFileTypeForm = async function(msg_pool, op) {
-  var conn, html;
-  var file_types = []; 
+  let conn, html, file_types = []; 
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -12662,8 +12668,8 @@ exports.printNewFileTypeForm = async function(msg_pool, op) {
 
 
 async function _getFileTypeDetails(conn, ftype_id) {
-  var sql, param, data;
-  var result = {file_ext: '', file_type: ''};
+  let sql, param, data;
+  let result = {file_ext: '', file_type: ''};
   
   try {
     sql = `SELECT file_ext, file_type ` +
@@ -12689,12 +12695,12 @@ async function _getFileTypeDetails(conn, ftype_id) {
 
 
 function _printFileTypeEditForm(op, ftype_id, ftype_dtl, file_types) {
-  var file_type_options, html;
+  let file_type_options, html;
   
   try {
     file_type_options = ``;
-    for (var i = 0; i < file_types.length; i++) {
-      var selected = (file_types[i] == ftype_dtl.file_type)? "selected" : "";      
+    for (let i = 0; i < file_types.length; i++) {
+      let selected = (file_types[i] == ftype_dtl.file_type)? "selected" : "";      
       file_type_options += `<option ${selected}>${file_types[i]}</option>`;
     }
     
@@ -12746,9 +12752,9 @@ function _printFileTypeEditForm(op, ftype_id, ftype_dtl, file_types) {
 
 
 exports.printFileTypeEditForm = async function(msg_pool, op, ftype_id) {
-  var conn, html;
-  var file_types = [];
-  var ftype_dtl = {};
+  let conn, html;
+  let file_types = [];
+  let ftype_dtl = {};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -12772,8 +12778,7 @@ exports.printFileTypeEditForm = async function(msg_pool, op, ftype_id) {
 
 
 async function _getSysSettingList(conn) {
-  var sql, data;
-  var result = [];
+  let sql, data, result = [];
   
   try {
     sql = `SELECT sys_key, sys_value ` +
@@ -12782,7 +12787,7 @@ async function _getSysSettingList(conn) {
     
     data = JSON.parse(await dbs.sqlQuery(conn, sql));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push({sys_key: data[i].sys_key, sys_value: data[i].sys_value});
     }
   }
@@ -12795,7 +12800,7 @@ async function _getSysSettingList(conn) {
 
 
 function _printSysSettingJS() {
-  var html;
+  let html;
   
   try {
     html = `
@@ -12911,7 +12916,7 @@ function _printSysSettingJS() {
 
 
 function _printSysSettingList(key_list) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -12944,9 +12949,9 @@ function _printSysSettingList(key_list) {
         <tbody>    
     `;
     
-    for (var i = 0; i < key_list.length; i++) {
-      var this_sys_key = key_list[i].sys_key;
-      var this_sys_value = key_list[i].sys_value;
+    for (let i = 0; i < key_list.length; i++) {
+      let this_sys_key = key_list[i].sys_key;
+      let this_sys_value = key_list[i].sys_value;
       
       html += `
           <tr style="background-color:lightyellow">
@@ -12995,8 +13000,7 @@ function _printSysSettingList(key_list) {
 
 
 exports.printSysSettingList = async function(msg_pool) {
-  var conn, html;
-  var key_list = [];
+  let conn, html, key_list = [];
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
@@ -13019,8 +13023,8 @@ exports.printSysSettingList = async function(msg_pool) {
 
 
 async function _getSysSettingDetails(conn, sys_key) {
-  var sql, param, data;
-  var result = {sys_key: '', sys_value: ''};
+  let sql, param, data;
+  let result = {sys_key: '', sys_value: ''};
   
   try {
     sql = `SELECT sys_value ` +
@@ -13043,7 +13047,7 @@ async function _getSysSettingDetails(conn, sys_key) {
 
 
 function _printSysSettingEditForm(op, key_dtl) {
-  var html;
+  let html;
   
   try {
     html = `
@@ -13083,8 +13087,7 @@ function _printSysSettingEditForm(op, key_dtl) {
 
 
 exports.printSysSettingEditForm = async function(msg_pool, op, sys_key) {
-  var conn, html;
-  var key_dtl = {};
+  let conn, html, key_dtl = {};
   
   try {
     conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -13110,7 +13113,7 @@ async function _printTelegramBotProfileJS(conn, sess_code) {
   let html;
   
   try {
-    await extendSession(conn, sess_code);   // Extend session period 
+    await _extendSession(conn, sess_code);   // Extend session period 
 				
     html = `
     <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
@@ -13394,7 +13397,7 @@ async function _printTelegramBotProfileJS(conn, sess_code) {
 
 
 function _printTelegramBotProfileInputForm() {
-  var html;
+  let html;
   
   try {
     html = `
@@ -13533,7 +13536,7 @@ exports.decryptTelegramProfileData = async function(algorithm, aes_key, enc_data
 
 
 async function _getUserIdByName(conn_msg, user) {
-  var sql, param, data, user_id;
+  let sql, param, data, user_id;
   
   try {
     //-- No deactivated user will be considered. Prevent hackers use deactivated users to infiltrate the system. --//
@@ -13561,7 +13564,7 @@ async function _getUserIdByName(conn_msg, user) {
 
 
 async function _isUserInValidSession(conn_pda, user_id, sess_code) {
-  var sql, param, data, is_valid;
+  let sql, param, data, is_valid;
   
   try {
     sql = `SELECT COUNT(*) AS cnt ` +
@@ -13583,7 +13586,7 @@ async function _isUserInValidSession(conn_pda, user_id, sess_code) {
 
 
 exports.getUserIdByName = async function(msg_pool, pda_pool, user, sess_code) {
-  var conn_msg, conn_pda, user_id;
+  let conn_msg, conn_pda, user_id;
   
   try {
     conn_msg = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
@@ -13610,8 +13613,7 @@ exports.getUserIdByName = async function(msg_pool, pda_pool, user, sess_code) {
 
 
 async function _getFeatures(conn) {
-  var sql, data;
-  var features = [];
+  let sql, data, features = [];
   
   try {
     sql = `SELECT b.feature_url, b.feature_icon, a.list_order ` +
@@ -13621,7 +13623,7 @@ async function _getFeatures(conn) {
           
     data = JSON.parse(await dbs.sqlQuery(conn, sql));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       features.push({url: data[i].feature_url, icon: data[i].feature_icon});
     }      
   }
@@ -13634,7 +13636,7 @@ async function _getFeatures(conn) {
 
 
 function _printSelectToolsJS() {
-  var html;
+  let html;
   
   try {
     html = `
@@ -13668,7 +13670,7 @@ function _printSelectToolsJS() {
 
 
 async function _printSelectToolsForm(conn_msg, user_role, features) {
-  var html, company_name, copy_right, spaces, panel, panel_btn, PDA_BG_COLOR;
+  let html, company_name, copy_right, spaces, panel, panel_btn, PDA_BG_COLOR;
   
   try {
     company_name = await wev.getDecoyCompanyName(conn_msg);
@@ -13727,9 +13729,9 @@ async function _printSelectToolsForm(conn_msg, user_role, features) {
       <div data-role="main" class="ui-body-d ui-content">
     `;
     
-    for (var i = 0; i < features.length; i++) {
-      var this_url = features[i].url;
-      var this_icon = features[i].icon;
+    for (let i = 0; i < features.length; i++) {
+      let this_url = features[i].url;
+      let this_icon = features[i].icon;
       
       //-- Note: style property must be declared explicitly to let it change image hovering icon --//
       html += `
@@ -13765,8 +13767,7 @@ async function _printSelectToolsForm(conn_msg, user_role, features) {
 
 
 exports.printSelectToolsForm = async function(pda_pool, msg_pool, user_id) {
-  var conn_pda, conn_msg, user_role, html;
-  var features = [];
+  let conn_pda, conn_msg, user_role, html, features = [];
   
   try {
     conn_pda = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
@@ -13792,16 +13793,15 @@ exports.printSelectToolsForm = async function(pda_pool, msg_pool, user_id) {
 
 
 async function _getNotesList(conn, user_id, list_filter) {
-  var sql, param, data, filter;
-  var result = [];
+  let sql, param, data, filter, result = [];
   
   try {
     if (wev.allTrim(list_filter) != "") {
-      var sqlcomm = [];
-      var keywords = list_filter.split(" ");
+      let sqlcomm = [];
+      let keywords = list_filter.split(" ");
       
-      for (var i = 0; i < keywords.length; i++) {
-        var this_keyword = wev.allTrim(keywords[i]);
+      for (let i = 0; i < keywords.length; i++) {
+        let this_keyword = wev.allTrim(keywords[i]);
         sqlcomm.push(`notes_title LIKE '%${this_keyword}%'`);        
       }
       
@@ -13820,7 +13820,7 @@ async function _getNotesList(conn, user_id, list_filter) {
     param = [user_id];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push({notes_id: data[i].notes_id, notes_title: data[i].notes_title});
     }      
   }
@@ -13833,7 +13833,7 @@ async function _getNotesList(conn, user_id, list_filter) {
 
 
 function _printNotesJS() {
-  var html;
+  let html;
   
   try {
     html = `
@@ -13935,7 +13935,7 @@ function _printNotesJS() {
 
 
 function _printNotesList(list_filter, notes_list) {
-  var html, pda_bg_color;
+  let html, pda_bg_color;
   
   try {
     pda_bg_color = wev.getGlobalValue('PDA_BG_COLOR');
@@ -13978,9 +13978,9 @@ function _printNotesList(list_filter, notes_list) {
         <tbody>    
     `;
     
-    for (var i = 0; i < notes_list.length; i++) {
-      var this_notes_id = notes_list[i].notes_id;
-      var this_notes_title = notes_list[i].notes_title;
+    for (let i = 0; i < notes_list.length; i++) {
+      let this_notes_id = notes_list[i].notes_id;
+      let this_notes_title = notes_list[i].notes_title;
       
       html += `
           <tr style="background-color:lightyellow">
@@ -14031,8 +14031,7 @@ function _printNotesList(list_filter, notes_list) {
 
 
 exports.printNotesList = async function(pda_pool, user_id, list_filter) {
-  var conn, html;
-  var notes_list = [];
+  let conn, html, notes_list = [];
   
   try {
     conn = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
@@ -14055,8 +14054,7 @@ exports.printNotesList = async function(pda_pool, user_id, list_filter) {
 
 
 async function _getNotesDetails(conn, user_id, notes_id) {
-  var sql, param, data;
-  var result = {};
+  let sql, param, data, result = {};
   
   try {
     //-- Note: 'user_id' is used to verify the owner of the notes record, it is for security measure. --//
@@ -14084,7 +14082,7 @@ async function _getNotesDetails(conn, user_id, notes_id) {
 
 
 function _printNotesDetails(op, notes_dtl, lstfilter) {
-  var html, pda_bg_color;
+  let html, pda_bg_color;
   
   try {
     pda_bg_color = wev.getGlobalValue('PDA_BG_COLOR');
@@ -14148,7 +14146,7 @@ function _printNotesDetails(op, notes_dtl, lstfilter) {
 
 
 function _printEditNotesForm(op, notes_dtl, lstfilter) {
-  var html, pda_bg_color;
+  let html, pda_bg_color;
   
   try {
     pda_bg_color = wev.getGlobalValue('PDA_BG_COLOR');
@@ -14199,7 +14197,7 @@ function _printEditNotesForm(op, notes_dtl, lstfilter) {
 
 
 async function _modifyNotes(conn, user_id, notes_id, notes_title, notes_content) {
-  var sql, param;
+  let sql, param;
   
   try {
     //-- Note: 'user_id' is used to safe guard the update record, so that it can't be amended by --//
@@ -14221,7 +14219,7 @@ async function _modifyNotes(conn, user_id, notes_id, notes_title, notes_content)
 
 
 async function _deleteNotes(conn, user_id, notes_id) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM notes ` +
@@ -14238,7 +14236,7 @@ async function _deleteNotes(conn, user_id, notes_id) {
 
 
 function _printNewNotesForm(op, user_id, lstfilter) {
-  var html, pda_bg_color;
+  let html, pda_bg_color;
   
   try {
     pda_bg_color = wev.getGlobalValue('PDA_BG_COLOR');
@@ -14288,7 +14286,7 @@ function _printNewNotesForm(op, user_id, lstfilter) {
 
 
 async function _addNewNotes(conn, user_id, notes_title, notes_content) {
-  var sql, param, data, notes_id;
+  let sql, param, data, notes_id;
   
   try {
     sql = `INSERT INTO notes ` +
@@ -14313,16 +14311,16 @@ async function _addNewNotes(conn, user_id, notes_title, notes_content) {
 
 
 exports.notesOperation = async function(pda_pool, op, oper_mode, user_id, notes_id, notes_title, notes_content, lstfilter) {
-  var conn, html;
+  let conn, html;
   
   try {
     conn = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
     
     if (op == 'A') {
       if (oper_mode == 'S') {
-        var notes_id = await _addNewNotes(conn, user_id, notes_title, notes_content);
+        let notes_id = await _addNewNotes(conn, user_id, notes_title, notes_content);        
+        let notes_dtl = await _getNotesDetails(conn, user_id, notes_id);        
         
-        var notes_dtl = await _getNotesDetails(conn, user_id, notes_id);        
         html = wev.printHeader("Notes");
         html += _printNotesJS();
         html += _printNotesDetails('R', notes_dtl, lstfilter);                  
@@ -14335,15 +14333,15 @@ exports.notesOperation = async function(pda_pool, op, oper_mode, user_id, notes_
     }
     else if (op == 'E') {
       if (oper_mode == 'S') {
-        await _modifyNotes(conn, user_id, notes_id, notes_title, notes_content);
-                 
-        var notes_dtl = await _getNotesDetails(conn, user_id, notes_id);        
+        await _modifyNotes(conn, user_id, notes_id, notes_title, notes_content);                 
+        let notes_dtl = await _getNotesDetails(conn, user_id, notes_id);        
+        
         html = wev.printHeader("Notes");
         html += _printNotesJS();
         html += _printNotesDetails('R', notes_dtl, lstfilter);        
       }
       else {
-        var notes_dtl = await _getNotesDetails(conn, user_id, notes_id);
+        let notes_dtl = await _getNotesDetails(conn, user_id, notes_id);
         
         html = wev.printHeader("Notes");
         html += _printNotesJS();
@@ -14351,15 +14349,15 @@ exports.notesOperation = async function(pda_pool, op, oper_mode, user_id, notes_
       }
     }
     else if (op == 'D') {
-      await _deleteNotes(conn, user_id, notes_id);      
-      
-      var notes_list = await _getNotesList(conn, user_id, lstfilter);      
+      await _deleteNotes(conn, user_id, notes_id);            
+      let notes_list = await _getNotesList(conn, user_id, lstfilter);
+            
       html = wev.printHeader("Notes");
       html += _printNotesJS();
       html += _printNotesList(lstfilter, notes_list);          
     }
     else if (op == 'R') {
-      var notes_dtl = await _getNotesDetails(conn, user_id, notes_id);
+      let notes_dtl = await _getNotesDetails(conn, user_id, notes_id);
       
       html = wev.printHeader("Notes");
       html += _printNotesJS();
@@ -14378,8 +14376,8 @@ exports.notesOperation = async function(pda_pool, op, oper_mode, user_id, notes_
 
 
 async function _getCurrentYearAndMonth(conn) {
-  var sql, data;
-  var result = {year: 0, month: 0};
+  let sql, data;
+  let result = {year: 0, month: 0};
   
   try {
     sql = `SELECT YEAR(CURRENT_TIMESTAMP()) AS year, MONTH(CURRENT_TIMESTAMP()) AS month`;
@@ -14395,7 +14393,7 @@ async function _getCurrentYearAndMonth(conn) {
 
 
 function _printSchedulerJS(op, oper_mode, reminder_list) {
-  var html, is_reminder_exist, go_first_active_event;
+  let html, is_reminder_exist, go_first_active_event;
   
   try {
     op = (typeof(op) != "string")? "" : op;
@@ -14675,7 +14673,7 @@ function _printSchedulerJS(op, oper_mode, reminder_list) {
 
 
 function _printSchedulerStyleSection() {
-  var html;
+  let html;
   
   try {
     html = `
@@ -14705,8 +14703,8 @@ function _printSchedulerStyleSection() {
 
 
 async function _getDateInfo(conn, first_date) {
-  var sql, param, data;
-  var result = {last_date: '', offset: 0, month: ''};
+  let sql, param, data;
+  let result = {last_date: '', offset: 0, month: ''};
   
   try {
     //-- Note: Day of the week index for the date (1 = Sunday, 2 = Monday, ..., 7 = Saturday). i.e. offset --//
@@ -14724,7 +14722,7 @@ async function _getDateInfo(conn, first_date) {
 
 
 async function _getDay(conn, date) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT DAYOFMONTH(?) AS day`;
@@ -14734,7 +14732,7 @@ async function _getDay(conn, date) {
   }
   catch(e) {
     //-- last resort: Assume date format is yyyy-mm-dd --//
-    var date_parts = date.split('-');
+    let date_parts = date.split('-');
     result = Number(date_parts[2]);
     
     if (isNaN(result) || result < 1 || result > 31) {
@@ -14747,7 +14745,7 @@ async function _getDay(conn, date) {
 
 
 async function _isToday(conn, date) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT DATEDIFF(?, CURRENT_DATE()) AS date_diff`;
@@ -14765,8 +14763,7 @@ async function _isToday(conn, date) {
 
 
 async function _getEventsInThisDate(conn, user_id, date) {
-  var sql, param, data;
-  var result = [];
+  let sql, param, data, result = [];
   
   try {
     sql = `SELECT event_id, event_title ` + 
@@ -14778,7 +14775,7 @@ async function _getEventsInThisDate(conn, user_id, date) {
     param = [user_id, date];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push({event_id: data[i].event_id, event_title: data[i].event_title});
     }      
   }
@@ -14791,7 +14788,7 @@ async function _getEventsInThisDate(conn, user_id, date) {
 
 
 async function _gotoNextDate(conn, date) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT DATE_FORMAT(ADDDATE(?, 1), '%Y-%m-%d') AS next_date`;
@@ -14808,7 +14805,7 @@ async function _gotoNextDate(conn, date) {
 
 
 async function _lastDateHasPassed(conn, date, last_date) {
-  var sql, param, data, result;
+  let sql, param, data, result;
   
   try {
     sql = `SELECT DATEDIFF(?, ?) AS date_diff`;
@@ -14825,8 +14822,8 @@ async function _lastDateHasPassed(conn, date, last_date) {
 
 
 async function _printCalendar(conn, user_id, what_year, what_month) {
-  var html, panel, month, first_date, last_date, date_pt, weekday_pt, offset, stop_run, start, end, pda_bg_color;
-  var date_info = {last_date: '', offset: 0, month: ''};
+  let html, panel, month, first_date, last_date, date_pt, weekday_pt, offset, stop_run, start, end, pda_bg_color;
+  let date_info = {last_date: '', offset: 0, month: ''};
   
   try {
     pda_bg_color = wev.getGlobalValue('PDA_BG_COLOR');
@@ -14909,18 +14906,18 @@ async function _printCalendar(conn, user_id, what_year, what_month) {
       
       for (weekday_pt = 1; weekday_pt <= 7; weekday_pt++) {
         if (start && !end) {
-          var this_day = await _getDay(conn, date_pt);
-          var cell_color = (await _isToday(conn, date_pt))? 'background-color:#F4F7CE;' : 'background-color:#D0F8FF';
-          var events = await _getEventsInThisDate(conn, user_id, date_pt);      // Note: 'events' is an array.
-          var all_events = (events.length > 0)? "<table width=100% cellspacing=0 cellpadding=0 style='table-layout:fixed;'><thead></thead><tbody>" : '';
-          var idx = 1;
-          var link_color = 'black';            
+          let this_day = await _getDay(conn, date_pt);
+          let cell_color = (await _isToday(conn, date_pt))? 'background-color:#F4F7CE;' : 'background-color:#D0F8FF';
+          let events = await _getEventsInThisDate(conn, user_id, date_pt);      // Note: 'events' is an array.
+          let all_events = (events.length > 0)? "<table width=100% cellspacing=0 cellpadding=0 style='table-layout:fixed;'><thead></thead><tbody>" : '';
+          let idx = 1;
+          let link_color = 'black';            
           
-          for (var i = 0; i < events.length; i++) {
-            var this_event_id = events[i].event_id;
-            var this_event_title = (unicodeStrLen.get(events[i].event_title) > 5)? unicodeSubstring(events[i].event_title, 0, 5) + '...' : events[i].event_title;
+          for (let i = 0; i < events.length; i++) {
+            let this_event_id = events[i].event_id;
+            let this_event_title = (unicodeStrLen.get(events[i].event_title) > 5)? unicodeSubstring(events[i].event_title, 0, 5) + '...' : events[i].event_title;
             link_color = (idx > 1)? '#003ADE' : 'black';              // blue : black
-            var link = `<a href='javascript:readEvent(${this_event_id})' style='font-size: 9px; color:${link_color}'>${this_event_title}</a>`;
+            let link = `<a href='javascript:readEvent(${this_event_id})' style='font-size: 9px; color:${link_color}'>${this_event_title}</a>`;
           
             all_events += `
             <tr>
@@ -14957,7 +14954,7 @@ async function _printCalendar(conn, user_id, what_year, what_month) {
         else {
           if (!start) {
             //-- A day before the first date of the month --//
-            var pt = offset - 1;
+            let pt = offset - 1;
             if (pt < 1) {
               pt = 7;
             }
@@ -15016,10 +15013,10 @@ async function _printCalendar(conn, user_id, what_year, what_month) {
 
 
 exports.printCalendar = async function(pda_pool, user_id, what_year, what_month, op, event_id, call_by) {
-  var conn, html, has_reminder;
-  var oper_mode = "";
-  var event_dtl = {};
-  var reminder_list = [];
+  let conn, html, has_reminder;
+  let oper_mode = "";
+  let event_dtl = {};
+  let reminder_list = [];
   
   try {
     conn = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
@@ -15029,7 +15026,7 @@ exports.printCalendar = async function(pda_pool, user_id, what_year, what_month,
     
     //-- Note: This calendar system cannot handle date before 01 January 1752 --//       
     if (what_year <= 0 || what_year < 1752 || what_month < 1 || what_month > 12) {
-      var today = await _getCurrentYearAndMonth(conn);
+      let today = await _getCurrentYearAndMonth(conn);
       what_year = today.year;
       what_month = today.month;
     }
@@ -15061,7 +15058,7 @@ exports.printCalendar = async function(pda_pool, user_id, what_year, what_month,
 
 
 function _printAddEventForm(op, what_year, what_month, event_title, event_start, event_end) {
-  var html, pda_bg_color;
+  let html, pda_bg_color;
   
   try {
     pda_bg_color = wev.getGlobalValue('PDA_BG_COLOR');
@@ -15155,8 +15152,7 @@ function _printAddEventForm(op, what_year, what_month, event_title, event_start,
 
 
 exports.printAddEventForm = async function(pda_pool, user_id, op, oper_mode, what_year, what_month, event_start, event_end, event_title, event_detail) {
-  var conn, html;
-  var reminder_list = [];
+  let conn, html, reminder_list = [];
   
   try {
     conn = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
@@ -15191,8 +15187,7 @@ exports.printAddEventForm = async function(pda_pool, user_id, op, oper_mode, wha
 
 
 async function _addEvent(conn, user_id, event_title, event_detail, event_start, event_end) {
-  var sql, param, data;
-  var event_id = 0;
+  let sql, param, data, event_id = 0;
   
   try {
     sql = `INSERT INTO schedule_event ` +
@@ -15216,12 +15211,12 @@ async function _addEvent(conn, user_id, event_title, event_detail, event_start, 
 
 
 async function _addReminder(conn, event_id, reminder) {
-  var sql, param;
+  let sql, param;
   
   try {
-    for (var i = 0; i < reminder.length; i++) {
-      var this_rd_value = parseInt(reminder[i].rd_value, 10);
-      var this_rd_unit = reminder[i].rd_unit;
+    for (let i = 0; i < reminder.length; i++) {
+      let this_rd_value = parseInt(reminder[i].rd_value, 10);
+      let this_rd_unit = reminder[i].rd_unit;
       
       sql = `INSERT INTO schedule_reminder ` +
             `(event_id, remind_before, remind_unit, has_informed) ` +
@@ -15239,9 +15234,8 @@ async function _addReminder(conn, event_id, reminder) {
 
 
 exports.addNewEvent = async function(pda_pool, user_id, event_title, event_detail, event_start, event_end, reminder) {
-  var conn, event_id;
-  var sql_tx_on = false;
-  var retval = {ok: true, msg: ''};
+  let conn, event_id, sql_tx_on = false;
+  let retval = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
@@ -15280,8 +15274,7 @@ exports.addNewEvent = async function(pda_pool, user_id, event_title, event_detai
 
 
 async function _getEventDetail(conn, event_id) {
-  var sql, param, data;
-  var result = {};
+  let sql, param, data, result = {};
   
   try {
     sql = `SELECT event_title, event_detail, DATE_FORMAT(ev_start, '%Y-%m-%d %H:%i') AS ev_start, DATE_FORMAT(ev_end, '%Y-%m-%d %H:%i') AS ev_end ` +
@@ -15307,8 +15300,7 @@ async function _getEventDetail(conn, event_id) {
 
 
 async function _getReminderListForEvent(conn, event_id) {
-  var sql, param, data;
-  var result = [];
+  let sql, param, data, result = [];
   
   try {
     sql = `SELECT reminder_id, remind_before, remind_unit ` +
@@ -15318,7 +15310,7 @@ async function _getReminderListForEvent(conn, event_id) {
     param = [event_id];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
 
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       result.push({reminder_id: data[i].reminder_id, remind_before: data[i].remind_before, remind_unit: data[i].remind_unit});
     }    
   }
@@ -15331,8 +15323,7 @@ async function _getReminderListForEvent(conn, event_id) {
 
 
 function _printEditEventForm(op, oper_mode, what_year, what_month, event_id, has_reminder, event_dtl, reminder_list, call_by) {
-  var html, pda_bg_color, idx, back_link;
-  var interval = [];
+  let html, pda_bg_color, idx, back_link, interval = [];
   
   try {
     if (call_by == "event_search") {
@@ -15390,16 +15381,16 @@ function _printEditEventForm(op, oper_mode, what_year, what_month, event_id, has
     interval.push({opt_value: 'day', opt_desc: 'Days before'});    
     //-- Note: Although currently users can just put one reminder to an event, it may be enhanced later to let users add multiple reminders. --//
     idx = 1;
-    for (var i = 0; i < reminder_list.length; i++) {
-      var this_rd_id = reminder_list[i].reminder_id;
-      var this_rd_value = parseInt(reminder_list[i].remind_before, 10);
-      var this_rd_unit = reminder_list[i].remind_unit;
+    for (let i = 0; i < reminder_list.length; i++) {
+      let this_rd_id = reminder_list[i].reminder_id;
+      let this_rd_value = parseInt(reminder_list[i].remind_before, 10);
+      let this_rd_unit = reminder_list[i].remind_unit;
       
-      var this_options = '';
-      for (var k = 0; k < interval.length; k++) {
-        var this_opt_value = interval[k].opt_value;
-        var this_opt_desc = interval[k].opt_desc;        
-        var selected = (this_opt_value == this_rd_unit)? "selected" : "";
+      let this_options = '';
+      for (let k = 0; k < interval.length; k++) {
+        let this_opt_value = interval[k].opt_value;
+        let this_opt_desc = interval[k].opt_desc;        
+        let selected = (this_opt_value == this_rd_unit)? "selected" : "";
         this_options += `<option value='${this_opt_value}' ${selected}>${this_opt_desc}</option>`; 
       }
 
@@ -15481,9 +15472,7 @@ function _printEditEventForm(op, oper_mode, what_year, what_month, event_id, has
  
 
 exports.printEditEventForm = async function(pda_pool, user_id, op, oper_mode, what_year, what_month, event_id, has_reminder, call_by) {
-  var conn, html;
-  var event_dtl = {};
-  var reminder_list = [];
+  let conn, html, event_dtl = {}, reminder_list = [];
   
   try {
     conn = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
@@ -15507,7 +15496,7 @@ exports.printEditEventForm = async function(pda_pool, user_id, op, oper_mode, wh
 
 
 function _printReadEventForm(op, oper_mode, what_year, what_month, call_by, search_phase, event_id, has_reminder, event_dtl, reminder_list) {
-  var html, back_link, pda_bg_color;
+  let html, back_link, pda_bg_color;
   
   try {
     pda_bg_color = wev.getGlobalValue('PDA_BG_COLOR');
@@ -15570,9 +15559,9 @@ function _printReadEventForm(op, oper_mode, what_year, what_month, call_by, sear
           </tr>      
       `;
       
-      for (var i = 0; i < reminder_list.length; i++) {
-        var this_remind_before = parseInt(reminder_list[i].remind_before, 10);
-        var this_remind_unit = (this_remind_before > 1)? wev.allTrim(reminder_list[i].remind_unit) + 's' : wev.allTrim(reminder_list[i].remind_unit);
+      for (let i = 0; i < reminder_list.length; i++) {
+        let this_remind_before = parseInt(reminder_list[i].remind_before, 10);
+        let this_remind_unit = (this_remind_before > 1)? wev.allTrim(reminder_list[i].remind_unit) + 's' : wev.allTrim(reminder_list[i].remind_unit);
         
         html += `
         <tr>
@@ -15624,9 +15613,7 @@ function _printReadEventForm(op, oper_mode, what_year, what_month, call_by, sear
 
 
 exports.printReadEventForm = async function(pda_pool, user_id, op, oper_mode, what_year, what_month, event_id, has_reminder, call_by, search_phase) {
-  var conn, html;
-  var event_dtl = {};
-  var reminder_list = [];
+  let conn, html, event_dtl = {}, reminder_list = [];
 
   try {
     conn = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
@@ -15650,7 +15637,7 @@ exports.printReadEventForm = async function(pda_pool, user_id, op, oper_mode, wh
 
 
 async function _modifyEvent(conn, event_id, event_title, event_detail, event_start, event_end) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `UPDATE schedule_event ` +
@@ -15670,16 +15657,16 @@ async function _modifyEvent(conn, event_id, event_title, event_detail, event_sta
 
 
 async function _modifyEventReminder(conn, event_id, reminder) {
-  var sql, param;
+  let sql, param;
   
   try {
     //-- Step 1: Firstly, remove all existing event reminder records --//
     await _deleteReminder(conn, event_id);
         
     //-- Step 2: Create reminder(s) of the event --//
-    for (var i = 0; i < reminder.length; i++) {
-      var this_rd_value = parseInt(reminder[i].rd_value, 10);
-      var this_rd_unit = reminder[i].rd_unit;
+    for (let i = 0; i < reminder.length; i++) {
+      let this_rd_value = parseInt(reminder[i].rd_value, 10);
+      let this_rd_unit = reminder[i].rd_unit;
 
       //-- Note: Since 'has_informed' flag is saved as 0, it means the reminder may be triggered again, even --//
       //--       informed message has been sent before.                                                      --//      
@@ -15699,9 +15686,8 @@ async function _modifyEventReminder(conn, event_id, reminder) {
 
 
 exports.updateEvent = async function(pda_pool, user_id, event_id, event_title, event_detail, event_start, event_end, reminder) {
-  var conn;
-  var sql_tx_on = false;
-  var retval = {ok: true, msg: ''};
+  let conn, sql_tx_on = false;
+  let retval = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
@@ -15731,7 +15717,7 @@ exports.updateEvent = async function(pda_pool, user_id, event_id, event_title, e
 
 
 async function _deleteEventRecord(conn, event_id) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM schedule_event ` +
@@ -15747,7 +15733,7 @@ async function _deleteEventRecord(conn, event_id) {
 
 
 async function _deleteReminder(conn, event_id) {
-  var sql, param;
+  let sql, param;
   
   try {
     sql = `DELETE FROM schedule_reminder ` +
@@ -15763,9 +15749,8 @@ async function _deleteReminder(conn, event_id) {
 
 
 exports.deleteEvent = async function(pda_pool, event_id) {
-  var conn;
-  var sql_tx_on = false;
-  var retval = {ok: true, msg: ''};
+  let conn, sql_tx_on = false;
+  let retval = {ok: true, msg: ''};
   
   try {
     conn = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
@@ -15798,8 +15783,7 @@ exports.deleteEvent = async function(pda_pool, event_id) {
 
 
 async function _getEventList(conn, user_id) {
-  var sql, param, data;
-  var event_list = [];
+  let sql, param, data, event_list = [];
   
   try {
     sql = `SELECT event_id, event_title, DATE_FORMAT(ev_start, '%Y-%m-%d %H:%i') AS ev_start, ` +
@@ -15814,7 +15798,7 @@ async function _getEventList(conn, user_id) {
     param = [user_id];
     data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
     
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       event_list.push({event_id: data[i].event_id, event_title: data[i].event_title, ev_start: data[i].ev_start, has_passed: data[i].has_passed});
     } 
   }
@@ -15827,7 +15811,7 @@ async function _getEventList(conn, user_id) {
 
 
 function _printEventList(op, what_year, what_month, event_list) {
-  var html, pda_bg_color;
+  let html, pda_bg_color;
   
   try {
     pda_bg_color = wev.getGlobalValue('PDA_BG_COLOR');
@@ -15859,15 +15843,15 @@ function _printEventList(op, what_year, what_month, event_list) {
     `;
     
     if (event_list.length > 0) {
-      var first_active_event_found = false;
+      let first_active_event_found = false;
 
-      for (var i = 0; i < event_list.length; i++) {
-        var this_event_id = event_list[i].event_id;
-        var this_event_title = event_list[i].event_title;
-        var this_ev_start = event_list[i].ev_start;
-        var this_has_passed = (parseInt(event_list[i].has_passed, 10) == 1)? true : false;
-        var tr_bg_color = (this_has_passed)? 'lightgray' : 'lightyellow';
-        var tr_id = '';
+      for (let i = 0; i < event_list.length; i++) {
+        let this_event_id = event_list[i].event_id;
+        let this_event_title = event_list[i].event_title;
+        let this_ev_start = event_list[i].ev_start;
+        let this_has_passed = (parseInt(event_list[i].has_passed, 10) == 1)? true : false;
+        let tr_bg_color = (this_has_passed)? 'lightgray' : 'lightyellow';
+        let tr_id = '';
         
         if (!this_has_passed && !first_active_event_found) {
           tr_id = "id=first_active_event";
@@ -15910,13 +15894,10 @@ function _printEventList(op, what_year, what_month, event_list) {
 
 
 exports.printEventList = async function(pda_pool, op, oper_mode, user_id, what_year, what_month) {
-  var conn, html;
-  var event_list = [];
-  var reminder_list = [];
+  let conn, html, event_list = [], reminder_list = [];
   
   try {
-    conn = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
-    
+    conn = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));    
     event_list = await _getEventList(conn, user_id);
     
     html = wev.printHeader("Event List");
@@ -15935,7 +15916,7 @@ exports.printEventList = async function(pda_pool, op, oper_mode, user_id, what_y
 
 
 function _printSearchForm(op, what_year, what_month) {
-  var html, pda_bg_color;
+  let html, pda_bg_color;
   
   try {
     pda_bg_color = wev.getGlobalValue('PDA_BG_COLOR');
@@ -15973,7 +15954,7 @@ function _printSearchForm(op, what_year, what_month) {
 
 
 exports.printSearchForm = async function(op, what_year, what_month) {
-  var html;
+  let html;
   
   try {
     html = wev.printHeader("Event Search");
@@ -15989,17 +15970,17 @@ exports.printSearchForm = async function(op, what_year, what_month) {
 
 
 async function _searchEvents(conn, user_id, search_phase) {
-  var sql, param, data;
-  var events = new SimpleHashTable();
-  var keywords = [];
-  var buffer = [];
-  var result = [];
+  let sql, param, data;
+  let events = new SimpleHashTable();
+  let keywords = [];
+  let buffer = [];
+  let result = [];
   
   try {
     keywords = search_phase.split(";");
     
-    for (var i = 0; i < keywords.length; i++) {
-      var this_keyword = wev.allTrim(keywords[i]);
+    for (let i = 0; i < keywords.length; i++) {
+      let this_keyword = wev.allTrim(keywords[i]);
       
       sql = `SELECT event_id, event_title, DATE_FORMAT(ev_start, '%Y-%m-%d %H:%i') AS ev_start ` +
             `  FROM schedule_event ` +
@@ -16011,8 +15992,8 @@ async function _searchEvents(conn, user_id, search_phase) {
       param = [user_id];
       data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
       
-      for (var k = 0; k < data.length; k++) {
-        var this_event_id = data[k].event_id;
+      for (let k = 0; k < data.length; k++) {
+        let this_event_id = data[k].event_id;
         
         //-- Avoid event duplication in search result --//
         if (!events.containsKey(this_event_id)) {
@@ -16038,7 +16019,7 @@ async function _searchEvents(conn, user_id, search_phase) {
 
 
 function _printSearchResult(op, what_year, what_month, search_phase, search_records) {
-  var html, pda_bg_color;
+  let html, pda_bg_color;
   
   try {
     pda_bg_color = wev.getGlobalValue('PDA_BG_COLOR');
@@ -16072,11 +16053,11 @@ function _printSearchResult(op, what_year, what_month, search_phase, search_reco
     `;
 
     if (search_records.length > 0) {
-      for (var i = 0; i < search_records.length; i++) {
-        var this_event_id = search_records[i].event_id;
-        var this_event_title = search_records[i].event_title;
-        var this_ev_start = search_records[i].ev_start;
-        var this_target = `javascript:readEvent(${this_event_id})`;
+      for (let i = 0; i < search_records.length; i++) {
+        let this_event_id = search_records[i].event_id;
+        let this_event_title = search_records[i].event_title;
+        let this_ev_start = search_records[i].ev_start;
+        let this_target = `javascript:readEvent(${this_event_id})`;
           
         html += `
         <tr style="background-color:lightyellow">
@@ -16111,8 +16092,7 @@ function _printSearchResult(op, what_year, what_month, search_phase, search_reco
 
 
 exports.printSearchResult = async function(pda_pool, op, user_id, what_year, what_month, search_phase) {
-  var conn, html;
-  var search_records = [];
+  let conn, html, search_records = [];
   
   try {
     conn = await dbs.getPoolConn(pda_pool, dbs.selectCookie('PDA'));
