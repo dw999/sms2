@@ -312,7 +312,7 @@ CREATE OR REPLACE TABLE sys_settings
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 LOCK TABLES `sys_settings` WRITE;
-INSERT INTO `sys_settings` VALUES ('audio_converter',"/usr/bin/ffmpeg -i '{input_file}' '{output_file}'"),('connection_mode','0'),('decoy_company_name','PDA Tools'),('msg_block_size','30'),('session_period','02:00:00'),('old_msg_delete_days','14',('use_email_gateway','FALSE'),('email_gateway',''),('master_passwd',''));
+INSERT INTO `sys_settings` VALUES ('audio_converter',"/usr/bin/ffmpeg -i '{input_file}' '{output_file}'"),('connection_mode','0'),('decoy_company_name','PDA Tools'),('msg_block_size','30'),('session_period','02:00:00'),('old_msg_delete_days','14'),('use_email_gateway','FALSE'),('email_gateway',''),('master_passwd','');
 UNLOCK TABLES;
 
 CREATE OR REPLACE TABLE rsa_keypair
