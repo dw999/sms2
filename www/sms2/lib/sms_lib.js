@@ -62,6 +62,8 @@
 // V1.0.22       2025-12-04      DW              Add function 'isSessionValidEx'. It is the key part of a rolling key mechanism to prevent
 //                                               and detect MITM attacking.
 // V2.0.23       2026-01-29      DW              Refine scope of variables declare in this library.
+// V2.0.24       2026-02-09      DW              Fix a bug for missing Javascript library "js.cookie.min.js", which let SMS 2.x causes error
+//                                               on Apple platforms, such as iPhone and iPad. 
 //#################################################################################################################################
 
 "use strict";
@@ -4342,6 +4344,7 @@ function _printAddGroupJavascriptSection(sess_code) {
 	<link rel="shortcut icon" href="/favicon.ico">
 	<script src="/js/jquery.min.js"></script>
 	<script src="/js/jquery.mobile-1.4.5.min.js"></script>
+  <script src="/js/js.cookie.min.js"></script>
   <script src="/js/crypto-lib.js"></script>
   <script src="/js/common_lib.js"></script>    
 
@@ -4521,9 +4524,10 @@ function _printAddPrivateGroupJavascriptSection(sess_code) {
 	<link rel="shortcut icon" href="/favicon.ico">
 	<script src="/js/jquery.min.js"></script>
 	<script src="/js/jquery.mobile-1.4.5.min.js"></script>
+  <script src="/js/js.cookie.min.js"></script>
   <script src="/js/common_lib.js"></script>
   <script src="/js/crypto-lib.js"></script>    
-
+  
   <script>
     $(document).on("pagecreate", function() {
       $("#group_name").focus();
@@ -4665,6 +4669,7 @@ function _printDeleteGroupByAdminJavascriptSection() {
 	<link rel="shortcut icon" href="/favicon.ico">
 	<script src="/js/jquery.min.js"></script>
 	<script src="/js/jquery.mobile-1.4.5.min.js"></script>
+  <script src="/js/js.cookie.min.js"></script>
   <script src="/js/common_lib.js"></script>    
   <script src="/js/crypto-lib.js"></script>
 
@@ -9285,6 +9290,7 @@ function _printRegisteredJavascriptSection() {
 	<link rel="shortcut icon" href="/favicon.ico">
 	<script src="/js/jquery.min.js"></script>
 	<script src="/js/jquery.mobile-1.4.5.min.js"></script>    
+  <script src="/js/js.cookie.min.js"></script>  
   <script src="/js/common_lib.js"></script>  
   `;
   
@@ -9546,6 +9552,7 @@ async function _printAddUserAccountJavascriptSection(conn) {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>    
+    <script src="/js/js.cookie.min.js"></script>
     <script src="/js/common_lib.js"></script>
     <script src='/js/crypto-lib.js'></script>
     
@@ -9910,6 +9917,7 @@ function _promoteUserJavascriptSection(op) {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+    <script src="/js/js.cookie.min.js"></script>
     <script src="/js/common_lib.js"></script>    
     <script src="/js/crypto-lib.js"></script>
   
@@ -10195,6 +10203,7 @@ function _demoteUserJavascriptSection(op) {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+    <script src="/js/js.cookie.min.js"></script>
     <script src="/js/common_lib.js"></script>   
     <script src="/js/crypto-lib.js"></script> 
   
@@ -10483,6 +10492,7 @@ function _lockUserJavascriptSection(op) {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+    <script src="/js/js.cookie.min.js"></script>
     <script src="/js/common_lib.js"></script>   
     <script src="/js/crypto-lib.js"></script> 
   
@@ -11119,6 +11129,7 @@ function _printMainSitesMaintainJavascriptSection() {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+    <script src="/js/js.cookie.min.js"></script>
     <script src="/js/common_lib.js"></script>
     <script src="/js/crypto-lib.js"></script>
   
@@ -11967,6 +11978,7 @@ function _printDecoySiteListJavascriptSection() {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+    <script src="/js/js.cookie.min.js"></script>
     <script src="/js/common_lib.js"></script>
     <script src="/js/crypto-lib.js"></script>
   
@@ -12351,6 +12363,7 @@ function _printFileTypeListJS() {
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
     <script src="/js/jquery-editable-select.min.js"></script>
     <link href="/js/jquery-editable-select.min.css" rel="stylesheet">  
+    <script src="/js/js.cookie.min.js"></script>
     <script src="/js/common_lib.js"></script>
     <script src="/js/crypto-lib.js"></script>
   
@@ -12808,6 +12821,7 @@ function _printSysSettingJS() {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+    <script src="/js/js.cookie.min.js"></script>
     <script src="/js/common_lib.js"></script>
     <script src="/js/crypto-lib.js"></script>
   
@@ -13644,6 +13658,7 @@ function _printSelectToolsJS() {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+    <script src="/js/js.cookie.min.js"></script>
     <script src="/js/crypto-lib.js"></script>
     <script src="/js/common_lib.js"></script>
     
@@ -13841,6 +13856,7 @@ function _printNotesJS() {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+    <script src="/js/js.cookie.min.js"></script>
     <script src="/js/common_lib.js"></script>
     
     <script>
@@ -14419,6 +14435,7 @@ function _printSchedulerJS(op, oper_mode, reminder_list) {
     <link rel="shortcut icon" href="/favicon.ico">
     <script src="/js/jquery.min.js"></script>
     <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+    <script src="/js/js.cookie.min.js"></script>
     <script src="/js/DateTimePicker.min.js"></script>
     <!--[if lt IE 9]>
     <link rel="stylesheet" type="text/css" href="/js/DateTimePicker-ltie9.min.css"/>
