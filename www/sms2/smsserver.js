@@ -75,9 +75,9 @@
 // V2.0.16       2025-12-04      DW              Implement a "rolling key mechanism" in SMS to detect and prevent MITM attack.
 //
 // V2.0.17       2026-01-29      DW              Refine scope of variables declare in this main program and related libraries.      
-// V2.0.18       2026-02-12      DW              - Let users recover their forgot password (except connection mode 1).
-//                                               - Let administrators to amend password for all users (mainly for connection mode 1, but
-//                                                 serve other connection modes also).  
+// V2.0.18       2026-02-12      DW              - Let users recover their forgot password (except connection mode 1 and 3).
+//                                               - Let administrators to amend password for all users (mainly for connection mode 1 and 3,
+//                                                 but serve other connection modes also).  
 // V2.0.19       2026-02-23      DW              Expel all access connections without proper browser agent identity.     
 //#################################################################################################################################
   
