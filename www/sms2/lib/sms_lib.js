@@ -16657,7 +16657,7 @@ exports.isPasswordRecoverySessCodeValid = async function(msg_pool, pr_sess_code)
     add_datetime = await _getPasswordRecoverySessionCreateTime(conn, pr_sess_code);
     
     if (add_datetime != "") {
-      // Calculate the session valid time. Password recovery session will be expired after 30 minute after it's creation. //
+      // Calculate the session valid time. Password recovery session will be expired 30 minute after it's creation. //
       sess_until = await _calculateSessionValidTime(conn, add_datetime, '00:30:00');
       
       if (await _isPasswordRecoverySessionValid(conn, sess_until)) {
