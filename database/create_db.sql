@@ -44,6 +44,7 @@
 -- V1.0.12       2025-12-04      DW              - Add a new field 'rolling_key varchar(128)' to tables 
 --                                                 'login_token_queue' and 'web_session'.
 --                                               - Create a new table 'sess_roll_key'. 
+-- V1.0.13       2026-02-12      DW              Add a new table 'pr_session' for user password recovery operation.
 --
 -- Remark: It is part of SMS installation program.
 -----------------------------------------------------------------------------------------------------
@@ -344,8 +345,21 @@ CREATE OR REPLACE TABLE sms_version
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 LOCK TABLES `sms_version` WRITE;
-INSERT INTO `sms_version` VALUES ("2.0.19", "2.0", "19", "20260130", "2026-01-30 23:59:59");
+INSERT INTO `sms_version` VALUES ("2.0.20", "2.0", "20", "20260212", "2026-02-12 23:59:59");
 UNLOCK TABLES;
+
+CREATE OR REPLACE TABLE pr_session
+(
+  sess_code varchar(128),
+  secure_key varchar(128),
+  user_name varchar(64),
+  email varchar(256),
+  verify_code varchar(6),
+  gen_cnt int,
+  add_datetime datetime,
+  status varchar(1),
+  PRIMARY KEY (sess_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --=========================================================================================================================================================--
 

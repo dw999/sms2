@@ -74,7 +74,11 @@
 //
 // V2.0.16       2025-12-04      DW              Implement a "rolling key mechanism" in SMS to detect and prevent MITM attack.
 //
-// V2.0.17       2026-01-29      DW              Refine scope of variables declare in this main program and related libraries.             
+// V2.0.17       2026-01-29      DW              Refine scope of variables declare in this main program and related libraries.      
+// V2.0.18       2026-02-12      DW              - Let users recover their forgot password (except connection mode 1).
+//                                               - Let administrators to amend password for all users (mainly for connection mode 1, but
+//                                                 serve other connection modes also).  
+// V2.0.19       2026-02-23      DW              Expel all access connections without proper browser agent identity.     
 //#################################################################################################################################
   
 "use strict";
@@ -202,56 +206,78 @@ var msg_pool = dbs.createConnectionPool('COOKIE_MSG', 20);
 var pda_pool = dbs.createConnectionPool('COOKIE_PDA', 20);
 
 
-// Redirect all the invaders to Microsoft :-) //
+// Redirect all the invaders to Interpol :-) //
 app.post('/', (req, res) => {
-  res.redirect("https://www.microsoft.com");
+  res.redirect("https://www.interpol.int");
 });
 
 
 app.get('/', (req, res) => {
-	let http_user_agent = req.headers['user-agent'];
+  let http_user_agent = req.headers['user-agent'];
   let message = "Firefox (include Tor browser) is not supported in this site, please use another web browser. You will be redirected to our recommanded site.";
+  let has_header;
+  
+  if (typeof(http_user_agent) == "string") {
+    if (http_user_agent.trim().length > 0) {
+      has_header = true;
+    }
+    else {
+      has_header = false;
+    }
+  }
+  else {
+    has_header = false;
+  }
 
-  if (http_user_agent.match(/Firefox/gi)) {
-		// 2023-10-13 by DW:                                                                                                      //
-		// Since Firefox (include Tor browser) isn't compatible with newly added javascript programs, which are used for security //
-		// enhancement. After balance the application compatibility and security, I make a hard decision to drop Firefox support  // 
-		// until I find a way to get it done in Firefox.                                                                          //  
-		let result = smslib.getRandomSiteForVisitor(msg_pool);
-		
-		result.then((url) => {		
-			let html = `<script>
-										alert("${message}"); 
-										window.location.href = "${url}";
-									</script>`;
-	
-			res.send(html);       
-	  }).catch((error) => {
-			let html = `<script>
-										alert("${message}"); 
-										window.location.href = "https://www.microsoft.com";
-									</script>`;
-	
-			res.send(html);       			
-		}); 
-	}	
-	else {
-	  let result = smslib.showLoginPage(msg_pool);
-	    
-	  result.then((html) => {
-	    res.send(html); 
-	  }).catch((error) => {
-	    smslib.consoleLog(error);
-
-      let html = `<script>
-                    alert("Error is found, please try again. If this problem insists, contact us."); 
-                    var url = window.location.href;
-                    var host = url.split('/');
-                    window.location.href = host[0] + '//' + host[2] + '/';
-                  </script>`;
+  if (has_header) { 
+    if (http_user_agent.match(/Firefox/gi)) {
+      // 2023-10-13 by DW:                                                                                                      //
+      // Since Firefox (include Tor browser) isn't compatible with newly added javascript programs, which are used for security //
+      // enhancement. After balance the application compatibility and security, I make a hard decision to drop Firefox support  // 
+      // until I find a way to get it done in Firefox.                                                                          //  
+      let result = smslib.getRandomSiteForVisitor(msg_pool);
+      
+      result.then((url) => {		
+        let html = `
+        <script>
+          alert("${message}"); 
+          window.location.href = "${url}";
+        </script>`;
     
-      res.send(html);    
-	  });
+        res.send(html);       
+      }).catch((error) => {
+        let html = `
+        <script>
+          alert("${message}"); 
+          window.location.href = "https://www.microsoft.com";
+        </script>`;
+    
+        res.send(html);       			
+      }); 
+    }	
+    else {
+      let result = smslib.showLoginPage(msg_pool);
+        
+      result.then((html) => {
+        res.send(html); 
+      }).catch((error) => {
+        smslib.consoleLog(error);
+  
+        let html = `
+        <script>
+          alert("Error is found, please try again. If this problem insists, contact us."); 
+          var url = window.location.href;
+          var host = url.split('/');
+          window.location.href = host[0] + '//' + host[2] + '/';
+        </script>`;
+      
+        res.send(html);    
+      });
+    }
+  }
+  else {
+    // Expel all connections without browser agent identity //
+    res.redirect("https://www.interpol.int");
   }
 });
 
@@ -305,24 +331,26 @@ app.post('/go-login', (req, res) => {
                     res.redirect(url);
                   }
                   else {
-                    let html = `<script>
-                                  alert("${msg}"); 
-                                  var url = window.location.href;
-                                  var host = url.split('/');
-                                  location.href = host[0] + '//' + host[2] + '/';
-                                </script>`;
+                    let html = `
+                    <script>
+                      alert("${msg}"); 
+                      var url = window.location.href;
+                      var host = url.split('/');
+                      location.href = host[0] + '//' + host[2] + '/';
+                    </script>`;
                 
                     res.send(html);        
                   }
                 }).catch((error) => {
                   smslib.consoleLog(error);
             
-                  let html = `<script>
-                                alert("Login process is failure, please try again."); 
-                                var url = window.location.href;
-                                var host = url.split('/');
-                                location.href = host[0] + '//' + host[2] + '/';
-                              </script>`;
+                  let html = `
+                  <script>
+                    alert("Login process is failure, please try again."); 
+                    var url = window.location.href;
+                    var host = url.split('/');
+                    location.href = host[0] + '//' + host[2] + '/';
+                  </script>`;
                 
                   res.send(html);
                 });
@@ -330,12 +358,13 @@ app.post('/go-login', (req, res) => {
                 err_msg = 'Rolling key is lost due to decryption failure!';
                 smslib.consoleLog(err_msg);
                 
-                let html = `<script>
-                              alert("Rolling key is lost on back-end processing, please try again."); 
-                              var url = window.location.href;
-                              var host = url.split('/');
-                              location.href = host[0] + '//' + host[2] + '/';
-                            </script>`;
+                let html = `
+                <script>
+                  alert("Rolling key is lost on back-end processing, please try again."); 
+                  var url = window.location.href;
+                  var host = url.split('/');
+                  location.href = host[0] + '//' + host[2] + '/';
+                </script>`;
                 
                 res.send(html);				      						                
               });    
@@ -343,12 +372,13 @@ app.post('/go-login', (req, res) => {
 				      err_msg = 'Password is lost due to decryption failure!';
 				      smslib.consoleLog(err_msg);
 				      
-				      let html = `<script>
-				                    alert("Password is lost on back-end processing, please try again."); 
-				                    var url = window.location.href;
-				                    var host = url.split('/');
-				                    location.href = host[0] + '//' + host[2] + '/';
-				                  </script>`;
+				      let html = `
+              <script>
+                alert("Password is lost on back-end processing, please try again."); 
+                var url = window.location.href;
+                var host = url.split('/');
+                location.href = host[0] + '//' + host[2] + '/';
+              </script>`;
 				      
 				      res.send(html);				      						
 						});						
@@ -356,47 +386,51 @@ app.post('/go-login', (req, res) => {
 			      err_msg = 'Username is lost due to decryption failure!';
 			      smslib.consoleLog(err_msg);
 			      
-			      let html = `<script>
-			                    alert("Username is lost on back-end processing, please try again."); 
-			                    var url = window.location.href;
-			                    var host = url.split('/');
-			                    location.href = host[0] + '//' + host[2] + '/';
-			                  </script>`;
+			      let html = `
+            <script>
+              alert("Username is lost on back-end processing, please try again."); 
+              var url = window.location.href;
+              var host = url.split('/');
+              location.href = host[0] + '//' + host[2] + '/';
+            </script>`;
 			      
 			      res.send(html);			      						
 					});			    			    			    
 				}).catch((error) => {
 					smslib.consoleLog(error);
 					
-			    let html = `<script>
-			                  alert("Unable to extract the client generated AES key. Error: ${error}"); 
-			                  var url = window.location.href;
-			                  var host = url.split('/');
-			                  location.href = host[0] + '//' + host[2] + '/';
-			                </script>`;
+			    let html = `
+          <script>
+            alert("Unable to extract the client generated AES key. Error: ${error}"); 
+            var url = window.location.href;
+            var host = url.split('/');
+            location.href = host[0] + '//' + host[2] + '/';
+          </script>`;
 			  
 			    res.send(html);                    															
 				});
 			}
 			else {
-		    let html = `<script>
-		                  alert("Warning: The checksum of the public key is invalid, login process is aborted. You may be under Man-In-The-Middle attack!"); 
-		                  var url = window.location.href;
-		                  var host = url.split('/');
-		                  location.href = host[0] + '//' + host[2] + '/';
-		                </script>`;
+		    let html = `
+        <script>
+          alert("Warning: The checksum of the public key is invalid, login process is aborted. You may be under Man-In-The-Middle attack!"); 
+          var url = window.location.href;
+          var host = url.split('/');
+          location.href = host[0] + '//' + host[2] + '/';
+        </script>`;
 		  
 		    res.send(html);                    														
 			}
 		}).catch((error) => {
 			smslib.consoleLog(error);
 			
-	    let html = `<script>
-	                  alert("Login process is aborted due to error: ${error}"); 
-	                  var url = window.location.href;
-	                  var host = url.split('/');
-	                  location.href = host[0] + '//' + host[2] + '/';
-	                </script>`;
+	    let html = `
+      <script>
+        alert("Login process is aborted due to error: ${error}"); 
+        var url = window.location.href;
+        var host = url.split('/');
+        location.href = host[0] + '//' + host[2] + '/';
+      </script>`;
 	  
 	    res.send(html);                    															
 		});
@@ -404,6 +438,340 @@ app.post('/go-login', (req, res) => {
   else {
     res.redirect('/');     
   }
+});
+
+
+app.post('/recover-password', (req, res) => {
+  let kyber_id = req.body.kyber_id;
+  let kyber_ct = req.body.kyber_ct;                 // Secret text for Kyber to obtain the shared key (It is in base64 format)
+	let key_id = req.body.key_id;  
+  let keycode_iv = req.body.keycode_iv;             // IV of the RSA encrypted and AES-256 encrypted 'keycode' (It is a JSON string).
+  let keycode = req.body.keycode;                   // RSA encrypted then AES-256 encrypted once more with Kyber secret key. (It is a JSON string). 
+  let cs_public_sha256sum = req.body.cs_public_sha256sum;
+  let aes_algorithm = req.body.aes_algorithm;       // AES-256 algorithm used
+  let http_user_agent = req.headers['user-agent'];
+  let ip_addr = req.ip;
+  let err_msg = '';
+
+  let result = smslib.checkClientSidePubKeySha256Sum(msg_pool, key_id, cs_public_sha256sum); 
+  result.then((is_valid) => {
+    if (is_valid) {
+      let result = smslib.extractClientAESkey(msg_pool, kyber_id, kyber_ct, aes_algorithm, key_id, keycode_iv, keycode);
+      result.then((aes_key) => {	
+        // Create a password recovering session and store the session secret key on it //
+        let result = smslib.createPasswordRecoverSessioin(msg_pool, aes_key);
+        result.then((pr_sess_code) => {
+           let result = smslib.showPasswordRecoverPage(pr_sess_code);
+           result.then((html) => {
+             res.send(html);
+           }).catch((error) => {
+             console.log(error);
+
+             let result = smslib.switchToPage("/", null, "GET", "Unable to build password recovering page, please contact support.");
+             result.then((html) => {
+               res.send(html);
+             }).catch((error) => {
+               console.log(error);
+               res.redirect("/");
+             });
+           });
+        }).catch((error) => {
+          console.log(error);
+
+          let result = smslib.switchToPage("/", null, "GET", "Password recovering process is failure, please contact support.");
+          result.then((html) => {
+            res.send(html);
+          }).catch((error) => {
+            console.log(error);
+            res.redirect("/");
+          });
+        });
+      }).catch((error) => {
+        console.log(error);
+
+        let result = smslib.switchToPage("/", null, "GET", "Unable to extract the client generated secret key, please contact support");
+        result.then((html) => {
+          res.send(html);
+        }).catch((error) => {
+          console.log(error);
+          res.redirect("/");
+        });
+      });
+    }
+    else {
+      let result = smslib.switchToPage("/", null, "GET", "Warning: Checksum of the public key is invalid, password recovering process is aborted. You may be under Man-In-The-Middle attack!");
+      result.then((html) => {
+        res.send(html);
+      }).catch((error) => {
+        console.log(error);
+        res.redirect("/");
+      });
+    }
+  }).catch((error) => {
+    console.log(error);
+
+    let result = smslib.switchToPage("/", null, "GET", "Password recovering process is aborted due to error, please contact support.");
+    result.then((html) => {
+      res.send(html);
+    }).catch((error) => {
+      console.log(error);
+      res.redirect("/");
+    });
+  });   
+});
+
+
+app.post('/send-verify-code', (req, res) => {
+  let pr_sess_code = (typeof(req.body.pr_sess_code) == "undefined")? '' : wev.allTrim(req.body.pr_sess_code);
+  let aes_algorithm = (typeof(req.body.aes_algorithm) == "undefined")? '' : wev.allTrim(req.body.aes_algorithm);
+  let e_email = (typeof(req.body.e_email) == "undefined")? '' : req.body.e_email;
+  let iv_email = (typeof(req.body.iv_email) == "undefined")? '' : req.body.iv_email;
+    
+  if (pr_sess_code == "" || aes_algorithm == "" || e_email == "" || iv_email == "") {
+    // Invalid parameter(s) is/are found //
+    let retval = JSON.stringify({status: -2, message: "Invalid parameter(s) is/are found"});
+    res.send(retval);      
+  }
+  else {
+    let result = smslib.isPasswordRecoverySessCodeValid(msg_pool, pr_sess_code);
+    
+    result.then((is_valid) => {
+      if (is_valid) {    
+        let result = smslib.sendVerifyCode(msg_pool, pr_sess_code, aes_algorithm, e_email, iv_email);
+        
+        result.then((retval) => {
+          res.send(JSON.stringify(retval));
+        }).catch((error) => {
+          console.log(error);
+          
+          let retval = JSON.stringify({status: 0, message: "Unable to send out verification code, please try again."});
+          res.send(retval);      
+        });
+      }
+      else {
+        let retval = JSON.stringify({status: -1, message: "Session expired!"});
+        res.send(retval);                    
+      }
+    }).catch((error) => {
+      console.log(error);
+      
+      let retval = JSON.stringify({status: 0, message: "System error is found, please try again."});
+      res.send(retval);            
+    });
+  }
+});
+
+
+app.post('/verify-code', (req, res) => {
+  let pr_sess_code = (typeof(req.body.pr_sess_code) == "undefined")? '' : wev.allTrim(req.body.pr_sess_code);
+  let aes_algorithm = (typeof(req.body.aes_algorithm) == "undefined")? '' : wev.allTrim(req.body.aes_algorithm);
+  let e_email = (typeof(req.body.e_email) == "undefined")? '' : req.body.e_email;
+  let iv_email = (typeof(req.body.iv_email) == "undefined")? '' : req.body.iv_email;
+  
+  if (pr_sess_code == "" || aes_algorithm == "" || e_email == "" || iv_email == "") {
+    // Invalid parameter(s) is/are found //
+    res.redirect("/");
+  }
+  else {
+    let result = smslib.isPasswordRecoverySessCodeValid(msg_pool, pr_sess_code);
+    
+    result.then((is_valid) => {
+      if (is_valid) {    
+        let result = smslib.showVerificationPage(pr_sess_code, aes_algorithm, e_email, iv_email);
+        
+        result.then((html) => {
+          res.send(html);
+        }).catch((error) => {
+          console.log(error);
+
+          let result = smslib.switchToPage("/", null, "GET", "Error is found in this step, please try again.");
+          result.then((html) => {
+            res.send(html);
+          }).catch((error) => {
+            console.log(error);
+            res.redirect("/");
+          });
+        });
+      }
+      else {
+        let result = smslib.switchToPage("/", null, "GET", "Password recovery session expired, please try again.");
+        result.then((html) => {
+          res.send(html);
+        }).catch((error) => {
+          console.log(error);
+          res.redirect("/");
+        });
+      }
+    }).catch((error) => {
+      console.log(error);      
+
+      let result = smslib.switchToPage("/", null, "GET", "System error is found on session validation checking (stage 2), please try again.");
+      result.then((html) => {
+        res.send(html);
+      }).catch((error) => {
+        console.log(error);
+        res.redirect("/");
+      });
+    });  
+  }  
+});
+
+
+app.post('/check-verification-code', (req, res) => {
+  let pr_sess_code = (typeof(req.body.pr_sess_code) == "undefined")? '' : wev.allTrim(req.body.pr_sess_code);
+  let aes_algorithm = (typeof(req.body.aes_algorithm) == "undefined")? '' : wev.allTrim(req.body.aes_algorithm);
+  let e_v_code = (typeof(req.body.e_v_code) == "undefined")? '' : wev.allTrim(req.body.e_v_code);
+  let iv_v_code = (typeof(req.body.iv_v_code) == "undefined")? '' : wev.allTrim(req.body.iv_v_code);
+  
+  if (pr_sess_code == "" || aes_algorithm == "" || e_v_code == "" || iv_v_code == "") {
+    // Invalid parameter(s) is/are found //
+    res.redirect("/");
+  }
+  else {
+    let result = smslib.isPasswordRecoverySessCodeValid(msg_pool, pr_sess_code);
+    
+    result.then((is_valid) => {
+      if (is_valid) {    
+        let result = smslib.checkVerificationCode(msg_pool, pr_sess_code, aes_algorithm, e_v_code, iv_v_code);
+        
+        result.then((v_code_match) => {
+          if (v_code_match) {
+            let result = smslib.showAmendPassowrdPage(pr_sess_code, aes_algorithm);
+            
+            result.then((html) => {
+              res.send(html);
+            }).catch((error) => {
+              console.log(error);
+
+              let result = smslib.switchToPage("/", null, "GET", "Error occurred as build password amendment page, please try again.");
+              result.then((html) => {
+                res.send(html);
+              }).catch((error) => {
+                console.log(error);
+                res.redirect("/");
+              });
+            });
+          }
+          else {
+            // From security point of view, any incorrect verification code input must let user start the whole //
+            // process from the beginning, i.e. new verification code must be used, so that hackers can't break //
+            // the code using try in error method.                                                              //
+            //                                                                                                  // 
+            // Note: The password recovery session must be marked as "used", if the given verification code is  //
+            //       incorrect.                                                                                 //
+            let result = smslib.switchToPage("/", null, "GET", "Incorrect verification code is given, please try again.");
+            result.then((html) => {
+              res.send(html);
+            }).catch((error) => {
+              console.log(error);
+              res.redirect("/");
+            });
+          }
+        }).catch((error) => {
+          console.log(error);
+
+          let result = smslib.switchToPage("/", null, "GET", "Error occurred as code verification, please try again.");
+          result.then((html) => {
+            res.send(html);
+          }).catch((error) => {
+            console.log(error);
+            res.redirect("/");
+          });
+        });
+      }
+      else {
+        let result = smslib.switchToPage("/", null, "GET", "Password recovery session has already expired, please try again.");
+        result.then((html) => {
+          res.send(html);
+        }).catch((error) => {
+          console.log(error);
+          res.redirect("/");
+        });
+      }
+    }).catch((error) => {
+      console.log(error);      
+
+      let result = smslib.switchToPage("/", null, "GET", "System error is found on session validation checking (stage 3), please try again.");
+      result.then((html) => {
+        res.send(html);
+      }).catch((error) => {
+        console.log(error);
+        res.redirect("/");
+      });
+    });  
+  }
+});
+
+
+app.post('/amend-password', (req, res) => {
+  let pr_sess_code = (typeof(req.body.pr_sess_code) == "undefined")? '' : wev.allTrim(req.body.pr_sess_code);
+  let aes_algorithm = (typeof(req.body.aes_algorithm) == "undefined")? '' : wev.allTrim(req.body.aes_algorithm);
+  let e_passwd = (typeof(req.body.e_passwd) == "undefined")? '' : wev.allTrim(req.body.e_passwd);
+  let iv_passwd = (typeof(req.body.iv_passwd) == "undefined")? '' : wev.allTrim(req.body.iv_passwd);
+  
+  if (pr_sess_code == "" || aes_algorithm == "" || e_passwd == "" || iv_passwd == "") {
+    // Invalid parameter(s) is/are found //
+    res.redirect("/");
+  }
+  else {
+    let result = smslib.isPasswordRecoverySessionLocked(msg_pool, pr_sess_code);
+    
+    result.then((is_locked) => {
+      if (is_locked) {    
+        let result = smslib.amendPassword(msg_pool, pr_sess_code, aes_algorithm, e_passwd, iv_passwd);
+        
+        result.then((retval) => {
+          if (retval.ok) { 
+            let result = smslib.switchToPage("/", null, "GET", "Password is changed, you may login now.");
+            result.then((html) => {
+              res.send(html);
+            }).catch((error) => {
+              console.log(error);
+              res.redirect("/");
+            });
+          }
+          else {
+            let result = smslib.switchToPage("/", null, "GET", "Password amendment process is failure, please try again or contact support.");
+            result.then((html) => {
+              res.send(html);
+            }).catch((error) => {
+              console.log(error);
+              res.redirect("/");
+            });
+          }
+        }).catch((error) => {
+          console.log(error);
+
+          let result = smslib.switchToPage("/", null, "GET", "Error occurred as password amendment process is executed, please try again.");
+          result.then((html) => {
+            res.send(html);
+          }).catch((error) => {
+            console.log(error);
+            res.redirect("/");
+          });
+        });
+      }
+      else {
+        let result = smslib.switchToPage("/", null, "GET", "Password recovery session status is invalid, process is aborted!");
+        result.then((html) => {
+          res.send(html);
+        }).catch((error) => {
+          console.log(error);
+          res.redirect("/");
+        });
+      }
+    }).catch((error) => {
+      console.log(error);      
+
+      let result = smslib.switchToPage("/", null, "GET", "System error is found on session validation checking (stage 4), please try again.");
+      result.then((html) => {
+        res.send(html);
+      }).catch((error) => {
+        console.log(error);
+        res.redirect("/");
+      });
+    });  
+  }  
 });
 
 
@@ -4504,6 +4872,459 @@ app.post('/lock_confirm_user', (req, res) => {
     //-- No session cookie is found, return to login page immediately. --//
     res.redirect('/');                                    
   }            
+});
+
+
+app.post('/amend_user_passwd', (req, res) => {
+  let roll_rec = (typeof(req.body.roll_rec) == "undefined")? '' : wev.allTrim(req.body.roll_rec);
+  let iv_roll_rec = (typeof(req.body.iv_roll_rec) == "undefined")? '' : wev.allTrim(req.body.iv_roll_rec);
+  let roll_rec_sum = (typeof(req.body.roll_rec_sum) == "undefined")? '' : wev.allTrim(req.body.roll_rec_sum);  
+  let enc_roll_rec = {encrypted: roll_rec, iv: iv_roll_rec, digest: roll_rec_sum};   
+  let cookie = req.cookies.MSG_USER;
+  let user_id = wev.getSessionUserId(cookie);
+  let sess_code = wev.getSessionCode(cookie);
+  let http_user_agent = req.headers['user-agent'];
+  let ip_addr = req.ip;
+
+  if (sess_code != '' && user_id > 0) {
+    let sess_checker = smslib.isSessionValidEx(msg_pool, user_id, sess_code, enc_roll_rec, true, 'MSG');    
+    sess_checker.then((sess_valid) => {
+      if (sess_valid) {
+        let checker = msglib.isSystemAdmin(msg_pool, user_id);
+        
+        checker.then((is_sys_admin) => {
+          if (is_sys_admin) {
+            let result = smslib.printUserFilterForm();
+            
+            result.then((html) => {
+              res.send(html);
+            }).catch((error) => {
+              smslib.consoleLog(error);
+
+              let result = smslib.switchToPage("/message", null, "POST", `Error ${error}: Unable to create user filter page for password amendment.`);
+              result.then((html) => {
+                res.send(html);
+              }).catch((error) => {
+                smslib.consoleLog(error);
+                res.redirect("/logout_msg");    
+              });
+            });             
+          }
+          else {
+            //-- It is a suspicious activity, log it down and logout this user. --//
+            let msg = `amend_user_passwd: User ${user_id} tries to use this function to change password of other users, but he/she is not system administrator! Check for it.`;          
+            smslib.consoleLog(msg);
+            let result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
+            result.then((ok) => {
+              res.redirect('/logout_msg');  
+            }).catch((error) => {
+              smslib.consoleLog(error);
+              res.redirect('/logout_msg');
+            });                                  
+          }
+        }).catch((error) => {
+          smslib.consoleLog(error);
+
+          let result = smslib.switchToPage("/message", null, "POST", "Unable to check whether you are system administrator, process is aborted.");
+          result.then((html) => {
+            res.send(html);
+          }).catch((error) => {
+            smslib.consoleLog(error);
+            res.redirect("/logout_msg");    
+          });
+        });        
+      }
+      else {
+        //-- The session is invalid, return to login page immediately. --//
+        let result = smslib.switchToPage("/logout_msg", null, "GET", "Session expired!");
+        result.then((html) => {
+          res.send(html);
+        }).catch((error) => {
+          smslib.consoleLog(error);
+          res.redirect("/logout_msg");    
+        });
+      }
+    }).catch((error) => {
+      //-- The session checking process is failure, return to login page immediately. --//
+      smslib.consoleLog(error);
+
+      let result = smslib.switchToPage("/logout_msg", null, "GET", "Unable to verify your session status, please login again.");
+      result.then((html) => {
+        res.send(html);
+      }).catch((error) => {
+        smslib.consoleLog(error);
+        res.redirect("/logout_msg");    
+      });
+    });
+  }
+  else {
+    //-- No session cookie is found, return to login page immediately. --//
+    res.redirect('/');                                    
+  }          
+});
+
+
+app.post('/load_user_list', (req, res) => {
+  let filter = (typeof(req.body.filter) != "string")? '' : req.body.filter;
+  let aes_algorithm = (typeof(req.body.aes_algorithm) == "undefined")? '' : req.body.aes_algorithm;
+  let roll_rec = (typeof(req.body.roll_rec) == "undefined")? '' : wev.allTrim(req.body.roll_rec);  
+  let iv_roll_rec = (typeof(req.body.iv_roll_rec) == "undefined")? '' : wev.allTrim(req.body.iv_roll_rec);  
+  let roll_rec_sum = (typeof(req.body.roll_rec_sum) == "undefined")? '' : wev.allTrim(req.body.roll_rec_sum);  
+  let enc_roll_rec = {encrypted: roll_rec, iv: iv_roll_rec, digest: roll_rec_sum};  
+  let cookie = req.cookies.MSG_USER;
+  let user_id = wev.getSessionUserId(cookie);
+  let sess_code = wev.getSessionCode(cookie);
+  let http_user_agent = req.headers['user-agent'];
+  let ip_addr = req.ip;
+  
+  if (sess_code != '' && user_id > 0) {
+    let sess_checker = smslib.isSessionValidEx(msg_pool, user_id, sess_code, enc_roll_rec, true, 'MSG');    
+    sess_checker.then((sess_valid) => {
+      if (sess_valid) {
+        let checker = msglib.isSystemAdmin(msg_pool, user_id);
+        
+        checker.then((is_sys_admin) => {
+          if (is_sys_admin) {
+            let result = smslib.printUserSelectionList(filter, aes_algorithm);
+            result.then((html) => {
+              res.send(html);
+            }).catch((error) => {
+              smslib.consoleLog(error);
+
+              let result = smslib.switchToPage("/message", null, "POST", `Error ${error}: Unable to create user selection list page for password amendment.`);
+              result.then((html) => {
+                res.send(html);
+              }).catch((error) => {
+                smslib.consoleLog(error);
+                res.redirect("/logout_msg");    
+              });
+            });             
+          }
+          else {
+            //-- It is a suspicious activity, log it down and logout this user. --//
+            let msg = `load_user_list: User ${user_id} tries to use this function to list out system users, but he/she is not system administrator! Check for it.`;          
+            smslib.consoleLog(msg);
+            let result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
+            result.then((ok) => {
+              res.redirect('/logout_msg');  
+            }).catch((error) => {
+              smslib.consoleLog(error);
+              res.redirect('/logout_msg');
+            });                                  
+          }
+        }).catch((error) => {
+          smslib.consoleLog(error);
+
+          let result = smslib.switchToPage("/message", null, "POST", "Unable to check whether you are system administrator, process is aborted.");
+          result.then((html) => {
+            res.send(html);
+          }).catch((error) => {
+            smslib.consoleLog(error);
+            res.redirect("/logout_msg");    
+          });
+        });        
+      }
+      else {
+        //-- The session is invalid, return to login page immediately. --//
+        let result = smslib.switchToPage("/logout_msg", null, "GET", "Session expired!");
+        result.then((html) => {
+          res.send(html);
+        }).catch((error) => {
+          smslib.consoleLog(error);
+          res.redirect("/logout_msg");    
+        });
+      }
+    }).catch((error) => {
+      //-- The session checking process is failure, return to login page immediately. --//
+      smslib.consoleLog(error);
+
+      let result = smslib.switchToPage("/logout_msg", null, "GET", "Unable to verify your session status, please login again.");
+      result.then((html) => {
+        res.send(html);
+      }).catch((error) => {
+        smslib.consoleLog(error);
+        res.redirect("/logout_msg");    
+      });
+    });
+  }
+  else {
+    //-- No session cookie is found, return to login page immediately. --//
+    res.redirect('/');                                    
+  }            
+});
+
+
+app.post('/get_active_user_list', (req, res) => {
+  let filter = (typeof(req.body.filter) != "string")? '' : req.body.filter;
+  let aes_algorithm = (typeof(req.body.aes_algorithm) == "undefined")? '' : req.body.aes_algorithm;
+  let roll_rec = (typeof(req.body.roll_rec) == "undefined")? '' : wev.allTrim(req.body.roll_rec);  
+  let iv_roll_rec = (typeof(req.body.iv_roll_rec) == "undefined")? '' : wev.allTrim(req.body.iv_roll_rec);
+  let roll_rec_sum = (typeof(req.body.roll_rec_sum) == "undefined")? '' : wev.allTrim(req.body.roll_rec_sum);  
+  let enc_roll_rec = {encrypted: roll_rec, iv: iv_roll_rec, digest: roll_rec_sum};  
+  let cookie = req.cookies.MSG_USER;
+  let user_id = wev.getSessionUserId(cookie);
+  let sess_code = wev.getSessionCode(cookie);
+  let http_user_agent = req.headers['user-agent'];
+  let ip_addr = req.ip;
+  
+  if (sess_code != '' && user_id > 0) {
+    let sess_checker = smslib.isSessionValidEx(msg_pool, user_id, sess_code, enc_roll_rec, true, 'MSG');    
+    sess_checker.then((sess_valid) => {
+      if (sess_valid) {
+        let checker = msglib.isSystemAdmin(msg_pool, user_id);
+        
+        checker.then((is_sys_admin) => {
+          if (is_sys_admin) {
+            let result = smslib.getActiveUserList(msg_pool, user_id, sess_code, filter, aes_algorithm);
+            
+            result.then((enc_data) => {
+              let retval = JSON.stringify(enc_data);
+              res.send(retval);
+            }).catch((error) => {
+              smslib.consoleLog(error);
+
+              let retval = JSON.stringify({cmd:`Unable to get user list. Error: ${error}`});
+              res.send(retval);                                    
+            });             
+          }
+          else {
+            //-- It is a suspicious activity, log it down and logout this user. --//
+            let msg = `get_active_user_list: User ${user_id} tries to use this function to get user list, but he/she is not system administrator! Check for it.`;          
+            smslib.consoleLog(msg);
+            let result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
+            result.then((ok) => {
+              let retval = JSON.stringify({cmd:"force_logout"});
+              res.send(retval);                                    
+            }).catch((error) => {
+              smslib.consoleLog(error);
+              let retval = JSON.stringify({cmd:"force_logout"});
+              res.send(retval);                                    
+            });                                  
+          }
+        }).catch((error) => {
+          smslib.consoleLog(error);
+
+          let retval = JSON.stringify({cmd:"admin_verify_fail"});
+          res.send(retval);                                    
+        });        
+      }
+      else {
+        //-- The session is invalid, return to login page immediately. --//
+        let retval = JSON.stringify({cmd:"sess_expired"});
+        res.send(retval);                                    
+      }
+    }).catch((error) => {
+      //-- The session checking process is failure, return to login page immediately. --//
+      smslib.consoleLog(error);
+
+      let retval = JSON.stringify({cmd:"sess_verify_fail"});
+      res.send(retval);                                    
+    });
+  }
+  else {
+    //-- No session cookie is found, return to login page immediately. --//
+    let retval = JSON.stringify({cmd:"no_cookie"});
+    res.send(retval);                                    
+  }              
+});
+
+
+app.post('/go_amend_user_password', (req, res) => {
+  let usr_id = (typeof(req.body.usr_id) == "undefined")? 0 : parseInt(req.body.usr_id, 10);    // The given user ID for password amendment
+  let aes_algorithm = (typeof(req.body.aes_algorithm) != "string")? "AES-GCM" : wev.allTrim(req.body.aes_algorithm);
+  let roll_rec = (typeof(req.body.roll_rec) == "undefined")? '' : wev.allTrim(req.body.roll_rec);  
+  let iv_roll_rec = (typeof(req.body.iv_roll_rec) == "undefined")? '' : wev.allTrim(req.body.iv_roll_rec);
+  let roll_rec_sum = (typeof(req.body.roll_rec_sum) == "undefined")? '' : wev.allTrim(req.body.roll_rec_sum);  
+  let enc_roll_rec = {encrypted: roll_rec, iv: iv_roll_rec, digest: roll_rec_sum};  
+  let cookie = req.cookies.MSG_USER;
+  let user_id = wev.getSessionUserId(cookie);
+  let sess_code = wev.getSessionCode(cookie);
+  let http_user_agent = req.headers['user-agent'];
+  let ip_addr = req.ip;
+
+  if (sess_code != '' && user_id > 0) {
+    let sess_checker = smslib.isSessionValidEx(msg_pool, user_id, sess_code, enc_roll_rec, true, 'MSG');    
+    sess_checker.then((sess_valid) => {
+      if (sess_valid) {
+        let checker = msglib.isSystemAdmin(msg_pool, user_id);
+        
+        checker.then((is_sys_admin) => {
+          if (is_sys_admin) {
+            let result = smslib.printUserPasswordAmendmentForm(msg_pool, user_id, sess_code, usr_id, aes_algorithm);
+            result.then((html) => {
+              res.send(html);
+            }).catch((error) => {
+              smslib.consoleLog(error);
+
+              let result = smslib.switchToPage("/message", null, "POST", `Error ${error}: Unable to create user password amendment form`);
+              result.then((html) => {
+                res.send(html);
+              }).catch((error) => {
+                smslib.consoleLog(error);
+                res.redirect("/logout_msg");    
+              });
+            });             
+          }
+          else {
+            //-- It is a suspicious activity, log it down and logout this user. --//
+            let msg = `go_amend_user_password: User ${user_id} tries to use this function to change password for another user, but he/she is not system administrator! Check for it.`;          
+            smslib.consoleLog(msg);
+            let result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
+            result.then((ok) => {
+              res.redirect('/logout_msg');  
+            }).catch((error) => {
+              smslib.consoleLog(error);
+              res.redirect('/logout_msg');
+            });                                  
+          }
+        }).catch((error) => {
+          smslib.consoleLog(error);
+
+          let result = smslib.switchToPage("/message", null, "POST", "Unable to check whether you are system administrator, process is aborted.");
+          result.then((html) => {
+            res.send(html);
+          }).catch((error) => {
+            smslib.consoleLog(error);
+            res.redirect("/logout_msg");    
+          });
+        });        
+      }
+      else {
+        //-- The session is invalid, return to login page immediately. --//
+        let result = smslib.switchToPage("/logout_msg", null, "GET", "Session expired!");
+        result.then((html) => {
+          res.send(html);
+        }).catch((error) => {
+          smslib.consoleLog(error);
+          res.redirect("/logout_msg");    
+        });
+      }
+    }).catch((error) => {
+      //-- The session checking process is failure, return to login page immediately. --//
+      smslib.consoleLog(error);
+
+      let result = smslib.switchToPage("/logout_msg", null, "GET", "Unable to verify your session status, please login again.");
+      result.then((html) => {
+        res.send(html);
+      }).catch((error) => {
+        smslib.consoleLog(error);
+        res.redirect("/logout_msg");    
+      });
+    });
+  }
+  else {
+    //-- No session cookie is found, return to login page immediately. --//
+    res.redirect('/');                                    
+  }              
+});
+
+
+app.post('/confirm_amend_user_password', (req, res) => {
+  let usr_id = (typeof(req.body.usr_id) == "undefined")? 0 : parseInt(req.body.usr_id, 10);    // The given user ID for password amendment
+  let aes_algorithm = (typeof(req.body.aes_algorithm) != "string")? "AES-GCM" : wev.allTrim(req.body.aes_algorithm);
+  let e_passwd = (typeof(req.body.e_passwd) == "undefined")? "" : wev.allTrim(req.body.e_passwd);
+  let iv_passwd = (typeof(req.body.iv_passwd) == "undefined")? "" : wev.allTrim(req.body.iv_passwd);
+  let roll_rec = (typeof(req.body.roll_rec) == "undefined")? '' : wev.allTrim(req.body.roll_rec);  
+  let iv_roll_rec = (typeof(req.body.iv_roll_rec) == "undefined")? '' : wev.allTrim(req.body.iv_roll_rec);
+  let roll_rec_sum = (typeof(req.body.roll_rec_sum) == "undefined")? '' : wev.allTrim(req.body.roll_rec_sum);  
+  let enc_roll_rec = {encrypted: roll_rec, iv: iv_roll_rec, digest: roll_rec_sum};  
+  let cookie = req.cookies.MSG_USER;
+  let user_id = wev.getSessionUserId(cookie);
+  let sess_code = wev.getSessionCode(cookie);
+  let http_user_agent = req.headers['user-agent'];
+  let ip_addr = req.ip;
+
+  if (sess_code != '' && user_id > 0) {
+    let sess_checker = smslib.isSessionValidEx(msg_pool, user_id, sess_code, enc_roll_rec, true, 'MSG');    
+    sess_checker.then((sess_valid) => {
+      if (sess_valid) {
+        let checker = msglib.isSystemAdmin(msg_pool, user_id);
+        
+        checker.then((is_sys_admin) => {
+          if (is_sys_admin) {
+            let result = smslib.amendUserPassword(msg_pool, user_id, sess_code, usr_id, aes_algorithm, iv_passwd, e_passwd);
+            result.then((retval) => {
+              if (retval.ok) {
+                let result = smslib.switchToPage("/message", null, "POST", "User password is amended successfully");
+                result.then((html) => {
+                  res.send(html);
+                }).catch((error) => {
+                  smslib.consoleLog(error);
+                  res.redirect("/logout_msg");    
+                });
+              }
+              else {
+                let result = smslib.switchToPage("/message", null, "POST", `Unable to change user password. Error: ${retval.msg}`);
+                result.then((html) => {
+                  res.send(html);
+                }).catch((error) => {
+                  smslib.consoleLog(error);
+                  res.redirect("/logout_msg");    
+                });                
+              }
+            }).catch((error) => {
+              smslib.consoleLog(error);
+
+              let result = smslib.switchToPage("/message", null, "POST", `Unable to change user password. Error: ${error}`);
+              result.then((html) => {
+                res.send(html);
+              }).catch((error) => {
+                smslib.consoleLog(error);
+                res.redirect("/logout_msg");    
+              });
+            });             
+          }
+          else {
+            //-- It is a suspicious activity, log it down and logout this user. --//
+            let msg = `confirm_amend_user_password: User ${user_id} tries to use this function to change password for another user, but he/she is not system administrator! Check for it.`;          
+            smslib.consoleLog(msg);
+            let result = smslib.logSystemEvent(msg_pool, user_id, msg, 'Alert', http_user_agent);
+            result.then((ok) => {
+              res.redirect('/logout_msg');  
+            }).catch((error) => {
+              smslib.consoleLog(error);
+              res.redirect('/logout_msg');
+            });                                  
+          }
+        }).catch((error) => {
+          smslib.consoleLog(error);
+
+          let result = smslib.switchToPage("/message", null, "POST", "Unable to check whether you are system administrator, process is aborted.");
+          result.then((html) => {
+            res.send(html);
+          }).catch((error) => {
+            smslib.consoleLog(error);
+            res.redirect("/logout_msg");    
+          });
+        });        
+      }
+      else {
+        //-- The session is invalid, return to login page immediately. --//
+        let result = smslib.switchToPage("/logout_msg", null, "GET", "Session expired!");
+        result.then((html) => {
+          res.send(html);
+        }).catch((error) => {
+          smslib.consoleLog(error);
+          res.redirect("/logout_msg");    
+        });
+      }
+    }).catch((error) => {
+      //-- The session checking process is failure, return to login page immediately. --//
+      smslib.consoleLog(error);
+
+      let result = smslib.switchToPage("/logout_msg", null, "GET", "Unable to verify your session status, please login again.");
+      result.then((html) => {
+        res.send(html);
+      }).catch((error) => {
+        smslib.consoleLog(error);
+        res.redirect("/logout_msg");    
+      });
+    });
+  }
+  else {
+    //-- No session cookie is found, return to login page immediately. --//
+    res.redirect('/');                                    
+  }                
 });
 
 

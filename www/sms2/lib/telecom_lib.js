@@ -209,6 +209,8 @@ exports.getMailWorker = async function(conn) {
 }
 
 
+// Old version of '_justSendEmail' //
+/*
 async function _justSendEmail(smtp_server, port, from, to, user, pass, subject, mail_body) {
   let secure = (port == 465)? true : false; 
   
@@ -238,11 +240,49 @@ async function _justSendEmail(smtp_server, port, from, to, user, pass, subject, 
     }
   });  
 }
+*/
+
+
+async function _justSendEmail(smtp_server, port, from, to, user, pass, subject, mail_body) {
+  let secure = (port == 465)? true : false; 
+  let result = {ok: true, error: ""};
+  
+  try {
+    let transporter = mailer.createTransport({
+      host: smtp_server,
+      port: port,
+      secure: secure,
+      auth: {
+        user: user, // user of email sender
+        pass: pass  // password of email sender
+      }
+    });
+  
+    let mailOptions = {
+      from: from, // sender address
+      to: to, // list of receivers
+      subject: subject, // Subject line
+      text: mail_body // plain text body
+    };
+  
+    // send mail with defined transport object
+    await transporter.sendMail(mailOptions);
+    
+    result = {ok: true, error: ""};
+  }
+  catch(e) {
+    console.log(`Unable to send email to ${to}. Error: ${e}`); 
+    result = {ok:false, error: e.message};
+  }
+  
+  return result;
+}
 
 
 async function _sendEmailViaGateway(email_gateway, master_passwd, site_dns, smtp_server, port, from, to, user, pass, subject, mail_body) {
   let key, algorithm, enc_object, command, token, tk_iv, receiver, receiver_iv, m_subject, m_subject_iv, m_body, m_body_iv;  
   let site, site_iv, smtp, smtp_iv, sender, sender_iv, m_user, m_user_iv, m_pass, m_pass_iv;
+  let result = {ok: true, error: ""};
   
   try {
     algorithm = "AES-GCM"; 
@@ -296,12 +336,19 @@ async function _sendEmailViaGateway(email_gateway, master_passwd, site_dns, smtp
 
     if (parseInt(exec_result.status, 10) != 1) {
       // Something is wrong, print the error message. //
-      console.log(exec_result.message);      
+      console.log(wev.sayCurrentTime() + " " + exec_result.message);    
+      result = {ok: false, error: exec_result.message};  
+    }
+    else {
+      result = {ok: true, error: ""};
     }        
   }
   catch(e) {
-    throw e; 
+    console.log(wev.sayCurrentTime() + " " + e.message);
+    result = {ok: false, error: e.message}; 
   }
+  
+  return result;
 }
 
 
@@ -324,6 +371,7 @@ async function _updateMasterPasswd(conn, sys_key, sys_value) {
 
 exports.sendEmail = async function(smtp_server, port, from, to, user, pass, subject, mail_body) {
   let conn, use_email_gateway, email_gateway, master_passwd, site_dns;
+  let result = {ok: true, error: ""};
   
   try {
     conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
@@ -340,18 +388,21 @@ exports.sendEmail = async function(smtp_server, port, from, to, user, pass, subj
         await _updateMasterPasswd(conn, 'master_passwd', master_passwd); 
       }
     
-      await _sendEmailViaGateway(email_gateway, master_passwd, site_dns, smtp_server, port, from, to, user, pass, subject, mail_body);      
+      result = await _sendEmailViaGateway(email_gateway, master_passwd, site_dns, smtp_server, port, from, to, user, pass, subject, mail_body);      
     } 
     else {
-      await _justSendEmail(smtp_server, port, from, to, user, pass, subject, mail_body);
+      result = await _justSendEmail(smtp_server, port, from, to, user, pass, subject, mail_body);
     }
   }
   catch(e) {
-    throw e;
+    console.log(wev.sayCurrentTime() + " " + e.message);
+    result = {ok: false, error: e.message};
   }
   finally {
     await dbs.dbClose(conn);
   }    
+  
+  return result;
 }
 
 

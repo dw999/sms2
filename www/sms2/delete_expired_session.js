@@ -30,6 +30,7 @@
 // V2.0.03       2025-06-27      DW              Show timestamp on error message.
 // V2.0.04       2025-07-07      DW              Use database connection pool to avoid database connection timeout issue.
 // V2.0.05       2026-01-22      DW              Delete rolling key records for all invalid web sessions, if any.
+// V1.0.06       2026-02-10      DW              Clear expired and used password recovery session.
 //##########################################################################################
 
 "use strict";
@@ -127,35 +128,143 @@ async function _delete_applicant_record(conn) {
 }
 
 
+async function _getPasswordRecoverySessionRecord(conn) {
+  let sql, data, result = [];
+  
+  try {
+    sql = `SELECT sess_code, DATE_FORMAT(add_datetime, '%Y-%m-%d %H:%i:%s') AS add_datetime ` +
+          `  FROM pr_session`;
+          
+    data = JSON.parse(await dbs.sqlQuery(conn, sql));       
+    
+    if (data.length > 0) {
+      let rec = {sess_code: data[0].sess_code, add_datetime: data[0].add_datetime};
+      result.push(rec);
+    }      
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;
+}
+
+
+async function _calculateSessionValidTime(conn, add_datetime, interval) {
+  let sql, param, data, result;
+  
+  try {
+    sql = `SELECT DATE_FORMAT(ADDTIME(?, ?), '%Y-%m-%d %H:%i:%s') AS time_limit`;
+    
+    param = [add_datetime, interval];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    result = data[0].time_limit;
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;  
+}
+
+
+async function _isPasswordRecoverySessionValid(conn, sess_until) {
+  let sql, param, data, sess_valid;
+  
+  try {
+    sql = `SELECT TIMESTAMPDIFF(second, CURRENT_TIMESTAMP(), ?) AS timediff`;
+    
+    param = [sess_until];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    sess_valid = (parseInt(data[0].timediff, 10) > 0)? true : false; 
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return sess_valid;    
+}
+
+
+async function _deletePasswordRecoverySession(conn, sess_code) {
+  let sql, param;
+  
+  try {
+    sql = `DELETE FROM pr_session ` +
+          `  WHERE sess_code = ?`;
+          
+    param = [sess_code];
+    await dbs.sqlExec(conn, sql, param);       
+  }
+  catch(e) {
+    throw e;
+  }
+} 
+
+
+async function _deleteExpiredAndUsedPasswordRecoverySession(conn) {
+  let sql, param, pr_list;
+  
+  try {
+    // Step 1: Delete all used P.R. session(s) firstly //
+    sql = `DELETE FROM pr_session ` +
+          `  WHERE status = 'U'`;
+    
+    await dbs.sqlExec(conn, sql);
+    
+    // Step 2: Then check every remain P.R. session record to see whether it has expired or not.  //
+    //         If it has been expired, delete it. Note: Every unused P.R. session will be expired //
+    //         after 30 minutes.                                                                  //
+    pr_list = await _getPasswordRecoverySessionRecord(conn);
+    
+    for (let i = 0; i < pr_list.length; i++) {
+      let sess_code = pr_list[i].sess_code;
+      let add_datetime = pr_list[i].add_datetime;
+      
+      // Calculate the session valid time. Password recovery session will be expired after 30 minute after it's creation. //
+      let sess_until = await _calculateSessionValidTime(conn, add_datetime, '00:30:00');
+      
+      if (!(await _isPasswordRecoverySessionValid(conn, sess_until))) {
+        // Session has expired, delete it. //
+        await _deletePasswordRecoverySession(conn, sess_code);        
+      }
+    }                 
+  }
+  catch(e) {
+    throw e;
+  }
+}
+
+
 async function _deleteExpiredRsaKeyPair(conn) {
-	let sql, param;
+  let sql, param;
 	
-	try {
-		sql = `DELETE FROM rsa_keypair ` +
-		      `  WHERE DATEDIFF(CURRENT_TIMESTAMP(), add_datetime) >= ?`;
-		
-		param = [key_rec_expired_days];      
-		await dbs.sqlExec(conn, sql, param);
-	}
-	catch(e) {
-		throw e;
-	}	
+  try {
+    sql = `DELETE FROM rsa_keypair ` +
+	  `  WHERE DATEDIFF(CURRENT_TIMESTAMP(), add_datetime) >= ?`;
+    
+    param = [key_rec_expired_days];      
+    await dbs.sqlExec(conn, sql, param);
+  }
+  catch(e) {
+    throw e;
+  }	
 }
 
 
 async function _deleteExpiredKyberKeyPair(conn) {
-	let sql, param;
-	
-	try {
-		sql = `DELETE FROM kyber_keypair ` +
-		      `  WHERE DATEDIFF(CURRENT_TIMESTAMP(), add_datetime) >= ?`;
-		
-		param = [key_rec_expired_days];      
-		await dbs.sqlExec(conn, sql, param);
-	}
-	catch(e) {
-		throw e;
-	}	  
+  let sql, param;
+  
+  try {
+    sql = `DELETE FROM kyber_keypair ` +
+	  `  WHERE DATEDIFF(CURRENT_TIMESTAMP(), add_datetime) >= ?`;
+    
+    param = [key_rec_expired_days];      
+    await dbs.sqlExec(conn, sql, param);
+  }
+  catch(e) {
+    throw e;
+  }	  
 }
 
 
@@ -186,7 +295,9 @@ async function deleteExpiredSession(interval) {
       console.log(wev.sayCurrentTime() + " Clear MSG site expired login token");
       await _deleteUsedAndTimeoutLoginToken(conn);
       console.log(wev.sayCurrentTime() + " Clear MSG site expired applicant record");
-      await _delete_applicant_record(conn);      
+      await _delete_applicant_record(conn);  
+      console.log(wev.sayCurrentTime() + " Clear used and expired password recovery session");
+      await _deleteExpiredAndUsedPasswordRecoverySession(conn);                     
     }
     catch(e) {
       console.log(wev.sayCurrentTime() + " : " + e.message);
@@ -218,23 +329,23 @@ async function deleteExpiredSession(interval) {
   }    
   
   async function _deleteExpiredRSAkeypairRecord() {
-		let conn;
+    let conn;
 		
-		try {
+    try {
       //conn = await dbs.dbConnect(dbs.selectCookie('MSG'));
       conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie('MSG'));
       
       console.log(wev.sayCurrentTime() + " Delete expired RSA key pair records");
-			await _deleteExpiredRsaKeyPair(conn);
-		}
-		catch(e) {
-			console.log(wev.sayCurrentTime() + " : " + e.message);
-		}
-		finally {
-			//await dbs.dbClose(conn);
+      await _deleteExpiredRsaKeyPair(conn);
+    }
+    catch(e) {
+      console.log(wev.sayCurrentTime() + " : " + e.message);
+    }
+    finally {
+      //await dbs.dbClose(conn);
       dbs.releasePoolConn(conn);
-		}		
-	}
+    }		
+  }
   
   async function _deleteExpiredKyberKeyPairRecord() {
     let conn;

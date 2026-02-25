@@ -64,6 +64,9 @@
 // V2.0.23       2026-01-29      DW              Refine scope of variables declare in this library.
 // V2.0.24       2026-02-09      DW              Fix a bug for missing Javascript library "js.cookie.min.js", which let SMS 2.x causes error
 //                                               on Apple platforms, such as iPhone and iPad. 
+// V2.0.25       2026-02-12      DW              - Let users recover their forgot password (except connection mode 1).
+//                                               - Let administrators to amend password for all users (mainly for connection mode 1, but
+//                                                 serve other connection modes also).
 //#################################################################################################################################
 
 "use strict";
@@ -555,7 +558,6 @@ exports.showLoginPage = async function(msg_pool) {
         let enc_pass = await aesEncryptJSON(aes_algorithm, key, $('#password').val()); 
         let enc_roll = await aesEncryptJSON(aes_algorithm, key, rolling_key);
 
-        
         let enc_key = await rsaEncrypt(algorithm, public_key, key);                       // Defined on crypto-lib.js
         // Step 1: Convert encrypted key from ArrayBuffer to Uint8Array //
         let enc_key_u8a = new Uint8Array(enc_key);
@@ -609,7 +611,60 @@ exports.showLoginPage = async function(msg_pool) {
       catch(e) {
         console.log(e);				  							  
         alert(e);
-      } 
+      }
+    }
+    
+    async function recoverPassword() {
+      try {
+        key = await prepareAESkey();				  
+          
+        let enc_key = await rsaEncrypt(algorithm, public_key, key);                       // Defined on crypto-lib.js
+        // Step 1: Convert encrypted key from ArrayBuffer to Uint8Array //
+        let enc_key_u8a = new Uint8Array(enc_key);
+        // Step 2: Stringify the Uint8Array to a JSON format string //
+        let enc_key_json = JSON.stringify(enc_key_u8a);
+        // Step 3: Use the secret key of the Kyber object to encrypt the RSA encrypted session key by AES-256 encryption. //
+        //         i.e. Use AES-256 with Kyber secret key as encryption key to encrypt the RSA encrypted session key once //
+        //         more.                                                                                                  //
+        let secret = await generateSharedCipherKey(kyber_pkey_b64);
+        let ct = secret.ct;
+        let skey = base64Decode(secret.sk);
+        
+        let enc_obj = await aesEncryptWithKeyJSON(aes_algorithm, skey, enc_key_json);
+        let keycode_iv = enc_obj.iv;
+        let keycode = enc_obj.encrypted;
+                              
+        // Store the generated AES key on browser local storage //
+        if (is_iOS) {
+          // iOS behavior is different from other platforms, so that it needs to put cross pages data to cookie as work-around. //
+          Cookies.set("aes_key", key, {expires: 1});              // Defined on js.cookie.min.js    
+        }
+        else {
+          setLocalStoredItem("aes_key", key);                     // Defined on common_lib.js
+        }
+        
+        // Clear the Kyber secret key and session AES key in RAM after used (for precaution only) //
+        skey = null;
+        secret.sk = null;
+        secret = null;
+        aes_key = null;
+        
+        $('#kyber_ct').val(ct);  
+        $('#keycode_iv').val(keycode_iv);                            
+        $('#keycode').val(keycode); 															
+        $('#cs_public_sha256sum').val(cs_public_sha256sum);	      // Send back to server for verification
+        $('#aes_algorithm').val(aes_algorithm);
+        $('#username').val('');
+        $('#password').val('');
+        //-- Note: jQuery v2.1.4 will get abnormal result in async function, so use traditional --//
+        //--       syntax instead jQuery syntax below.                                          --//  
+        document.getElementById("frmLogin").action = "/recover-password";
+        document.getElementById("frmLogin").submit();																																																						 																	
+      }
+      catch(e) {
+        console.log(e.message);
+        alert(e.message);
+      }
     }`; 
     
     js = await wev.minifyJS(js);
@@ -700,6 +755,12 @@ exports.showLoginPage = async function(msg_pool) {
                       </tr>
 
                       <tr><td colspan=2>&nbsp;</td></tr>
+                      
+                      <tr>
+                        <td align=center colspan=2>
+                          <a href="javascript:recoverPassword();" data-ajax="false"><b>Forget Password</b></a>
+                        </td>
+                      </tr>
                     </tbody>
                     </table>
                   </div>
@@ -2930,6 +2991,7 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
             <li><a href="javascript:promoteUser();" data-ajax="false">Promote User</a></li>
             <li><a href="javascript:demoteUser();" data-ajax="false">Demote User</a></li>
             <li><a href="javascript:lockUser();" data-ajax="false">Lock/Unlock User</a></li>
+            <li><a href="javascript:amendUserPassword();" data-ajax="false">User Password</a></li>
             <li><a href="javascript:systemSetup();" data-ajax="false">System Settings</a></li>
 					  <li><a href="javascript:doomEntireSystem();" data-ajax="false">Destroy System</a></li>
 				  </ul>	
@@ -3326,6 +3388,17 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
         alert(e.message);
       }                                        
     }
+    
+    async function amendUserPassword() {
+      try {
+        await prepareRollingKey(${_key_len});
+        document.getElementById("main_page").action = "/amend_user_passwd";
+        document.getElementById("main_page").submit();
+      }
+      catch(e) {
+        alert(e.message);
+      }                                            
+    }  
     
     async function systemSetup() {
       try {
@@ -9802,18 +9875,18 @@ async function _printAddUserAccountForm(conn, username, apply_id, applicant) {
         <input type=text id="alias" name="alias">
     
         <label for="happy_passwd1"><b>Happy Password ${red_dot} (2)</b></label>
-        <input type=password id="happy_passwd1" name="happy_passwd1">
+        <input type=password id="happy_passwd1" name="happy_passwd1" maxlength=256>
         (8 chars. or more)
   
         <label for="happy_passwd2"><b>Retype Happy Password ${red_dot}</b></label>
-        <input type=password id="happy_passwd2" name="happy_passwd2">
+        <input type=password id="happy_passwd2" name="happy_passwd2" maxlength=256>
   
         <label for="unhappy_passwd1"><b>Unhappy Password ${red_dot} (3)</b></label>
-        <input type=password id="unhappy_passwd1" name="unhappy_passwd1">
+        <input type=password id="unhappy_passwd1" name="unhappy_passwd1" maxlength=256>
         (8 chars. or more)
     
         <label for="unhappy_passwd2"><b>Retype Unhappy Password ${red_dot}</b></label>
-        <input type=password id="unhappy_passwd2" name="unhappy_passwd2">
+        <input type=password id="unhappy_passwd2" name="unhappy_passwd2" maxlength=256>
         <br>
         <input type=button id="save" name="save" value="Create Account" onClick="goCreateUserAccount();">  
         <br>
@@ -16207,4 +16280,1961 @@ exports.switchToPage = async function(url, param, method, message) {
   }
   
   return html;
+}
+
+
+async function _generatePasswordRecoverySessionCode(conn) {
+  let sql, param, data, stop_run = false, code_len, loop_cnt = 0, pr_sess_code = "";
+  
+  try {
+    while (!stop_run) {
+      code_len = (loop_cnt < 3)? 32 : 64;
+      pr_sess_code = cipher.generateTrueRandomStr("A", code_len);
+      
+      sql = `SELECT COUNT(*) AS cnt ` +
+            `  FROM pr_session ` +
+            `  WHERE sess_code = ?`;
+            
+      param = [pr_sess_code];
+      data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+      
+      if (Number(data[0].cnt) == 0) {
+        stop_run = true;
+      }
+      else {
+        loop_cnt++;
+        
+        if (loop_cnt >= 6) {
+          throw new Error("Fail to generate password recovery session code");
+        }
+      }  
+    }    
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return pr_sess_code;  
+}
+
+
+exports.createPasswordRecoverSessioin = async function(msg_pool, aes_key) {
+  let conn, pr_sess_code, sql, param, data;
+  
+  try {
+    conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
+    
+    pr_sess_code = await _generatePasswordRecoverySessionCode(conn);
+    
+    sql = `INSERT INTO pr_session ` +
+          `(sess_code, secure_key, user_name, email, verify_code, gen_cnt, add_datetime, status) ` +
+          `VALUES ` +
+          `(?, ?, "", "", "", 0, CURRENT_TIMESTAMP(), 'A')`;
+    
+    param = [pr_sess_code, aes_key];
+    data = JSON.parse(await dbs.sqlExec(conn, sql, param));
+    
+    if (Number(data.affectedRows) <= 0) {
+      throw new Error("Unable to create password recovery session by unknown reason");
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+  finally {
+    dbs.releasePoolConn(conn);
+  }
+  
+  return pr_sess_code;
+}
+
+
+exports.showPasswordRecoverPage = async function(pr_sess_code) {
+  let aes_algorithm, panel, html;
+  
+  try {    
+    aes_algorithm = "AES-GCM";
+    
+    panel = `
+    <div data-role="panel" data-position-fixed="true" data-position="left" data-display="overlay" id="go_back">
+      <div data-role="main" class="ui-content">
+        <ul data-role="listview">
+          <li><a href="javascript:goBack();" data-ajax="false">Back</a></li>
+        </ul>	
+      </div>
+    </div>`;
+    
+    html = `
+    <!doctype html>
+    <html>
+    <head>
+      <title>Recover Password</title>
+      <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+      <meta http-equiv='Content-Type' content='text/html; charset=utf-8'> 
+
+      <style>
+        .ui-panel.ui-panel-open {
+          position:fixed;
+        }
+
+        .ui-panel-inner {
+          position: absolute;
+          top: 1px;
+          left: 0;
+          right: 0;
+          bottom: 0px;
+          overflow: scroll;
+          -webkit-overflow-scrolling: touch;
+        }    
+      </style>
+
+      <link rel='stylesheet' href='/js/jquery.mobile-1.4.5.min.css'>
+      <link rel='shortcut icon' href='/favicon.ico'>
+      <script src='/js/jquery.min.js'></script>
+      <script src='/js/jquery.mobile-1.4.5.min.js'></script>
+      <script src="/js/js.cookie.min.js"></script>  
+      <script src='/js/crypto-lib.js'></script>
+      <script src="/js/common_lib.js"></script>
+    
+      <script>
+        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);  
+        var inter_lock = 0;      // 0 = Can send verification code, 1 = Verification code is sending, no more operation.
+      
+        function goBack() {
+          window.location.href = "/";
+        }
+
+        function dataSetValid() {
+          let email = document.getElementById("email").value;
+          let result = {};
+          
+          try {
+            if (email.trim() == "") {
+              result = {ok: false, message: "Please input the email"};
+            }
+            else {
+              result = {ok: true, message: ""};
+            }
+          }
+          catch(e) {
+            result = {ok: false, message: e.message};
+          }
+          
+          return result;
+        }
+        
+        async function sendVerifyCode() {
+          try {
+            let chk_result = dataSetValid();
+          
+            if (chk_result.ok) {
+              if (inter_lock == 0) {
+                if (confirm("Send verification code now?")) {
+                  await goSendVerifyCode();
+                }
+              }
+              else {
+                alert("Verification code is sending, please be patient.");
+              }
+            }
+            else {
+              alert(chk_result.message);
+            }            
+          }
+          catch(e) {
+            alert(e.message);
+          }
+        }
+        
+        async function goSendVerifyCode() {
+          let pr_sess_code = document.getElementById("pr_sess_code").value;
+          let email = document.getElementById("email").value;
+          let aes_algorithm = document.getElementById("aes_algorithm").value;
+
+          try {
+            let aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+            
+            if (aes_key.length >= ${_key_len} && aes_algorithm.trim() == "AES-GCM") {
+              inter_lock = 1;       // Mark verification code sending process is 'ON' 
+              
+              let enc_rec = await aesEncryptJSON(aes_algorithm, aes_key, email);
+              let e_email = enc_rec.encrypted;
+              let iv_email = enc_rec.iv;
+              
+              // They will be used in next step //
+              document.getElementById("e_email").value = e_email;
+              document.getElementById("iv_email").value = iv_email;
+          
+              // Clear it in memory //
+              aes_key = null;
+
+              $.ajax({
+                type: 'POST',
+                url: '/send-verify-code',
+                dataType: 'html',
+                data: {
+                  pr_sess_code: pr_sess_code,
+                  aes_algorithm: aes_algorithm, 
+                  e_email: e_email,
+                  iv_email: iv_email                
+                },
+                success: function(retval) {
+                  retval = JSON.parse(retval);
+                  
+                  if (parseInt(retval.status, 10) == 1) {
+                    goNextStep();
+                  }
+                  else {
+                    if (parseInt(retval.status, 10) == -1) {
+                      // Password recovery session expired //
+                      alert(retval.message);
+                      goBack();
+                    }
+                    else if (parseInt(retval.status, 10) == -2) {
+                      // invalid parameter(s) is/are found //
+                      goBack();
+                    }
+                    else if (parseInt(retval.status, 10) == -3) {
+                      // Serious problem is found, unable to proceed. //
+                      alert(retval.message);
+                      goBack();
+                    }                                                          
+                    else {
+                      // Something is wrong (retval.status = 0) //
+                      alert(retval.message);
+                      inter_lock = 0;       // Mark verification code sending process is 'OFF'
+                    }
+                  }
+                },
+                error: function(xhr, ajaxOptions, thrownError) {
+                  alert("Error is found as sending verification code, please contact support.");
+                  goBack();                  
+                }             
+              });      
+            }
+            else {
+              alert("System error is found, please contact support.");
+              goBack();
+            }
+          }
+          catch(e) {
+            alert(e.message);
+          }        
+        }
+        
+        function goNextStep() {
+          document.getElementById("email").value = "";
+          document.getElementById("frmRecoverPass").action = "/verify-code";
+          document.getElementById("frmRecoverPass").submit();
+        }
+      </script>
+    </head>
+      
+    <body>
+      <div data-role="page" id="mainpage">
+        ${panel}
+
+        <div data-role="header" style="overflow:hidden;" data-position="fixed">
+          <a href="#go_back" data-icon="bars" class="ui-btn-left">Menu</a>					
+          <h1>Recover Password</h1>
+        </div>	
+
+        <div data-role="main" class="ui-body-d ui-content">
+          <form id="frmRecoverPass" name="frmRecoverPass" action="" method="POST">
+            <input type=hidden id="pr_sess_code" name="pr_sess_code" value="${pr_sess_code}">
+            <input type=hidden id="aes_algorithm" name="aes_algorithm" value="${aes_algorithm}">
+            <input type=hidden id="e_email" name="e_email" value="">
+            <input type=hidden id="iv_email" name="iv_email" value="">
+                     
+            <label for="email">Email registered for your user account:</label>
+            <input type="text" id="email" name="email" value="" maxlength=128>
+            <br>
+            <br>
+            <b>A six digits verification code will be sent to your email, and you need to input it in next step.</b>
+            <br>
+            <br>
+            <input type="button" id="send_vcode" name="send_vcode" value="Send Verification Code" onClick="sendVerifyCode();">
+          </form>
+        </div>
+      </div>      
+    </body>    
+    `;
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return html;
+}
+
+
+async function _getPasswordRecoverySessionCreateTime(conn, pr_sess_code) {
+  let sql, param, data, result;
+  
+  try {
+    sql = `SELECT DATE_FORMAT(add_datetime, '%Y-%m-%d %H:%i:%s') AS add_datetime ` +
+          `  FROM pr_session ` +
+          `  WHERE sess_code = ? ` +
+          `    AND status = 'A'`;
+          
+    param = [pr_sess_code];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    
+    if (data.length > 0) {
+      result = data[0].add_datetime;
+    }      
+    else {
+      // The session is deleted or no longer valid //
+      result = "";
+    }      
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;
+}
+
+
+async function _calculateSessionValidTime(conn, add_datetime, interval) {
+  let sql, param, data, result;
+  
+  try {
+    sql = `SELECT DATE_FORMAT(ADDTIME(?, ?), '%Y-%m-%d %H:%i:%s') AS time_limit`;
+    
+    param = [add_datetime, interval];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    result = data[0].time_limit;
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;
+}
+
+
+async function _isPasswordRecoverySessionValid(conn, sess_until) {
+  let sql, param, data, sess_valid;
+  
+  try {
+    sql = `SELECT TIMESTAMPDIFF(second, CURRENT_TIMESTAMP(), ?) AS timediff`;
+    
+    param = [sess_until];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    sess_valid = (parseInt(data[0].timediff, 10) > 0)? true : false; 
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return sess_valid;  
+}
+
+
+async function _deletePasswordRecoverySession(conn, pr_sess_code) {
+  let sql, param;
+  
+  try {
+    sql = `DELETE FROM pr_session ` +
+          `  WHERE sess_code = ?`;
+          
+    param = [pr_sess_code];
+    await dbs.sqlExec(conn, sql, param);       
+  }
+  catch(e) {
+    throw e;
+  }
+}
+
+
+exports.isPasswordRecoverySessCodeValid = async function(msg_pool, pr_sess_code) {
+  let conn, add_datetime, sess_until, is_valid;
+  
+  try {
+    conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
+    
+    add_datetime = await _getPasswordRecoverySessionCreateTime(conn, pr_sess_code);
+    
+    if (add_datetime != "") {
+      // Calculate the session valid time. Password recovery session will be expired after 30 minute after it's creation. //
+      sess_until = await _calculateSessionValidTime(conn, add_datetime, '00:30:00');
+      
+      if (await _isPasswordRecoverySessionValid(conn, sess_until)) {
+        is_valid = true;
+      }
+      else {
+        // Session has expired, delete it. //
+        await _deletePasswordRecoverySession(conn, pr_sess_code);
+        is_valid = false;
+      }
+    }
+    else {
+      // Invalid P.R. session record may still exist //
+      await _deletePasswordRecoverySession(conn, pr_sess_code);
+      is_valid = false;
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+  finally {
+    dbs.releasePoolConn(conn);
+  }
+  
+  return is_valid;
+}
+
+
+async function _verifyCodeSendingCounter(conn, pr_sess_code) {
+  let sql, param, data, result;
+  
+  try {
+    sql = `SELECT gen_cnt ` +
+          `  FROM pr_session ` +
+          `  WHERE sess_code = ? ` +
+          `    AND status = 'A'`;
+          
+    param = [pr_sess_code];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    
+    if (data.length > 0) {
+      result = Number(data[0].gen_cnt);
+    }
+    else {
+      throw new Error("Password recovery session is lost!");
+    }       
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;  
+}
+
+
+async function _getPasswordRecoverySessionKey(conn, pr_sess_code) {
+  let sql, param, data, result;
+  
+  try {
+    sql = `SELECT secure_key ` +
+          `  FROM pr_session ` +
+          `  WHERE sess_code = ?`;
+          
+    param = [pr_sess_code];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));      
+    
+    if (data.length > 0) {
+      result = data[0].secure_key;
+    }
+    else {
+      throw new Error(`The P.R. session record is lost! Session: ${pr_sess_code}`);
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;
+}
+
+
+async function _getUsernameByEmail(conn, email) {
+  let sql, param, data, result;
+  
+  try {
+    sql = `SELECT user_name ` +
+          `  FROM user_list ` +
+          `  WHERE email = ? ` +
+          `    AND status = 'A'`;
+          
+    param = [email];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));      
+    
+    if (data.length > 0) {
+      result = data[0].username;
+    }
+    else {
+      throw new Error(`Unable to get user login name for email ${email}.`);
+    }       
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;
+}
+
+
+async function _updatePasswordRecoverySession(conn, pr_sess_code, email, username, verify_code) {
+  let sql, param, data;
+  
+  try {
+    sql = `UPDATE pr_session ` +
+          `  SET user_name = ?, ` +
+          `      email = ?, ` + 
+          `      verify_code = ? ` +
+          `  WHERE sess_code = ? ` +
+          `    AND status = 'A'`;
+          
+    param = [username, email, verify_code, pr_sess_code];
+    data = JSON.parse(await dbs.sqlExec(conn, sql, param));      
+    
+    if (Number(data.affectedRows) <= 0) {
+      throw new Error(`Unable to update the new verification code.`); 
+    }
+    else {
+      // Only one active P.R. session is allowed for an user //
+      sql = `DELETE FROM pr_session ` +
+            `  WHERE user_name = ? ` +
+            `    AND email = ? ` +
+            `    AND sess_code <> ?`;
+            
+      param = [username, email, pr_sess_code];
+      await dbs.sqlExec(conn, sql, param); 
+    }
+  }
+  catch(e) {
+    throw e; 
+  }
+}
+
+
+async function _getMailerRecord(conn) {
+  let sql, data, result;
+  
+  try {
+    // Assume it has only one email worker //
+    sql = `SELECT email, m_user, m_pass, smtp_server, port ` +
+          `  FROM sys_email_sender ` +
+          `  WHERE status = 'A'`;
+          
+    data = JSON.parse(await dbs.sqlQuery(conn, sql));
+    
+    if (data.length > 0) {
+      result = {
+        email: data[0].email,
+        m_user: data[0].m_user,
+        m_pass: data[0].m_pass,
+        smtp_server: data[0].smtp_server,
+        port: data[0].port
+      };      
+    }
+    else {
+      result = null;
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;  
+}
+
+
+async function _sendVerifyCode(conn, to_email, verify_code) {
+  let subject, mail_body, mailer, sent_result, retval;
+  
+  try {
+    mailer = await _getMailerRecord(conn);
+    
+    if (mailer != null) {
+      subject = "Password Recovery (SMS 2)";
+      
+      mail_body = `The verification code is ${verify_code} \n\n` +
+                  `You have 30 minutes to complete the process. \n\n` +
+                  `Warning: Don't share this code to other people.`;
+      
+      sent_result = await telecom.sendEmail(mailer.smtp_server, mailer.port, mailer.email, to_email, mailer.m_user, mailer.m_pass, subject, mail_body);
+      
+      if (sent_result.ok) {
+        retval = {status: 1, message: ""};
+      }
+      else {
+        retval = {status: 0, message: sent_result.error}; 
+      }
+    }
+    else {
+      retval = {status: -3, message: "Email sending worker is missing!"};
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return retval;
+}
+
+
+async function _updateSendingCounter(conn, pr_sess_code) {
+  let sql, param, data, retval;
+  
+  try {
+    sql = `UPDATE pr_session ` +
+          `  SET gen_cnt = gen_cnt + 1 ` +
+          `  WHERE sess_code = ? ` +
+          `    AND status = 'A'`;
+          
+    param = [pr_sess_code];
+    data = JSON.parse(await dbs.sqlExec(conn, sql, param));
+    
+    if (Number(data.affectedRows) < 1) {
+      retval = {status: -3, message: "Unable to update verification code generation counter."};
+    }
+    else {
+      retval = {status: 1, message: ""};
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return retval;
+}
+
+
+exports.sendVerifyCode = async function(msg_pool, pr_sess_code, aes_algorithm, e_email, iv_email) {
+  let conn, aes_key, email, username, verify_code = "", retval = {status: 1, message: ""};
+  
+  try {
+    conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
+    
+    // The maximum number of verification code generation is 10 //
+    if (await _verifyCodeSendingCounter(conn, pr_sess_code) < 10) {
+      // Step 1: Retrieve the session AES key //
+      aes_key = await _getPasswordRecoverySessionKey(conn, pr_sess_code);
+      
+      // Step 2: Decrypt email used for password recovery //
+      email = await cipher.aesDecryptJSON(aes_algorithm, aes_key, iv_email, e_email);
+      
+      // Step 3: Get corresponding username //
+      username = await _getUsernameByEmail(conn, email);
+      
+      // Step 4: Generate a 6 digits verification code //
+      verify_code = cipher.generateTrueRandomStr("N", 6);
+      
+      if (verify_code.trim().length == 6) {
+        // Step 5: Update password recovery session with additional information //
+        await _updatePasswordRecoverySession(conn, pr_sess_code, email, username, verify_code);
+        
+        // Step 6: Send out the verification code via email //
+        retval = await _sendVerifyCode(conn, email, verify_code);
+        
+        if (retval.status == 1) {
+          // Step 7: If the new verification code has been sent out successfully, update //
+          // the verification code sending counter.                                      //
+          retval = await _updateSendingCounter(conn, pr_sess_code);
+        }
+      }
+      else {
+        retval = {status: 0, message: "Verification code generation fails, please try again."};
+      }  
+    }
+    else {
+      retval = {status: -3, message: "Too many verification codes have been generated, process is aborted."};
+    }
+  }
+  catch(e) {
+    // Usually problem caught in here would let the whole password recovery process be aborted //  
+    retval = {status: -3, message: e.message};
+  }
+  finally {
+    dbs.releasePoolConn(conn);
+  }
+  
+  return retval;  
+}
+
+
+exports.showVerificationPage = async function(pr_sess_code, aes_algorithm, e_email, iv_email) {
+  let html;
+
+  try {
+    html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <!-- Required meta tags-->
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+        <meta name="mobile-web-app-capable" content="yes">
+        <!-- Color theme for statusbar (Android only) -->
+        <meta name="theme-color" content="#2196f3">
+        <!-- Your app title -->
+        <title>Verify Code</title>
+
+        <link rel='stylesheet' href='/js/jquery.mobile-1.4.5.min.css'>
+        <link rel='shortcut icon' href='/favicon.ico'>
+        <script src='/js/jquery.min.js'></script>
+        <script src='/js/jquery.mobile-1.4.5.min.js'></script>
+        <script src="/js/js.cookie.min.js"></script>  
+        <script src='/js/crypto-lib.js'></script>
+        <script src="/js/common_lib.js"></script>
+      
+        <script>
+          var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);  
+          var inter_lock = 0;     // 0 = Can re-send verification code, 1 = Verification code sending slot is occupied.
+
+          function trimInput(object) {
+            let strval = object.value;
+
+            strval = strval.trim();
+            object.value = strval;         
+          }
+                              
+          function dataSetValid() {
+            let v_code = document.getElementById("v_code").value;
+            let result = {ok: true, message: ""};
+            
+            try {
+              if (v_code.trim().length != 6) {
+                result = {ok: false, message: "Invalid verification code is given"};
+              }
+            }
+            catch(e) {
+              result = {ok: false, message: e.message};
+            }
+            
+            return result;
+          }
+          
+          async function goVerify() {
+            let retval = dataSetValid();
+            
+            if (retval.ok) {
+              try { 
+                let aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+                let aes_algorithm = document.getElementById("aes_algorithm").value;
+                let v_code = document.getElementById("v_code").value;
+                
+                if (aes_key.length >= ${_key_len}) {                         
+                  let enc_rec = await aesEncryptJSON(aes_algorithm, aes_key, v_code);
+                  let e_v_code = enc_rec.encrypted;
+                  let iv_v_code = enc_rec.iv;
+                  
+                  // Encrypt the verification code and clear the plain text copy of it before go to next page //  
+                  document.getElementById("e_v_code").value = e_v_code;
+                  document.getElementById("iv_v_code").value = iv_v_code;
+                  document.getElementById("v_code").value = "";
+                  document.getElementById("frmRecoverPass").action = "/check-verification-code";
+                  document.getElementById("frmRecoverPass").submit();
+                }
+                else {
+                  alert("Session key is lost, process is aborted.");
+                  goBack();
+                }
+              }
+              catch(e) {
+                alert("System error is found, try again. If the error persists, please contact support.");
+                goBack();
+              }               
+            }
+            else {
+              alert(retval.message, "Alert");
+            } 
+          }
+        
+          async function resendVerifyCode() {
+            if (inter_lock == 0) {
+              if (confirm("Resend verification code?")) {
+                inter_lock = 1;
+                await goResendVerifyCode();
+              }
+            }
+            else {
+              alert("New verification code is sending, please be patient.");
+            }          
+          }
+          
+          async function goResendVerifyCode() {
+            let pr_sess_code = document.getElementById("pr_sess_code").value;
+            let aes_algorithm = document.getElementById("aes_algorithm").value;
+            let e_email = document.getElementById("e_email").value;
+            let iv_email = document.getElementById("iv_email").value;
+
+            try {
+              $.ajax({
+                type: 'POST',
+                url: '/send-verify-code',
+                dataType: 'html',
+                data: {
+                  pr_sess_code: pr_sess_code,
+                  aes_algorithm: aes_algorithm, 
+                  e_email: e_email,
+                  iv_email: iv_email                
+                },
+                success: function(retval) {
+                  retval = JSON.parse(retval);
+                  
+                  if (parseInt(retval.status, 10) == 1) {
+                    alert("New verification code has been re-sent, please check your email.");
+                    inter_lock = 0;
+                  }
+                  else {
+                    if (parseInt(retval.status, 10) == -1) {
+                      // Password recovery session expired //
+                      alert(retval.message);
+                      goBack();
+                    }
+                    else if (parseInt(retval.status, 10) == -2) {
+                      // invalid parameter(s) is/are found //
+                      goBack();
+                    }
+                    else if (parseInt(retval.status, 10) == -3) {
+                      // Serious problem is found, unable to proceed. //
+                      alert(retval.message);
+                      goBack();
+                    }                                                          
+                    else {
+                      // Something is wrong (retval.status = 0) //
+                      alert(retval.message);
+                      inter_lock = 0;       // Mark verification code sending process is 'OFF'
+                    }
+                  }
+                },
+                error: function(xhr, ajaxOptions, thrownError) {
+                  alert("Re-sent verification code is failure.");
+                  inter_lock = 0;                  
+                }             
+              });      
+            }
+            catch(e) {
+              alert(e.message);
+              inter_lock = 0;
+            }           
+          }
+          
+          function goBack() {
+            window.location.href = "/";
+          }
+        </script>                     
+      </head>
+    
+      <body>
+      <div data-role="page" id="mainpage">
+        <div data-role="header" style="overflow:hidden;" data-position="fixed">
+          <h1>Verify Code</h1>
+        </div>	
+
+        <div data-role="main" class="ui-body-d ui-content">
+          <form id="frmRecoverPass" name="frmRecoverPass" action="" method="POST">
+            <input type=hidden id="pr_sess_code" name="pr_sess_code" value="${pr_sess_code}">
+            <input type=hidden id="aes_algorithm" name="aes_algorithm" value="${aes_algorithm}">
+            <input type=hidden id="e_email" name="e_email" value='${e_email}'>
+            <input type=hidden id="iv_email" name="iv_email" value='${iv_email}'>
+            <input type=hidden id="e_v_code" name="e_v_code" value="">
+            <input type=hidden id="iv_v_code" name="iv_v_code" value="">
+
+            <table width='100%' cellspacing=0 cellpadding=0>
+            <thead></thead>
+            <tbody>
+              <tr>
+                <td>
+                  <label for="v_code">Input Verification Code:</label>
+                  <input type="text" id="v_code" name="v_code" value="" maxlength=6 onBlur="trimInput(this)"/>
+                </td>
+              </tr>  
+              
+              <tr>
+                <td>
+                  <a href="javascript:resendVerifyCode();">Resend Verification Code</a>
+                  <!--
+                  <input type="button" id="resend_vcode" name="resend_vcode" value="Resend Verification Code" onClick="resendVerifyCode();">
+                  //-->
+                </td>
+              </tr>
+              
+              <tr><td>&nbsp;</td></tr>
+              <tr><td>&nbsp;</td></tr>
+
+              <tr>
+                <td>
+                  <input type="button" id="verify_code" name="verify_code" value="Verify Code" onClick="goVerify();">
+                </td>  
+              </tr>
+            </tbody>
+            </table>  
+          </form>
+        </div>
+      </div>      
+      </body>
+    </html>`;
+  }
+  catch(e) {
+    throw e;
+  }  
+  
+  return html;
+}
+
+
+async function _updatePasswordRecoverySessionStatus(conn, pr_sess_code, status) {
+  let sql, param;
+  
+  try {
+    sql = `UPDATE pr_session ` +
+          `  SET status = ? ` +
+          `  WHERE sess_code = ?`;
+          
+    param = [status, pr_sess_code];
+    await dbs.sqlExec(conn, sql, param);             
+  }
+  catch(e) {
+    throw e; 
+  }
+}
+
+
+async function _compareVerificationCode(conn, pr_sess_code, verify_code) {
+  let sql, param, data, status, is_match;
+  
+  try {
+    sql = `SELECT COUNT(*) AS cnt ` +
+          `  FROM pr_session ` +
+          `  WHERE sess_code = ? ` +
+          `    AND verify_code = ? ` +
+          `    AND status = 'A'`;
+          
+    param = [pr_sess_code, verify_code];      
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    is_match = (Number(data[0].cnt) > 0)? true : false;  
+    
+    // If the verification code is correct, mark the P.R. session status 'locked' for password amendment. //
+    // However, if the verification code is incorrect, mark it 'used'.                                    //
+    status = (is_match)? "L" : "U";    
+    await _updatePasswordRecoverySessionStatus(conn, pr_sess_code, status);
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return is_match;  
+}
+
+
+exports.checkVerificationCode = async function(msg_pool, pr_sess_code, aes_algorithm, e_v_code, iv_v_code) {
+  let conn, aes_key, verify_code, result;
+  
+  try {
+    conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
+    
+    // Step 1: Retrieve the session AES key //
+    aes_key = await _getPasswordRecoverySessionKey(conn, pr_sess_code);
+    
+    // Step 2: Decrypt user given verification code //
+    verify_code = await cipher.aesDecryptJSON(aes_algorithm, aes_key, iv_v_code, e_v_code);
+    
+    // Step 3: Compare it with the verification code stored in the P.R. session record //
+    result = await _compareVerificationCode(conn, pr_sess_code, verify_code);
+  }
+  catch(e) {
+    throw e;
+  }
+  finally {
+    dbs.releasePoolConn(conn);
+  }
+  
+  return result;
+}
+
+
+exports.showAmendPassowrdPage = async function(pr_sess_code, aes_algorithm) {
+  let panel, html;
+
+  try {
+    panel = `
+    <div data-role="panel" data-position-fixed="true" data-position="left" data-display="overlay" id="go_back">
+      <div data-role="main" class="ui-content">
+        <ul data-role="listview">
+          <li><a href="javascript:cancelOperation();" data-ajax="false">Cancel</a></li>
+        </ul>	
+      </div>
+    </div>`;
+    
+    html = `
+    <!doctype html>
+    <html>
+    <head>
+      <title>Recover Password</title>
+      <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+      <meta http-equiv='Content-Type' content='text/html; charset=utf-8'> 
+
+      <style>
+        .ui-panel.ui-panel-open {
+          position:fixed;
+        }
+
+        .ui-panel-inner {
+          position: absolute;
+          top: 1px;
+          left: 0;
+          right: 0;
+          bottom: 0px;
+          overflow: scroll;
+          -webkit-overflow-scrolling: touch;
+        }    
+      </style>
+
+      <link rel='stylesheet' href='/js/jquery.mobile-1.4.5.min.css'>
+      <link rel='shortcut icon' href='/favicon.ico'>
+      <script src='/js/jquery.min.js'></script>
+      <script src='/js/jquery.mobile-1.4.5.min.js'></script>
+      <script src="/js/js.cookie.min.js"></script>  
+      <script src='/js/crypto-lib.js'></script>
+      <script src="/js/common_lib.js"></script>
+    
+      <script>
+        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);  
+              
+        function trimInput(object) {
+          let strval = object.value;
+
+          strval = strval.trim();
+          object.value = strval;         
+        }
+                            
+        function dataSetValid() {
+          let passwd1 = document.getElementById("passwd1").value;
+          let passwd2 = document.getElementById("passwd2").value;
+          let result = {ok: true, message: ""};
+          
+          try {
+            passwd1 = passwd1.trim();
+            passwd2 = passwd2.trim();
+          
+            if (passwd1 == "") {
+              result = {ok: false, message: "Password cannot blank"};
+            }
+            else { 
+              if (passwd1.length < 8) {
+                result = {ok: false, message: "Password is too short, it should be 8 characters or more."};
+              }
+              else {
+                if (passwd1 != passwd2) {
+                  result = {ok: false, message: "Password is not match"};
+                }
+              }
+            }
+          }
+          catch(e) {
+            result = {ok: false, message: e.message};
+          }
+          
+          return result;
+        }
+                  
+        async function amendPassword() {
+          let retval = dataSetValid();
+          
+          if (retval.ok) {
+            if (confirm("Amend password now?")) {
+              await goAmendPassword();
+            }
+          }
+          else {
+            alert(retval.message, "Alert");
+          }          
+        }
+        
+        async function goAmendPassword() {
+          try {
+            let aes_algorithm = document.getElementById("aes_algorithm").value;
+            let passwd = document.getElementById("passwd1").value;
+            let aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+          
+            if (aes_key.length >= ${_key_len} && aes_algorithm.trim() != "") {                         
+              let enc_rec = await aesEncryptJSON(aes_algorithm, aes_key, passwd);
+              let e_passwd = enc_rec.encrypted;
+              let iv_passwd = enc_rec.iv;
+
+              aes_key = null;
+            
+              document.getElementById("e_passwd").value = e_passwd;
+              document.getElementById("iv_passwd").value = iv_passwd; 
+              document.getElementById("passwd1").value = "";
+              document.getElementById("passwd2").value = "";
+              document.getElementById("frmRecoverPass").action = "/amend-password";
+              document.getElementById("frmRecoverPass").submit();
+            }
+            else {
+              alert("System error is found, please contact support.");
+              cancelOperation();
+            }
+          }
+          catch(e) {
+            alert(e.message);
+          }
+        }
+        
+        function cancelOperation() {
+          if (is_iOS) {
+            Cookies.remove("aes_key");
+          }
+          else {
+            deleteLocalStoredItem("aes_key");
+          } 
+
+          document.getElementById("pr_sess_code").value = "";   
+          document.getElementById("aes_algorithm").value = "";          
+          document.getElementById("passwd1").value = "";
+          document.getElementById("passwd2").value = "";  
+          window.location.href = "/";          
+        }
+      </script>
+    </head>
+      
+    <body>
+      <div data-role="page" id="mainpage">
+        ${panel}
+
+        <div data-role="header" style="overflow:hidden;" data-position="fixed">
+          <a href="#go_back" data-icon="bars" class="ui-btn-left">Menu</a>					
+          <h1>Amend Password</h1>
+        </div>	
+
+        <div data-role="main" class="ui-body-d ui-content">
+          <form id="frmRecoverPass" name="frmRecoverPass" action="" method="POST">
+            <input type=hidden id="pr_sess_code" name="pr_sess_code" value="${pr_sess_code}">
+            <input type=hidden id="aes_algorithm" name="aes_algorithm" value="${aes_algorithm}">
+            <input type=hidden id="e_passwd" name="e_passwd" value="">
+            <input type=hidden id="iv_passwd" name="iv_passwd" value="">
+                     
+            <label for="passwd1">Input new password (8 characters or more):</label>
+            <input type="password" id="passwd1" name="passwd1" value="" maxlength=256 onBlur="trimInput(this)" />
+            <label for="passwd2">Retype the new password:</label>
+            <input type="password" id="passwd2" name="passwd2" value="" maxlength=256 onBlur="trimInput(this)" />            
+            <br>
+            <br>
+            <input type="button" id="save_passwd" name="save_passwd" value="Save New Password" onClick="amendPassword();;">
+          </form>
+        </div>
+      </div>      
+    </body>    
+    `;
+  }
+  catch(e) {
+    throw e;
+  }
+
+  return html;
+}
+
+
+exports.isPasswordRecoverySessionLocked = async function(msg_pool, pr_sess_code) {
+  let conn, sql, param, data, result;
+  
+  try {
+    conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
+    
+    sql = `SELECT status ` +
+          `  FROM pr_session ` +
+          `  WHERE sess_code = ?`;
+          
+    param = [pr_sess_code];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    
+    if (data.length > 0) {
+      result = (data[0].status == "L")? true : false;
+    }      
+    else {
+      result = false;
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+  finally {
+    dbs.releasePoolConn(conn);
+  }
+  
+  return result;    
+}
+
+
+async function _retrieveInfoFromPrSession(conn, pr_sess_code) {
+  let sql, param, data, rec = {};
+
+  try {
+    sql = `SELECT user_name, email ` +
+          `  FROM pr_session ` +
+          `  WHERE sess_code = ?`;
+          
+    param = [pr_sess_code];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    
+    if (data.length > 0) {
+      rec = {
+        username: data[0].user_name,
+        email: data[0].email
+      };
+    }      
+    else {
+      throw new Error("The P.R. session record is lost, process cannot proceed.");
+    }       
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return rec;
+}
+
+
+async function _amendPassword(conn, pr_sess_code, hash_passwd, rec) {
+  let sql, param, data, retval;
+  
+  try {
+    // Note: An email may be used to register multiple user accounts, so that password of all //
+    //       active accounts with same registered email will be changed.                      //    
+    sql = `UPDATE user_list ` +
+          `  SET happy_passwd = ? ` +
+          `  WHERE email = ? ` +
+          `    AND status = 'A'`;
+          
+    param = [hash_passwd, rec.email];   
+    data = JSON.parse(await dbs.sqlExec(conn, sql, param));
+    
+    if (Number(data.affectedRows) >= 1) {
+      retval = {ok: true, message: "", username: ""};
+    }
+    else {
+      retval = {ok: false, message: "Unable update password by unknown reason, please contact support.", username: ""};
+    }   
+    
+    // Mark the P.R. record used, no matter the password amendment result. //
+    await _updatePasswordRecoverySessionStatus(conn, pr_sess_code, "U");
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return retval;
+}
+
+
+exports.amendPassword = async function(msg_pool, pr_sess_code, aes_algorithm, e_passwd, iv_passwd) {
+  let conn, aes_key, passwd, hash_passwd, rec = {}, retval = {ok: true, message: "", username: ""};
+  
+  try {
+    conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
+    
+    // Step 1: Retrieve the session AES key //
+    aes_key = await _getPasswordRecoverySessionKey(conn, pr_sess_code);
+    
+    // Step 2: Decrypt the new password //
+    passwd = await cipher.aesDecryptJSON(aes_algorithm, aes_key, iv_passwd, e_passwd);
+    
+    // Step 3: Hashing the new password //
+    hash_passwd = await cipher.encryptPassword(passwd);
+    
+    // Step 4: Retrieve required information from the P.R. session record //
+    rec = await _retrieveInfoFromPrSession(conn, pr_sess_code);
+    
+    // Step 5: Update user password //
+    retval = await _amendPassword(conn, pr_sess_code, hash_passwd, rec);
+    
+    if (retval.ok) {
+      // Inform user his/her login username, in case he/she forget it also. //
+      retval.username = rec.username;
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+  finally {
+    dbs.releasePoolConn(conn);
+  }
+  
+  return retval;  
+}
+
+
+exports.printUserFilterForm = async function() {
+  let html;
+  
+  try {
+    html = `
+    <!doctype html>
+    <html>
+    <head>
+      <title>Amend User Password</title>
+      <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+      <meta http-equiv='Content-Type' content='text/html; charset=utf-8'> 
+
+      <style>
+        .ui-panel.ui-panel-open {
+          position:fixed;
+        }
+
+        .ui-panel-inner {
+          position: absolute;
+          top: 1px;
+          left: 0;
+          right: 0;
+          bottom: 0px;
+          overflow: scroll;
+          -webkit-overflow-scrolling: touch;
+        }    
+      </style>
+
+      <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
+      <link rel="shortcut icon" href="/favicon.ico">
+      <script src="/js/jquery.min.js"></script>
+      <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+      <script src="/js/js.cookie.min.js"></script>
+      <script src="/js/common_lib.js"></script>
+      <script src="/js/crypto-lib.js"></script>
+    
+      <script>
+        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);     
+      
+        async function goBack() {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("frmAmendPassword").action = "/message";
+            document.getElementById("frmAmendPassword").submit();                    
+          }
+          catch(e) {
+            alert(e.message);
+          }
+        }
+      
+        function trimInput(object) {
+          let strval = object.value;
+
+          strval = strval.trim();
+          object.value = strval;         
+        }
+        
+        async function getUserList() {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("frmAmendPassword").action = "/load_user_list";
+            document.getElementById("frmAmendPassword").submit();  
+          }
+          catch(e) {
+            alert(e.message);
+          }
+        }
+      </script>
+    </head>      
+    
+    <body>
+      <div data-role="page" id="mainpage">
+        <div data-role="header" style="overflow:hidden;" data-position="fixed">
+          <a href="javascript:goBack();" data-icon="bars" class="ui-btn-left">Home</a>					
+          <h1>User Password</h1>
+        </div>	
+
+        <div data-role="main" class="ui-body-d ui-content">
+          <form id="frmAmendPassword" name="frmAmendPassword" action="" method="POST">
+            <input type=hidden id="roll_rec" name="roll_rec" value="">
+            <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+            <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">          
+            <input type=hidden id="aes_algorithm" name="aes_algorithm" value="AES-GCM">
+                     
+            <label for="passwd1">Input full or partial username/alias/email:</label>
+            <input type="text" id="filter" name="filter" value="" maxlength=128 onBlur="trimInput(this)" />
+            <br>
+            <font style="color:#A52A2A">Warnning:</font><br>
+            If you don't filter out specified user(s), the user list on next step may be too long and cause timeout error. 
+            <br>
+            <br>
+            <input type="button" id="get_list" name="get_list" value="Next Page" onClick="getUserList();">
+          </form>
+        </div>
+      </div>            
+    </body>
+    </html>
+    `;
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return html;
+}
+
+
+exports.printUserSelectionList = async function(filter, aes_algorithm) {
+  let html;  
+  
+  try {
+    html = `
+    <!doctype html>
+    <html>
+    <head>
+      <title>Amend User Password</title>
+      <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+      <meta http-equiv='Content-Type' content='text/html; charset=utf-8'> 
+
+      <style>
+        .ui-panel.ui-panel-open {
+          position:fixed;
+        }
+
+        .ui-panel-inner {
+          position: absolute;
+          top: 1px;
+          left: 0;
+          right: 0;
+          bottom: 0px;
+          overflow: scroll;
+          -webkit-overflow-scrolling: touch;
+        }    
+      </style>
+
+      <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
+      <link rel="shortcut icon" href="/favicon.ico">
+      <script src="/js/jquery.min.js"></script>
+      <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+      <script src="/js/js.cookie.min.js"></script>
+      <script src="/js/common_lib.js"></script>
+      <script src="/js/crypto-lib.js"></script>
+    
+      <script>
+        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);     
+        var aes_algorithm = "${aes_algorithm}";        
+        var filter = "${filter}";
+
+        $(document).on("pagecreate", function() {
+          loadUserList(filter, aes_algorithm);      
+        });
+        
+        async function loadUserList(filter, aes_algorithm) {
+          try {
+            await prepareRollingKey(${_key_len});
+            let roll_rec = document.getElementById("roll_rec").value;
+            let iv_roll_rec = document.getElementById("iv_roll_rec").value;
+            let roll_rec_sum = document.getElementById("roll_rec_sum").value;          
+
+            $.ajax({
+              type: 'POST',
+              url: '/get_active_user_list',
+              dataType: 'html',
+              data: {
+                filter: filter,
+                aes_algorithm: aes_algorithm,              
+                roll_rec: roll_rec,
+                iv_roll_rec: iv_roll_rec,
+                roll_rec_sum: roll_rec_sum
+              },
+              success: function(ret_data) {
+                ret_data = JSON.parse(ret_data);
+              
+                if (typeof(ret_data.cmd) == "string") {
+                  let cmd = ret_data.cmd;
+                  
+                  if (cmd == "force_logout") {
+                    logout();
+                  }
+                  else if (cmd == "admin_verify_fail") {
+                    alert("Unable to check whether you are system administrator, process is aborted.");
+                    goBack();
+                  }
+                  else if (cmd == "sess_expired") {
+                    alert("Session expired!");
+                    logout();
+                  }
+                  else if (cmd == "sess_verify_fail") {
+                    alert("Unable to verify your session status, please login again.");
+                    logout();
+                  }
+                  else if (cmd == "no_cookie") {
+                    window.location.href = "/";
+                  }
+                  else {
+                    alert(cmd);
+                  }
+                }   
+                else {
+                  showUserList(ret_data);
+                }
+              },
+              error: function(xhr, ajaxOptions, thrownError) {
+                alert("Unable to get required user list. Error " + xhr.status + ": " + thrownError);
+              }
+            });                                    
+          }
+          catch(e) {
+            alert(e.message);
+          } 
+        }
+        
+        async function showUserList(ret_data) {
+          try {
+            aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+            
+            if (typeof(aes_key) == "string" && aes_key.length >= ${_key_len}) {
+              let data_str = await aesDecryptBase64(aes_algorithm, aes_key, ret_data.iv, ret_data.enc);
+              let data = JSON.parse(data_str);
+              
+              if (Array.isArray(data)) {
+                if (data.length > 0) {
+                  for (let i = 0; i < data.length; i++) {
+                    let user_id = data[i].user_id;
+                    let user_name = data[i].user_name;
+                    let user_alias = data[i].user_alias;
+                    let email = data[i].email;
+                  
+                    let this_tr = "<tr style='background-color:#FFFC94'>" +
+                                    "<td><a href='javascript:goAmendUserPassword(" + user_id + ");'>" + user_name + "</a></td>" +
+                                    "<td><a href='javascript:goAmendUserPassword(" + user_id + ");'>" + user_alias + "</a></td>" +
+                                    "<td><a href='javascript:goAmendUserPassword(" + user_id + ");'>" + email + "</a></td>" +
+                                  "</tr>";
+                    
+                    $('#user_table').append(this_tr).enhanceWithin();
+                  }
+                  
+                  let this_tr = "<tr style='background-color:#9BDFF6'><td colspan=3>&nbsp;</td></tr>";
+                  $('#user_table').append(this_tr).enhanceWithin();
+                }
+                else {
+                  let this_tr = "<tr style='background-color:#FFFC94'><td colspan=3>No user is found</td></tr>";
+                  $('#user_table').append(this_tr).enhanceWithin();
+                } 
+              }
+              else {
+                alert("Return data is invalid, operation cannot proceed.");
+                goBack();
+              } 
+            }
+            else {
+              alert("Session secret key is lost, operation is aborted!");
+              goBack();              
+            }   
+          }
+          catch(e) {
+            alert(e.message);
+          }    
+        }
+        
+        async function goAmendUserPassword(usr_id) {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("usr_id").value = usr_id;
+            document.getElementById("frmAmendPassword").action = "/go_amend_user_password";
+            document.getElementById("frmAmendPassword").submit();                    
+          }
+          catch(e) {
+            alert(e.message);
+          }        
+        }
+              
+        async function goBack() {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("frmAmendPassword").action = "/message";
+            document.getElementById("frmAmendPassword").submit();                    
+          }
+          catch(e) {
+            alert(e.message);
+          }
+        }
+
+        function logout() {
+          window.location.href = '/logout_msg';
+        }        
+        
+        async function goPrevPage() {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("frmAmendPassword").action = "/amend_user_passwd";
+            document.getElementById("frmAmendPassword").submit();                    
+          }
+          catch(e) {
+            alert(e.message);
+          }        
+        }
+      </script>
+    </head>      
+    
+    <body>
+      <div data-role="page" id="mainpage">
+        <div data-role="header" style="overflow:hidden;" data-position="fixed">
+          <a href="javascript:goBack();" data-icon="bars" class="ui-btn-left">Home</a>					
+          <h1>User Password</h1>
+        </div>	
+
+        <div data-role="main" class="ui-body-d ui-content">
+          <form id="frmAmendPassword" name="frmAmendPassword" action="" method="POST">
+            <input type=hidden id="roll_rec" name="roll_rec" value="">
+            <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+            <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">          
+            <input type=hidden id="usr_id" name="usr_id" value="">
+            <input type=hidden id="aes_algorithm", name="aes_algorithm" value="${aes_algorithm}">
+
+            <table id="user_table" width=100% cellspacing=1 cellpadding=1 style="table-layout:fixed;">
+            <tbody>
+              <tr style="background-color:#9BDFF6">
+                <td align=center width=25%>User Name</td>
+                <td align=center width=20%>Alias</td>
+                <td align=center>Email</td>
+              </tr>
+              <!-- User list will be put in here -->  
+            </tbody>
+            </table>
+            Click on desired user record to change user password
+            <br>
+            <br>
+            <input type="button" id="prev_page" name="prev_page" value="Previous Page" onClick="goPrevPage();">
+          </form>
+        </div>
+      </div>            
+    </body>
+    </html>    
+    `;    
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return html;
+}
+
+
+async function _getActiveUserList(conn, filter) {
+  let sql, data, user_list = [];
+  
+  try {
+    if (filter.trim() == "") {
+      sql = `SELECT user_id, user_name, user_alias, email ` + 
+            `  FROM user_list ` +
+            `  WHERE status = 'A' ` +
+            `  ORDER BY user_name`;
+    }
+    else {
+      sql = `SELECT user_id, user_name, user_alias, email ` + 
+            `  FROM user_list ` +
+            `  WHERE (user_name LIKE '%` + filter.trim() + `%' ` +
+            `     OR user_alias LIKE '%` + filter.trim() + `%' ` +
+            `     OR email LIKE '%` + filter.trim() + `%' ` + `) ` +
+            `    AND status = 'A' ` +
+            `  ORDER BY user_name`;
+    }
+    
+    data = JSON.parse(await dbs.sqlQuery(conn, sql));
+    
+    for (let i = 0; i < data.length; i++) {
+      let rec = {user_id: data[i].user_id, user_name: data[i].user_name, user_alias: data[i].user_alias, email: data[i].email};
+      user_list.push(rec);
+    }
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return user_list;
+}
+
+
+exports.getActiveUserList = async function(msg_pool, user_id, sess_code, filter, aes_algorithm) {
+  let conn, aes_key, user_list, user_list_json, result = {iv: "", enc: ""};
+  
+  try {
+    conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
+
+    let keys = await _getSessionKeys(conn, user_id, sess_code);
+    aes_key = keys.aes_key;
+    
+    user_list = await _getActiveUserList(conn, filter);     // Note: 'user_list' is an array
+    user_list_json = JSON.stringify(user_list);
+    
+    let enc_obj = await cipher.aesEncryptBase64(aes_algorithm, aes_key, user_list_json);
+    result = {iv: enc_obj.iv, enc: enc_obj.encrypted};
+  }
+  catch(e) {
+    throw e;
+  }
+  finally {
+    dbs.releasePoolConn(conn);
+  }  
+
+  return result;  
+}
+
+
+async function _getUserRecord(conn, usr_id) {
+  let sql, param, data, result;
+  
+  try {
+    sql = `SELECT user_name, user_alias, email ` + 
+          `  FROM user_list ` +
+          `  WHERE user_id = ? ` +
+          `    AND status = 'A'`;
+          
+    param = [usr_id];
+    data = JSON.parse(await dbs.sqlQuery(conn, sql, param));
+    
+    if (data.length > 0) {
+      result = {user_name: data[0].user_name, user_alias: data[0].user_alias, email: data[0].email};
+    }
+    else {
+      throw new Error(`User ${usr_id} is not found. May be he/she is not active user anymore.`);
+    }      
+  }
+  catch(e) {
+    throw e;
+  }
+  
+  return result;  
+}
+
+
+exports.printUserPasswordAmendmentForm = async function(msg_pool, user_id, sess_code, usr_id, aes_algorithm) {
+  let conn, aes_key, html, usr_rec, usr_rec_json, enc_obj, iv_usr_rec, enc_usr_rec;
+  
+  try {
+    conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
+    
+    let keys = await _getSessionKeys(conn, user_id, sess_code);
+    aes_key = keys.aes_key;
+
+    usr_rec = await _getUserRecord(conn, usr_id);
+    usr_rec_json = JSON.stringify(usr_rec);
+    
+    enc_obj = await cipher.aesEncryptBase64(aes_algorithm, aes_key, usr_rec_json);
+    enc_usr_rec = enc_obj.encrypted;
+    iv_usr_rec = enc_obj.iv;
+    
+    html = `
+    <!doctype html>
+    <html>
+    <head>
+      <title>Amend User Password</title>
+      <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+      <meta http-equiv='Content-Type' content='text/html; charset=utf-8'> 
+
+      <style>
+        .ui-panel.ui-panel-open {
+          position:fixed;
+        }
+
+        .ui-panel-inner {
+          position: absolute;
+          top: 1px;
+          left: 0;
+          right: 0;
+          bottom: 0px;
+          overflow: scroll;
+          -webkit-overflow-scrolling: touch;
+        }    
+      </style>
+
+      <link rel="stylesheet" href="/js/jquery.mobile-1.4.5.min.css">
+      <link rel="shortcut icon" href="/favicon.ico">
+      <script src="/js/jquery.min.js"></script>
+      <script src="/js/jquery.mobile-1.4.5.min.js"></script>
+      <script src="/js/js.cookie.min.js"></script>
+      <script src="/js/common_lib.js"></script>
+      <script src="/js/crypto-lib.js"></script>
+    
+      <script>
+        var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);     
+        var aes_algorithm = "${aes_algorithm}";        
+        var enc_usr_rec = "${enc_usr_rec}";
+        var iv_usr_rec = "${iv_usr_rec}"
+
+        $(document).on("pagecreate", function() {
+          decryptUserRecord(aes_algorithm, enc_usr_rec, iv_usr_rec);      
+        });
+        
+        async function decryptUserRecord(aes_algorithm, enc_usr_rec, iv_usr_rec) {
+          try {
+            let aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+            
+            if (aes_key.length >= ${_key_len}) {
+              let usr_rec = JSON.parse(await aesDecryptBase64(aes_algorithm, aes_key, iv_usr_rec, enc_usr_rec));    
+              document.getElementById("t_user_name").innerHTML = usr_rec.user_name;
+              document.getElementById("t_user_alias").innerHTML = usr_rec.user_alias;
+              document.getElementById("t_email").innerHTML = usr_rec.email;
+            }
+            else {
+              alert("Session secret key is lost, operation is aborted.");
+              goBack();
+            }
+            
+            aes_key = null;
+          }
+          catch(e) {
+            alert(e.message);
+          } 
+        }
+        
+        function dataSetOkay() {
+          let passwd1 = document.getElementById("passwd1").value;
+          let passwd2 = document.getElementById("passwd2").value;
+          let result = {ok: true, message: ""};
+          
+          try {
+            passwd1 = passwd1.trim();
+            passwd2 = passwd2.trim();
+          
+            if (passwd1 == "") {
+              result = {ok: false, message: "Password cannot blank"};
+            }
+            else { 
+              if (passwd1.length < 8) {
+                result = {ok: false, message: "Password is too short, it should be 8 characters or more."};
+              }
+              else {
+                if (passwd1 != passwd2) {
+                  result = {ok: false, message: "Password is not match"};
+                }
+              }
+            }
+          }
+          catch(e) {
+            throw e;
+          }
+          
+          return result;        
+        }
+        
+        async function goUpdatePassword() {
+          try {
+            let checker = dataSetOkay();
+          
+            if (checker.ok) {
+              let aes_key = (is_iOS)? Cookies.get("aes_key") : getLocalStoredItem("aes_key");
+              
+              if (aes_key.length >= ${_key_len}) {
+                await prepareRollingKey(${_key_len});
+                
+                let passwd = document.getElementById("passwd1").value;
+                let enc_obj = await aesEncryptJSON(aes_algorithm, aes_key, passwd.trim());
+                document.getElementById("e_passwd").value = enc_obj.encrypted;
+                document.getElementById("iv_passwd").value = enc_obj.iv;
+                document.getElementById("frmAmendPassword").action = "/confirm_amend_user_password";
+                document.getElementById("frmAmendPassword").submit();                      
+              }           
+              else {
+                alert("Session secret key is lost, operation cannot proceed.");
+              }
+            }
+            else {
+              alert(checker.message);
+            }
+          }
+          catch(e) {
+            alert(e.message);
+          }
+        }
+                              
+        async function goBack() {
+          try {
+            await prepareRollingKey(${_key_len});
+            document.getElementById("frmAmendPassword").action = "/message";
+            document.getElementById("frmAmendPassword").submit();                    
+          }
+          catch(e) {
+            alert(e.message);
+          }
+        }
+      </script>
+    </head>      
+    
+    <body>
+      <div data-role="page" id="mainpage">
+        <div data-role="header" style="overflow:hidden;" data-position="fixed">
+          <a href="javascript:goBack();" data-icon="bars" class="ui-btn-left">Home</a>					
+          <h1>Amend Password</h1>
+        </div>	
+
+        <div data-role="main" class="ui-body-d ui-content">
+          <form id="frmAmendPassword" name="frmAmendPassword" action="" method="POST">
+            <input type=hidden id="roll_rec" name="roll_rec" value="">
+            <input type=hidden id="iv_roll_rec" name="iv_roll_rec" value="">
+            <input type=hidden id="roll_rec_sum" name="roll_rec_sum" value="">          
+            <input type=hidden id="usr_id" name="usr_id" value="${usr_id}">
+            <input type=hidden id="aes_algorithm", name="aes_algorithm" value="${aes_algorithm}">
+            <input type=hidden id="e_passwd" name="e_passwd" value="">
+            <input type=hidden id="iv_passwd" name="iv_passwd" value="">
+
+            <table width=100% cellspacing=0 cellpadding=0 style="table-layout:fixed;">
+            <tbody>
+              <tr style="background-color:#9BDFF6">
+                <td width=26%><b>User Name:</b></td>
+                <td id="t_user_name"></td>
+              <tr>
+              
+              <tr style="background-color:#9BDFF6">
+                <td><b>User Alias:</b></td>  
+                <td id="t_user_alias"></td>
+              </tr>
+              
+              <tr style="background-color:#9BDFF6">
+                <td><b>Email:</b></td>  
+                <td id="t_email"></td>
+              </tr>
+              
+              <tr><td colspan=2>&nbsp;</td></tr>
+              
+              <tr>  
+                <td colspan=2>
+                  <label for="passwd1">New Password (8 characters or more):</label>
+                  <input type=password id="passwd1" name="passwd1" value="" maxlength=256>
+                </td>
+              </tr>
+              
+              <tr>  
+                <td colspan=2>
+                  <label for="passwd1">Retype New Password:</label>
+                  <input type=password id="passwd2" name="passwd2" value="" maxlength=256>                
+                </td>                
+              </tr>
+            </tbody>
+            </table>
+            <br>
+            <br>
+            <input type="button" id="save_passwd" name="save_passwd" value="Update Password" onClick="goUpdatePassword();">
+          </form>
+        </div>
+      </div>            
+    </body>
+    </html>        
+    `;    
+  }
+  catch(e) {
+    throw e;
+  }
+  finally {
+    dbs.releasePoolConn(conn);
+  }
+  
+  return html;
+}
+
+
+exports.amendUserPassword = async function(msg_pool, user_id, sess_code, usr_id, aes_algorithm, iv_passwd, e_passwd) {
+  let conn, aes_key, passwd, pw_hash, sql, param, data, retval = {ok: true, msg: ""};  
+  
+  try {
+    conn = await dbs.getPoolConn(msg_pool, dbs.selectCookie("MSG"));
+    
+    let keys = await _getSessionKeys(conn, user_id, sess_code);
+    aes_key = keys.aes_key;
+    
+    passwd = await cipher.aesDecryptJSON(aes_algorithm, aes_key, iv_passwd, e_passwd);
+    pw_hash = await cipher.encryptPassword(passwd);
+    
+    sql = `UPDATE user_list ` +
+          `  SET happy_passwd = ? ` +
+          `  WHERE user_id = ?`;
+          
+    param = [pw_hash, usr_id];
+    data = JSON.parse(await dbs.sqlExec(conn, sql, param));      
+    
+    if (parseInt(data.affectedRows, 10) != 1) {
+      retval = {ok: false, msg: "Unable to change user password by unknown reason."};
+    }      
+  }
+  catch(e) {
+    throw e;
+  }
+  finally {
+    dbs.releasePoolConn(conn);
+  }
+  
+  return retval;
 }
