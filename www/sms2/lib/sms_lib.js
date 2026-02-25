@@ -17622,7 +17622,7 @@ exports.printUserFilterForm = async function() {
     <body>
       <div data-role="page" id="mainpage">
         <div data-role="header" style="overflow:hidden;" data-position="fixed">
-          <a href="javascript:goBack();" data-icon="bars" class="ui-btn-left">Home</a>					
+          <a href="javascript:goBack();" data-icon="home" class="ui-btn-left">Home</a>					
           <h1>User Password</h1>
         </div>	
 
@@ -17852,7 +17852,7 @@ exports.printUserSelectionList = async function(filter, aes_algorithm) {
     <body>
       <div data-role="page" id="mainpage">
         <div data-role="header" style="overflow:hidden;" data-position="fixed">
-          <a href="javascript:goBack();" data-icon="bars" class="ui-btn-left">Home</a>					
+          <a href="javascript:goBack();" data-icon="home" class="ui-btn-left">Home</a>					
           <h1>User Password</h1>
         </div>	
 
@@ -18137,7 +18137,7 @@ exports.printUserPasswordAmendmentForm = async function(msg_pool, user_id, sess_
     <body>
       <div data-role="page" id="mainpage">
         <div data-role="header" style="overflow:hidden;" data-position="fixed">
-          <a href="javascript:goBack();" data-icon="bars" class="ui-btn-left">Home</a>					
+          <a href="javascript:goBack();" data-icon="home" class="ui-btn-left">Home</a>					
           <h1>Amend Password</h1>
         </div>	
 
