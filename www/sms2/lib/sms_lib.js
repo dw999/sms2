@@ -382,7 +382,7 @@ async function _getKyberKeyData(conn) {
 
 
 exports.showLoginPage = async function(msg_pool) {
-  let conn, html, company_name, join_us, connect_mode, key_id, rsa_keys, public_pem, public_pem_b64, algorithm, algorithm_b64, public_sha256sum;
+  let conn, html, company_name, join_us, forget_passwd, connect_mode, key_id, rsa_keys, public_pem, public_pem_b64, algorithm, algorithm_b64, public_sha256sum;
   
   html = '';
   company_name = '';
@@ -399,7 +399,24 @@ exports.showLoginPage = async function(msg_pool) {
       join_us = `<a href='/request-to-join' class='ui-btn ui-btn-inline' data-ajax='false'>Join Us</a>`;
     }
     else {
-      join_us = ``;
+      join_us = "";
+    }
+    
+    if (connect_mode != 1) {
+      forget_passwd = `
+      <tr>
+        <td align=center colspan=2>
+          <a href="javascript:recoverPassword();" data-ajax="false"><b>Forget Password</b></a>
+        </td>
+      </tr>`;      
+    }
+    else {
+      forget_passwd = `
+      <tr>
+        <td align=center colspan=2>
+          <a href="javascript:contactAdmin();" data-ajax="false"><b>Forget Password</b></a>
+        </td>
+      </tr>`;      
     }
 
     // Step 1: Obtain an existing RSA public key or generate a new RSA key pair. //
@@ -614,6 +631,10 @@ exports.showLoginPage = async function(msg_pool) {
       }
     }
     
+    function contactAdmin() {
+      alert("If you forget your password, please contact system administrator or your referrer.");
+    }
+    
     async function recoverPassword() {
       try {
         key = await prepareAESkey();				  
@@ -756,11 +777,7 @@ exports.showLoginPage = async function(msg_pool) {
 
                       <tr><td colspan=2>&nbsp;</td></tr>
                       
-                      <tr>
-                        <td align=center colspan=2>
-                          <a href="javascript:recoverPassword();" data-ajax="false"><b>Forget Password</b></a>
-                        </td>
-                      </tr>
+                      ${forget_passwd}
                     </tbody>
                     </table>
                   </div>
