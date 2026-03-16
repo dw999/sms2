@@ -67,6 +67,7 @@
 // V2.0.25       2026-02-12      DW              - Let users recover their forgot password (except connection mode 1).
 //                                               - Let administrators to amend password for all users (mainly for connection mode 1, but
 //                                                 serve other connection modes also).
+// V2.0.26       2026-03-16      DW              Rewrite function "_selectSiteForVisitor" to make it selecting decoy website more randomly.
 //#################################################################################################################################
 
 "use strict";
@@ -2177,44 +2178,65 @@ async function isTokenValid(conn, token) {
 
 
 async function _selectSiteForVisitor(conn) {
-  let sqlcmd, data, cnt, rows, stop_run, idx, max_cnt, result;
+  let sqlcmd, data, cnt, seed, rows, stop_run, idx, max_cnt, result;
   let sites = []; 
   
   //-- Default value --//
   result = 'https://www.microsoft.com';
   
   try {
-    sqlcmd = `SELECT site_url ` +
-             `  FROM decoy_sites`;
-    data = JSON.parse(await dbs.sqlQuery(conn, sqlcmd));
+    stop_run = false;
+    max_cnt = 0;
     
-    for (let i = 0; i < data.length; i++) {
-      sites.push(data[i].site_url);
-    }         
-    
-    rows = sites.length;
-    if (rows > 0) {
-      stop_run = false;
-      max_cnt = 0;
+    while (!stop_run) {
+      seed = cipher.generateTrueRandomStr('S', 1);
       
-      while (!stop_run) {
-        //-- Return a random number between 1 and 'rows + arbitrary' --//
-        let arbitrary = Math.floor((Math.random() * rows * 2) + 1);
-        cnt = Math.floor((Math.random() * (rows + arbitrary)) + 1);
+      sqlcmd = `SELECT site_url ` +
+               `  FROM decoy_sites ` +
+               `  WHERE site_url like '%` + seed + `%' `;
+               
+      data = JSON.parse(await dbs.sqlQuery(conn, sqlcmd));
+      
+      if (data.length > 0) {
+        for (let i = 0; i < data.length; i++) {
+          sites.push(data[i].site_url);
+        }         
         
-        if (cnt >= 1 && cnt <= rows) {
-          idx = cnt - 1;
-          result = sites[idx];
+        rows = sites.length;
+        if (rows == 1) {
+          result = sites[0];
           stop_run = true;
         }
-        
-        if (!stop_run) {
-          max_cnt++;
-          if (max_cnt >= 50) {
-            stop_run = true;
-          }    
-        }
+        else if (rows > 1) {
+          stop_run = false;
+          max_cnt = 0;
+          
+          while (!stop_run) {
+            //-- Return a random number between 1 and 'rows + arbitrary' --//
+            let arbitrary = Math.floor((Math.random() * rows * 2) + 1);
+            cnt = Math.floor((Math.random() * (rows + arbitrary)) + 1);
+            
+            if (cnt >= 1 && cnt <= rows) {
+              idx = cnt - 1;
+              result = sites[idx];
+              stop_run = true;
+            }
+            
+            if (!stop_run) {
+              max_cnt++;
+              if (max_cnt >= 10) {
+                stop_run = true;
+              }    
+            }
+          }
+        }        
       }
+      else {
+        max_cnt++;
+        if (max_cnt >= 10) {
+          stop_run = true;
+        }            
+      }  
     }
   }
   catch(e) {
