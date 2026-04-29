@@ -75,10 +75,11 @@
 // V2.0.16       2025-12-04      DW              Implement a "rolling key mechanism" in SMS to detect and prevent MITM attack.
 //
 // V2.0.17       2026-01-29      DW              Refine scope of variables declare in this main program and related libraries.      
-// V2.0.18       2026-02-12      DW              - Let users recover their forgot password (except connection mode 1 and 3).
-//                                               - Let administrators to amend password for all users (mainly for connection mode 1 and 3,
+// V2.0.18       2026-02-12      DW              - Let users recover their forgot password (except connection mode 1).
+//                                               - Let administrators to amend password for all users (mainly for connection mode 1,
 //                                                 but serve other connection modes also).  
 // V2.0.19       2026-02-23      DW              Expel all access connections without proper browser agent identity.     
+// V2.0.20       2026-04-29      DW              Remove 'rolling_key' stored on client side as user logout.
 //#################################################################################################################################
   
 "use strict";
@@ -10921,13 +10922,15 @@ app.get('/logout_msg', (req, res) => {
 				Cookies.remove("u_id");
 				Cookies.remove("m_id");
 				Cookies.remove("aes_key");
+        Cookies.remove("rolling_key");
 				Cookies.remove("top_id");
 			}
 			else {
 				deleteLocalStoredItem("g_id");                             // Defined on common_lib.js
 				deleteLocalStoredItem("u_id");                             
 				deleteLocalStoredItem("m_id");
-				deleteLocalStoredItem("aes_key");                             
+				deleteLocalStoredItem("aes_key");
+        deleteLocalStoredItem("rolling_key");                             
 				deleteLocalStoredItem("top_id");                                   
 			}      
 		  
@@ -10950,13 +10953,15 @@ app.get('/logout_msg', (req, res) => {
 				Cookies.remove("u_id");
 				Cookies.remove("m_id");
 				Cookies.remove("aes_key");
+        Cookies.remove("rolling_key");
 				Cookies.remove("top_id");
 			}
 			else {
 				deleteLocalStoredItem("g_id");                             // Defined on common_lib.js
 				deleteLocalStoredItem("u_id");                             
 				deleteLocalStoredItem("m_id");
-				deleteLocalStoredItem("aes_key");                             
+				deleteLocalStoredItem("aes_key");    
+        deleteLocalStoredItem("rolling_key");                         
 				deleteLocalStoredItem("top_id");                                   
 			}      
 		  
