@@ -345,7 +345,7 @@ CREATE OR REPLACE TABLE sms_version
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 LOCK TABLES `sms_version` WRITE;
-INSERT INTO `sms_version` VALUES ("2.0.20", "2.0", "20", "20260212", "2026-02-12 23:59:59");
+INSERT INTO `sms_version` VALUES ("2.0.21", "2.0", "21", "20260527", "2026-05-27 23:59:59");
 UNLOCK TABLES;
 
 CREATE OR REPLACE TABLE pr_session

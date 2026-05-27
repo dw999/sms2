@@ -29,6 +29,8 @@
 // V1.0.05       2025-03-13      DW              Add function "minifyJS" which is used to compress JavaScript code block.
 // V1.0.06       2025-06-09      DW              Fix a syntax error on function '_isLeapYear'.
 // V1.0.07       2026-01-29      DW              Refine scope of variables declare in this library.
+// V1.0.08       2026-05-20      DW              Add a new global variable 'KEY_VALID_DAY', and rename global variable 'RSA_KEY_POOL_SIZE'
+//                                               to 'KEY_POOL_SIZE'.  
 //#################################################################################################################################
 
 "use strict";
@@ -82,9 +84,15 @@ function _getGlobalValue(option) {
     case 'PDA_BG_COLOR':
       value = '#E0F4FB';
       break;
+    
+    // RSA or ML-KEM key pool size //  
+    case 'KEY_POOL_SIZE':
+      value = 100;
+      break;  
       
-    case 'RSA_KEY_POOL_SIZE':
-      value = 50;
+    // Life span (in day) of temporary used RSA and ML-KEM key pair //
+    case 'KEY_VALID_DAY':
+      value = 1;
       break;  
       
     case 'AES_KEY_LEN':

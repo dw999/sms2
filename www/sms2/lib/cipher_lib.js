@@ -67,6 +67,9 @@
 // V1.0.16       2025-12-26      DW              Adjust parameters of argon2id on function 'encryptPassword' to harden password security.
 //
 // V1.0.17       2026-01-29      DW              Refine scope of variables declare in this library.
+//
+// V1.0.18       2026-05-20      DW              Use global values 'KEY_POOL_SIZE' and 'KEY_VALID_DAY' to control key pool size and their
+//                                               life span, instead hard code them in the program.
 //#################################################################################################################################
 
 "use strict";
@@ -888,14 +891,15 @@ exports.getKeyPairRSA = async function(conn, algorithm, days) {
   
   try {
 		if (parseInt(days, 10) <= 0 || isNaN(parseInt(days, 10))) {
-			days = 5;
+			let valid_days = wev.getGlobalValue('KEY_VALID_DAY');
+      days = (parseInt(valid_days, 10) > 0)? valid_days : 1;
 		} 
 		
-    //-- Determine whether RSA key pair pool large enough to draw. If it has or more RSA key pairs, then     --//
-    //-- select one from the pool randomly. Otherwise, generate a new RSA key pair to the pool, and use this --//
-    //-- newly created RSA key pair.                                                                         --// 
-    let key_pool_size = wev.getGlobalValue('RSA_KEY_POOL_SIZE');
-    key_pool_size = (parseInt(key_pool_size, 10) > 0)? key_pool_size : 50;
+    //-- Determine whether RSA key pair pool large enough to draw. If it has enough RSA key pairs, then --//
+    //-- select one from the pool randomly. Otherwise, generate a new RSA key pair to the pool, and use --//
+    //-- the newly created RSA key pair.                                                                --// 
+    let key_pool_size = wev.getGlobalValue('KEY_POOL_SIZE');
+    key_pool_size = (parseInt(key_pool_size, 10) > 0)? key_pool_size : 100;
     
     if (await _rsaKeyPairPoolSize(conn, days) >= key_pool_size) {
       result = await _rsaDrawKeyPair(conn, days);

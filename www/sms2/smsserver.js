@@ -80,10 +80,12 @@
 //                                                 but serve other connection modes also).  
 // V2.0.19       2026-02-23      DW              Expel all access connections without proper browser agent identity.     
 // V2.0.20       2026-04-29      DW              Remove 'rolling_key' stored on client side as user logout.
+// V2.0.21       2026-05-19      DW              Use 'express-rate-limit' to prevent (or at least slow down) DDoS attack.
 //#################################################################################################################################
   
 "use strict";
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const ws = require('ws');
 const cookie = require('cookie');      // Important note: 'cookie' is required for websocket upgrade checking process, don't remove it.              
 const cookieParser = require('cookie-parser')
@@ -106,6 +108,10 @@ const COOKIE_PDA = wev.getGlobalValue('COOKIE_PDA');                  // PDA_USE
 const COOKIE_MSG = wev.getGlobalValue('COOKIE_MSG');                  // MSG_USER
 const COMP_NAME = (wev.getGlobalValue('COMP_NAME') != '')? wev.getGlobalValue('COMP_NAME') : "PDA Tools Corp."; 
 const _key_len = wev.getGlobalValue('AES_KEY_LEN');                   // AES-256 passphase length
+const limiter = rateLimit({
+  windowMs: 60 * 1000,  // Within 1 minutes
+  limit: 60             // Limit each IP to 60 requests per 'window' 
+});
 
 var port = 8444;
 var host = '127.0.0.1';
@@ -167,6 +173,9 @@ app.disable('x-powered-by');
 
 //-- Define static resources (such as library files) location for express --// 
 app.use(express.static(__dirname));
+
+//-- Restrict user request frequency (Slow down DDoS attack) --//
+app.use(limiter);
 
 //-- Web page parser to get POST parameters --//
 app.use(bodyParser.json());  // for parsing application/json 

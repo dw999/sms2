@@ -30,7 +30,9 @@
 // V2.0.03       2025-06-27      DW              Show timestamp on error message.
 // V2.0.04       2025-07-07      DW              Use database connection pool to avoid database connection timeout issue.
 // V2.0.05       2026-01-22      DW              Delete rolling key records for all invalid web sessions, if any.
-// V1.0.06       2026-02-10      DW              Clear expired and used password recovery session.
+// V2.0.06       2026-02-10      DW              Clear expired and used password recovery session.
+// V2.0.07       2026-05-19      DW              Use global defeined value for RSA and ML-KEM key pair records expired days
+//                                               rather than hard code it in here. 
 //##########################################################################################
 
 "use strict";
@@ -38,7 +40,8 @@ const wev = require('./lib/webenv_lib.js');
 const dbs = require('./lib/db_lib.js');
 
 const interval = 3600000;        // Repeat every hour
-const key_rec_expired_days = 7;  // RSA and Kyber key pair records expired days
+// RSA and Kyber key pair records expired days //
+const key_rec_expired_days = (parseInt(wev.getGlobalValue('KEY_VALID_DAY'), 10) > 0)? wev.getGlobalValue('KEY_VALID_DAY') + 2 : 5;
 
 //-- Open database pool --//
 var msg_pool = dbs.createConnectionPool('COOKIE_MSG', 3);
@@ -241,7 +244,7 @@ async function _deleteExpiredRsaKeyPair(conn) {
 	
   try {
     sql = `DELETE FROM rsa_keypair ` +
-	  `  WHERE DATEDIFF(CURRENT_TIMESTAMP(), add_datetime) >= ?`;
+          `  WHERE DATEDIFF(CURRENT_TIMESTAMP(), add_datetime) >= ?`;
     
     param = [key_rec_expired_days];      
     await dbs.sqlExec(conn, sql, param);
@@ -257,7 +260,7 @@ async function _deleteExpiredKyberKeyPair(conn) {
   
   try {
     sql = `DELETE FROM kyber_keypair ` +
-	  `  WHERE DATEDIFF(CURRENT_TIMESTAMP(), add_datetime) >= ?`;
+          `  WHERE DATEDIFF(CURRENT_TIMESTAMP(), add_datetime) >= ?`;
     
     param = [key_rec_expired_days];      
     await dbs.sqlExec(conn, sql, param);

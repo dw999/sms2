@@ -68,6 +68,8 @@
 //                                               - Let administrators to amend password for all users (mainly for connection mode 1, but
 //                                                 serve other connection modes also).
 // V2.0.26       2026-03-16      DW              Rewrite function "_selectSiteForVisitor" to make it selecting decoy website more randomly.
+// V2.0.27       2026-05-20      DW              Use global values 'KEY_POOL_SIZE' and 'KEY_VALID_DAY' to control key pool size and their
+//                                               life span, instead hard code them in the program.
 //#################################################################################################################################
 
 "use strict";
@@ -83,6 +85,8 @@ const msglib = require('../lib/msg_lib.js');
 //-- Define constants --//
 const _decoy_company_name = (wev.getGlobalValue('COMP_NAME') != '')? wev.getGlobalValue('COMP_NAME') : "PDA Tools Corp.";
 const _key_len = wev.getGlobalValue('AES_KEY_LEN');                   // AES-256 passphase length
+const _key_pool_size = wev.getGlobalValue('KEY_POOL_SIZE');           // RSA or ML-KEM key pool size
+const _key_valid_day = wev.getGlobalValue('KEY_VALID_DAY');           // Life span of RSA and ML-KEM key pairs 
 
 
 async function _logSystemError(conn, user_id, detail_msg, brief_msg, browser_signature) {
@@ -341,8 +345,8 @@ async function _pickKyberKeyInRandom(conn, days) {
 async function _getKyberKeyData(conn) {
   let result, days, size, stop_run, cnt, kyber_obj, kyber_keypair, kyber_id, kyber_pkey;
 
-  size = 50;
-  days = 5;
+  size = _key_pool_size;
+  days = _key_valid_day;
   
   try {    
     if (await _getKyberKeyPoolSize(conn, days) < size) {
@@ -423,8 +427,8 @@ exports.showLoginPage = async function(msg_pool) {
     // Step 1: Obtain an existing RSA public key or generate a new RSA key pair. //
     // Note: key_obj.public, key_obj.private and key_obj.algorithm are in base64 //
     //       string format. Moreover, key_obj.public and key_obj.private are pem //
-    //       of public key and private key respectively.                         //		
-		let key_obj = await _getRsaPublicKey(conn, 5);
+    //       of public key and private key respectively.                         //
+		let key_obj = await _getRsaPublicKey(conn, _key_valid_day);
 				
 		if (key_obj.id == null) {
 			algorithm = {
@@ -9026,7 +9030,7 @@ async function _printJoinUsJavascriptSection(conn) {
     // Note: key_obj.public, key_obj.private and key_obj.algorithm are in base64 //
     //       string format. Moreover, key_obj.public and key_obj.private are pem //
     //       of public key and private key respectively.                         //		
-    let key_obj = await _getRsaPublicKey(conn, 5);
+    let key_obj = await _getRsaPublicKey(conn, _key_valid_day);
 				
     if (key_obj.id == null) {
       algorithm = {
@@ -9589,7 +9593,7 @@ async function _printAddUserAccountJavascriptSection(conn) {
     // Note: key_obj.public, key_obj.private and key_obj.algorithm are in base64 //
     //       string format. Moreover, key_obj.public and key_obj.private are pem //
     //       of public key and private key respectively.                         //		
-    let key_obj = await _getRsaPublicKey(conn, 5);
+    let key_obj = await _getRsaPublicKey(conn, _key_valid_day);
 				
     if (key_obj.id == null) {
       algorithm = {
