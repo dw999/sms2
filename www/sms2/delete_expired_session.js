@@ -31,7 +31,7 @@
 // V2.0.04       2025-07-07      DW              Use database connection pool to avoid database connection timeout issue.
 // V2.0.05       2026-01-22      DW              Delete rolling key records for all invalid web sessions, if any.
 // V2.0.06       2026-02-10      DW              Clear expired and used password recovery session.
-// V2.0.07       2026-05-19      DW              Use global defeined value for RSA and ML-KEM key pair records expired days
+// V2.0.07       2026-05-19      DW              Use global defined value for RSA and ML-KEM key pair records expired days
 //                                               rather than hard code it in here. 
 //##########################################################################################
 
