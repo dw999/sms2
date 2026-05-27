@@ -41,6 +41,7 @@
 # V1.0.14     2026-01-28      DW              Let 'mlkem' library is called locally by clients.
 # V1.0.15     2026-01-29      DW              Use a soft link instead a physical copy of 'mlkem' library to be called 
 #                                             by clients
+# V1.0.16     2026-05-27      DW              Add NPM package 'express-rate-limit'.
 #=========================================================================================================
 
 setterm -blank 0
@@ -447,6 +448,7 @@ npm install -S cookie-parser >> /tmp/install.log
 #npm install -S crypto-js >> /tmp/install.log
 npm install -S express >> /tmp/install.log
 npm install -S express-fileupload >> /tmp/install.log
+npm install -S express-rate-limit >> /tmp/install.log
 npm install -S image-thumbnail >> /tmp/install.log
 #npm install -S jsencrypt >> /tmp/install.log
 npm install -S mariadb >> /tmp/install.log
