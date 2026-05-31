@@ -31,6 +31,7 @@
 // V1.0.07       2026-01-29      DW              Refine scope of variables declare in this library.
 // V1.0.08       2026-05-20      DW              Add a new global variable 'KEY_VALID_DAY', and rename global variable 'RSA_KEY_POOL_SIZE'
 //                                               to 'KEY_POOL_SIZE'.  
+// V1.0.09       2026-05-30      DW              Show error message on console log for function 'minifyJS'.
 //#################################################################################################################################
 
 "use strict";
@@ -1426,6 +1427,7 @@ exports.minifyJS = async function(js) {
     result = buffer.code;     
   }
   catch(e) {
+    console.log(e.message);
     // The last resort //
     result = js;
   }
