@@ -70,6 +70,9 @@
 //
 // V1.0.18       2026-05-20      DW              Use global values 'KEY_POOL_SIZE' and 'KEY_VALID_DAY' to control key pool size and their
 //                                               life span, instead hard code them in the program.
+//
+// V1.0.19       2026-06-03      DW              Functions on required library 'mlkem' have been changed, so it needs to be amended in 
+//                                               here accordingly. 
 //#################################################################################################################################
 
 "use strict";
@@ -77,7 +80,8 @@ const decoder = require('arraybuffer-encoding');
 const hashwasm = require('hash-wasm'); 
 //const bcrypt = require('bcrypt');
 const crypto = require('node:crypto');
-const { MlKem1024 } = require("mlkem");
+//const { MlKem1024 } = require("mlkem");
+const { createMlKem1024 } = require("mlkem");
 const util = require('util');
 const dbs = require('../lib/db_lib.js');
 const wev = require('../lib/webenv_lib.js');
@@ -1546,9 +1550,13 @@ async function _generateKyberKeyPair() {
   let result = {pkey: '', skey: ''};
   
   try {
-    let kem = new MlKem1024();
+    //let kem = new MlKem1024();
     // pkey is public key, and skey is secret key. //
-    let [pkey, skey] = await kem.generateKeyPair(); 
+    //let [pkey, skey] = await kem.generateKeyPair(); 
+    
+    let kem = await createMlKem1024();
+    // pkey is public key, and skey is secret key. //
+    let [pkey, skey] = kem.generateKeyPair(); 
     
     result = {pkey: pkey, skey: skey};
   }
@@ -1596,8 +1604,8 @@ exports.kyberDecap = async function(ct, skey) {
   let kem, shared_key;
   
   try {
-    kem = new MlKem1024();
-    shared_key = await kem.decap(ct, skey);
+    kem = await createMlKem1024();
+    shared_key = kem.decap(ct, skey);
   }
   catch(e) {
     throw e;
@@ -1613,8 +1621,10 @@ exports.getKyberClientModule = function() {
   try {
     js = `
     <script type="module">
-      // Start from mlkem 2.5.0, it can be called locally. //
-      import { MlKem1024 } from "/js/mlkem/esm/mod.js";
+      // 1. Start from mlkem 2.5.0, it can be called locally. 
+      // 2. Start from mlkem 2.7.0, the syntax of library functions are changed. 
+      //    Here is for version 2.7.0 or later only. 
+      import { createMlKem1024 } from "/js/mlkem/esm/mod.js";
       //import { MlKem1024 } from "https://esm.sh/mlkem";
 
       function base64Encode(u8) {
@@ -1629,8 +1639,8 @@ exports.getKyberClientModule = function() {
         try {
           const pkey = base64Decode(pkey_b64);
 
-          const kem = new MlKem1024();
-          const [ct, skey] = await kem.encap(pkey);
+          const kem = await createMlKem1024();
+          const [ct, skey] = kem.encap(pkey);
               
           const ct_b64 = base64Encode(ct);
           const skey_b64 = base64Encode(skey);              
