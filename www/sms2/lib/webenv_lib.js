@@ -32,13 +32,15 @@
 // V1.0.08       2026-05-20      DW              Add a new global variable 'KEY_VALID_DAY', and rename global variable 'RSA_KEY_POOL_SIZE'
 //                                               to 'KEY_POOL_SIZE'.  
 // V1.0.09       2026-05-30      DW              Show error message on console log for function 'minifyJS'.
+// V1.0.10       2026-07-30      DW              Replace npm library 'image-thumbnail' with 'sharp'.
 //#################################################################################################################################
 
 "use strict";
 const fs = require('fs');
 const path = require('node:path');
 const execSync = require('node:child_process').execSync;
-const imageThumbnail = require('image-thumbnail');
+//const imageThumbnail = require('image-thumbnail');
+const sharp = require('sharp');
 const { minify } = require("terser");
 const dbs = require('../lib/db_lib.js');
 const telecom = require('../lib/telecom_lib.js');
@@ -900,6 +902,7 @@ exports.fileUpload = async function (upload_file, file_path) {
 }
 
 
+/*
 exports.createThumbnail = async function(src_filename, thumbnail_path) {
   let filename, ext, tn_filename, options, thumbnail;
   
@@ -923,7 +926,39 @@ exports.createThumbnail = async function(src_filename, thumbnail_path) {
   
   return tn_filename;
 }
+*/ 
 
+
+exports.createThumbnail = async function(src_filename, thumbnail_path) {
+  let filename, tn_filename, image, thumbnail;
+  
+  try {
+    let fileinfo = await _fileNameParser(src_filename);
+    filename = _allTrim(fileinfo.filename);
+    tn_filename = thumbnail_path + '/' + filename + '.jpg';
+        
+    image = sharp(src_filename);
+    
+    image
+      .metadata()
+      .then(function(metadata) {
+        return image
+          .resize(Math.round(metadata.width / 3))
+          .jpeg({ mozjpeg: true })
+          .toBuffer();
+      })
+      .then(function(thumbnail) {
+        // 'thumbnail' is a buffer variable which contains a JPEG image 1/3 the width and height of the original image file //
+        fs.createWriteStream(tn_filename).write(thumbnail);
+      });    
+  }
+  catch(e) {
+    console.log(e.message);
+    tn_filename = '';
+  }
+  
+  return tn_filename;
+}
 
 async function _checkFileConversionResult(input_file, output_file) {
   let result = '';

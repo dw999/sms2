@@ -46,6 +46,7 @@
 #                                             by clients
 # V1.0.19     2026-01-31      DW              Set Node.js version to 24.x  
 # V1.0.20     2026-05-27      DW              Add NPM package 'express-rate-limit'.
+# V1.0.21     2026-07-30      DW              Replace NPM package 'image-thumbnail' by 'sharp'.
 #=========================================================================================================
 
 setterm -blank 0
@@ -468,7 +469,7 @@ npm install -S cookie-parser >> /tmp/install.log
 npm install -S express >> /tmp/install.log
 npm install -S express-fileupload >> /tmp/install.log
 npm install -S express-rate-limit >> /tmp/install.log
-npm install -S image-thumbnail >> /tmp/install.log
+#npm install -S image-thumbnail >> /tmp/install.log
 #npm install -S jsencrypt >> /tmp/install.log
 npm install -S mariadb >> /tmp/install.log
 npm install -S mlkem >> /tmp/install.log
@@ -476,6 +477,7 @@ npm install -S node-device-detector >> /tmp/install.log
 npm install -S node-forge >> /tmp/install.log
 npm install -S nodemailer >> /tmp/install.log
 npm install -S prompt-sync >> /tmp/install.log
+npm install -S sharp >> /tmp/install.log
 npm install -S simple-hashtable >> /tmp/install.log
 #npm install -S telegram-bot-api >> /tmp/install.log
 npm install -S telegramsjs >> /tmp/install.log
