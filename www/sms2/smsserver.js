@@ -110,7 +110,7 @@ const COMP_NAME = (wev.getGlobalValue('COMP_NAME') != '')? wev.getGlobalValue('C
 const _key_len = wev.getGlobalValue('AES_KEY_LEN');                   // AES-256 passphase length
 const limiter = rateLimit({
   windowMs: 60 * 1000,  // Within 1 minutes
-  limit: 60             // Limit each IP to 60 requests per 'window' 
+  limit: 240            // Limit each IP to 240 requests per 'window' 
 });
 
 var port = 8444;
