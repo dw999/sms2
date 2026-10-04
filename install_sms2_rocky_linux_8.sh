@@ -43,6 +43,7 @@
 #                                             by clients
 # V1.0.16     2026-05-27      DW              Add NPM package 'express-rate-limit'.
 # V1.0.17     2026-07-30      DW              Replace NPM package 'image-thumbnail' by 'sharp'.
+# V1.0.28     2026-10-04      DW              Remove NPM package 'node-forge'.
 #=========================================================================================================
 
 setterm -blank 0
@@ -455,7 +456,7 @@ npm install -S express-rate-limit >> /tmp/install.log
 npm install -S mariadb >> /tmp/install.log
 npm install -S mlkem >> /tmp/install.log
 npm install -S node-device-detector >> /tmp/install.log
-npm install -S node-forge >> /tmp/install.log
+#npm install -S node-forge >> /tmp/install.log
 npm install -S nodemailer >> /tmp/install.log
 npm install -S prompt-sync >> /tmp/install.log
 npm install -S sharp >> /tmp/install.log
