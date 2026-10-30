@@ -81,6 +81,7 @@
 // V2.0.19       2026-02-23      DW              Expel all access connections without proper browser agent identity.     
 // V2.0.20       2026-04-29      DW              Remove 'rolling_key' stored on client side as user logout.
 // V2.0.21       2026-05-19      DW              Use 'express-rate-limit' to prevent (or at least slow down) DDoS attack.
+// V2.0.22       2026-10-30      DW              Suppress "ERR_ERL_PERMISSIVE_TRUST_PROXY" error on 'express-rate-limit'.
 //#################################################################################################################################
   
 "use strict";
@@ -110,7 +111,10 @@ const COMP_NAME = (wev.getGlobalValue('COMP_NAME') != '')? wev.getGlobalValue('C
 const _key_len = wev.getGlobalValue('AES_KEY_LEN');                   // AES-256 passphase length
 const limiter = rateLimit({
   windowMs: 60 * 1000,  // Within 1 minutes
-  limit: 240            // Limit each IP to 240 requests per 'window' 
+  limit: 240,           // Limit each IP to 240 requests per 'window' 
+  validate: {
+    trustProxy: false,  // Suppress "ERR_ERL_PERMISSIVE_TRUST_PROXY" error
+  }        
 });
 
 var port = 8444;
