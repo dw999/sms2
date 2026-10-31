@@ -82,6 +82,7 @@
 // V2.0.20       2026-04-29      DW              Remove 'rolling_key' stored on client side as user logout.
 // V2.0.21       2026-05-19      DW              Use 'express-rate-limit' to prevent (or at least slow down) DDoS attack.
 // V2.0.22       2026-10-30      DW              Suppress "ERR_ERL_PERMISSIVE_TRUST_PROXY" error on 'express-rate-limit'.
+// V2.0.23       2026-10-30      DW              Rewrite code segment for middleware of 'DeviceDetector'.
 //#################################################################################################################################
   
 "use strict";
@@ -197,7 +198,30 @@ app.use(fileUpload({
 //-- Define middleware for client device detection --//
 //-- Consult the following URLs for more details:                                             --// 
 //-- 1. https://github.com/sanchezzzhak/node-device-detector/blob/HEAD/docs/EXPRESS_SERVER.MD --//
-//-- 2. https://www.npmjs.com/package/node-device-detector                                    --//  
+//-- 2. https://www.npmjs.com/package/node-device-detector                                    --//
+const deviceDetector = new DeviceDetector({
+  clientIndexes: true,
+  deviceIndexes: true,
+  deviceAliasCode: false,
+});
+
+const clientHints = new ClientHints;
+
+const hasBotResult = (result) => {
+  return result && result.name;
+}
+
+const middlewareDetect = (req, res, next) => {
+  const useragent = req.headers['user-agent']; 
+  const clientHintsData = clientHints.parse(req.headers);
+
+  req.useragent = useragent;
+  req.device = deviceDetector.detect(useragent, clientHintsData);
+  req.bot = deviceDetector.parseBot(useragent);
+  next();
+};
+
+/*  
 const middlewareDetect = (req, res, next) => {
   const deviceDetector = new DeviceDetector;
   const clientHints = new ClientHints;
@@ -209,6 +233,7 @@ const middlewareDetect = (req, res, next) => {
   req.bot = deviceDetector.parseBot(useragent);
   next();
 };
+*/
 
 //-- attach middleware --//
 app.use(middlewareDetect);
