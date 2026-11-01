@@ -83,6 +83,7 @@
 // V2.0.21       2026-05-19      DW              Use 'express-rate-limit' to prevent (or at least slow down) DDoS attack.
 // V2.0.22       2026-10-30      DW              Suppress "ERR_ERL_PERMISSIVE_TRUST_PROXY" error on 'express-rate-limit'.
 // V2.0.23       2026-10-30      DW              Rewrite code segment for middleware of 'DeviceDetector'.
+// V2.0.24       2026-11-01      DW              Define reserved port numbers.
 //#################################################################################################################################
   
 "use strict";
@@ -110,6 +111,7 @@ const COOKIE_PDA = wev.getGlobalValue('COOKIE_PDA');                  // PDA_USE
 const COOKIE_MSG = wev.getGlobalValue('COOKIE_MSG');                  // MSG_USER
 const COMP_NAME = (wev.getGlobalValue('COMP_NAME') != '')? wev.getGlobalValue('COMP_NAME') : "PDA Tools Corp."; 
 const _key_len = wev.getGlobalValue('AES_KEY_LEN');                   // AES-256 passphase length
+const resv_ports = [22, 80, 443, 8443];                               // Reserved port numbers
 const limiter = rateLimit({
   windowMs: 60 * 1000,  // Within 1 minutes
   limit: 240,           // Limit each IP to 240 requests per 'window' 
@@ -124,7 +126,7 @@ process.argv.forEach((val, index) => {
   if (val.match(/port=/i)) {
   	let params = val.split("=");
   	let data = parseInt(params[1], 10);
-  	if (data > 0 && data <= 65535) {
+  	if (data > 0 && data <= 65535 && !resv_ports.includes(data)) {
       port = data;
   	}
   }
