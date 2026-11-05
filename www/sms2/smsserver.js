@@ -84,6 +84,9 @@
 // V2.0.22       2026-10-30      DW              Suppress "ERR_ERL_PERMISSIVE_TRUST_PROXY" error on 'express-rate-limit'.
 // V2.0.23       2026-10-30      DW              Rewrite code segment for middleware of 'DeviceDetector'.
 // V2.0.24       2026-11-01      DW              Define reserved port numbers.
+// V2.0.25       2026-11-05      DW              Review related coding for using NPM library 'cookie' as 'cookie' 2.x.x is a breaking 
+//                                               update. The old 'parse' and 'stringify' methods are renamed to 'parseCookie' and 
+//                                               'stringifySetCookie' respectively.
 //#################################################################################################################################
   
 "use strict";
@@ -11146,7 +11149,8 @@ const wss = new ws.Server({
     if (typeof(info.req.headers['cookie']) == 'string') {   
       //-- Note: Ensure the argument which pass into 'cookie.parse' is a string, or else it will cause a runtime error --//
       //--       to crash the application.                                                                             --//      
-      let parsed_cookie = cookie.parse(info.req.headers['cookie']);
+      //let parsed_cookie = cookie.parse(info.req.headers['cookie']);        // Syntax for 'cookie' version 1.x.x
+      let parsed_cookie = cookie.parseCookie(info.req.headers['cookie']);    // Syntax for 'cookie' version 2.x.x
       let cookie_value = JSON.parse(parsed_cookie.MSG_USER);
       let user_id = parseInt(cookie_value.user_id, 10);
       let sess_code = cookie_value.sess_code.trim();  
@@ -11285,7 +11289,8 @@ function noticeHandler(notice) {
 runNotificator();
 
 wss.on('connection', (socket, request) => {
-  let parsed_cookie = cookie.parse(request.headers['cookie']);
+  //let parsed_cookie = cookie.parse(request.headers['cookie']);       // Syntax for 'cookie' version 1.x.x
+  let parsed_cookie = cookie.parseCookie(request.headers['cookie']);   // Syntax for 'cookie' version 2.x.x
   let cookie_value = JSON.parse(parsed_cookie.MSG_USER);
   //-- Note: Don't create any other variables named 'user_id' or 'sess_code' within this block (even they are in different scope), or --//
   //--       else the value stored on 'user_id' or 'sess_code' will be lost.                                                          --//
@@ -11398,7 +11403,8 @@ const server = app.listen(port, host, () => {
 // Handle WebSocket upgrade request in here
 server.on('upgrade', (request, socket, head) => {  
   if (typeof(request.headers['cookie']) == "string") {
-		let parsed_cookie = cookie.parse(request.headers['cookie']);
+		//let parsed_cookie = cookie.parse(request.headers['cookie']);          // Syntax for 'cookie' version 1.x.x
+    let parsed_cookie = cookie.parseCookie(request.headers['cookie']);      // Syntax for 'cookie' version 2.x.x
 		let cookie_value = JSON.parse(parsed_cookie.MSG_USER);
 		let user_id = parseInt(cookie_value.user_id, 10);
 		let sess_code = cookie_value.sess_code.trim();
