@@ -321,9 +321,10 @@ if [[ -z "$url" ]]; then
   echo "check RabbitMQ's Ubuntu installation instructions and download link." 
   exit 1
 else
-  wget "$url" -O rabbitmq-server-latest.deb 
-  apt-get install ./rabbitmq-server-latest.deb -y
-  rm -f rabbitmq-server-latest.deb
+  wget "$url" 
+  rmqfilename=${url##*/}
+  apt-get install ./$rmqfilename -y
+  rm -f $rmqfilename
 fi  
 
 #-- Check whether RabbitMQ message broker has been installed OK. If it is not, abort installation process. --#
