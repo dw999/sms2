@@ -304,9 +304,27 @@ apt-get install -y erlang-base \
 ## Install rabbitmq-server and its dependencies
 #apt-get install rabbitmq-server -y --fix-missing >> /tmp/install.log
 ## 2026-11-06: Since the most updated RabbitMQ server is never put on Ubuntu 22.04, so I need to get it from it's GitHub repository.
-wget https://github.com/rabbitmq/rabbitmq-server/releases/download/v4.4.0/rabbitmq-server_4.4.0-1_all.deb 
-apt-get install ./rabbitmq-server_4.4.0-1_all.deb -y >> /tmp/install.log
-rm -f rabbitmq-server_4.4.0-1_all.deb  
+api='https://api.github.com/repos/rabbitmq/rabbitmq-server/releases/latest'
+
+url=$(
+  curl -fsSL "$api" |
+    jq -r '
+      [.assets[]
+       | select(.name | test("^rabbitmq-server_.*_all\\.deb$"))]
+      | first
+      | .browser_download_url // empty
+    '
+)
+
+if [[ -z "$url" ]]; then
+  echo "No RabbitMQ .deb asset found in the latest GitHub release. Please " 
+  echo "check RabbitMQ's Ubuntu installation instructions and download link." 
+  exit 1
+else
+  wget "$url" -O rabbitmq-server-latest.deb 
+  apt-get install ./rabbitmq-server-latest.deb -y
+  rm -f rabbitmq-server-latest.deb
+fi  
 
 #-- Check whether RabbitMQ message broker has been installed OK. If it is not, abort installation process. --#
 checker=`dpkg -l | grep rabbitmq-server | wc -l`
