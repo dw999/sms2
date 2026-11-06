@@ -33,6 +33,7 @@
 # V1.0.16     2026-05-27      DW              Add NPM package 'express-rate-limit'.
 # V1.0.17     2026-07-30      DW              Replace NPM package 'image-thumbnail' by 'sharp'.
 # V1.0.18     2026-10-04      DW              Remove NPM package 'node-forge'.
+# V1.0.19     2026-10-04      DW              Remove NPM package 'qs'.
 #=========================================================================================================
 
 setterm -blank 0
@@ -399,7 +400,7 @@ echo "Install required Node.js libraries"
 dir=`pwd`
 cd /www/sms2
 npm init -y >> /tmp/install.log
-npm install -S qs@^6.5.3 >> /tmp/install.log
+#npm install -S qs@^6.5.3 >> /tmp/install.log
 npm install -S amqplib >> /tmp/install.log
 npm install -S arraybuffer-encoding >> /tmp/install.log
 npm install -S hash-wasm >> /tmp/install.log

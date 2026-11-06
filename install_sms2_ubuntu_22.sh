@@ -48,6 +48,8 @@
 # V1.0.20     2026-05-27      DW              Add NPM package 'express-rate-limit'.
 # V1.0.21     2026-07-30      DW              Replace NPM package 'image-thumbnail' by 'sharp'.
 # V1.0.22     2026-10-04      DW              Remove NPM package 'node-forge'.
+# V1.0.23     2026-11-06      DW              - Remove NPM package 'qs'.
+#                                             - Change RabbitMQ Server installation method.
 #=========================================================================================================
 
 setterm -blank 0
@@ -300,7 +302,11 @@ apt-get install -y erlang-base \
                         erlang-syntax-tools erlang-tftp erlang-tools erlang-xmerl >> /tmp/install.log
 
 ## Install rabbitmq-server and its dependencies
-apt-get install rabbitmq-server -y --fix-missing >> /tmp/install.log
+#apt-get install rabbitmq-server -y --fix-missing >> /tmp/install.log
+## 2026-11-06: Since the most updated RabbitMQ server is never put on Ubuntu 22.04, so I need to get it from it's GitHub repository.
+wget https://github.com/rabbitmq/rabbitmq-server/releases/download/v4.4.0/rabbitmq-server_4.4.0-1_all.deb 
+apt-get install ./rabbitmq-server_4.4.0-1_all.deb -y >> /tmp/install.log
+rm -f rabbitmq-server_4.4.0-1_all.deb  
 
 #-- Check whether RabbitMQ message broker has been installed OK. If it is not, abort installation process. --#
 checker=`dpkg -l | grep rabbitmq-server | wc -l`
@@ -457,7 +463,7 @@ echo "Install required Node.js libraries"
 dir=`pwd`
 cd /www/sms2
 npm init -y >> /tmp/install.log
-npm install -S qs >> /tmp/install.log
+#npm install -S qs >> /tmp/install.log
 npm install -S amqplib >> /tmp/install.log
 npm install -S arraybuffer-encoding >> /tmp/install.log
 npm install -S hash-wasm >> /tmp/install.log
