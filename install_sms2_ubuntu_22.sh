@@ -50,6 +50,7 @@
 # V1.0.22     2026-10-04      DW              Remove NPM package 'node-forge'.
 # V1.0.23     2026-11-06      DW              - Remove NPM package 'qs'.
 #                                             - Change RabbitMQ Server installation method.
+# V1.0.24     2026-11-10      DW              Revise RabbitMQ Server and Erlang installation method.
 #=========================================================================================================
 
 setterm -blank 0
@@ -267,65 +268,37 @@ then
 fi
 
 echo "Install RabbitMQ message broker."
-## Team RabbitMQ's main signing key
+## Install required tools
+apt-get install curl gnupg apt-transport-https -y >> /tmp/install.log
+
+## Team RabbitMQ's signing key
 curl -1sLf "https://keys.openpgp.org/vks/v1/by-fingerprint/0A9AF2115F4687BD29803A206B73A36E6026DFCA" | gpg --dearmor | tee /usr/share/keyrings/com.rabbitmq.team.gpg > /dev/null
-## Launchpad PPA that provides modern Erlang releases
-curl -1sLf "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xf77f1eda57ebb1cc" | gpg --dearmor | tee /usr/share/keyrings/net.launchpad.ppa.rabbitmq.erlang.gpg > /dev/null
-## PackageCloud RabbitMQ repository
-curl -1sLf "https://packagecloud.io/rabbitmq/rabbitmq-server/gpgkey" | gpg --dearmor | tee /usr/share/keyrings/io.packagecloud.rabbitmq.gpg > /dev/null
 
 ## Add apt repositories maintained by Team RabbitMQ
 tee /etc/apt/sources.list.d/rabbitmq.list <<EOF
-## Provides modern Erlang/OTP releases
+## Modern Erlang/OTP releases
 ##
-## "jammy" as distribution name should work for any reasonably recent Ubuntu or Debian release.
-## See the release to distribution mapping table in RabbitMQ doc guides to learn more.
-deb [signed-by=/usr/share/keyrings/net.launchpad.ppa.rabbitmq.erlang.gpg] http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang/ubuntu jammy main
-deb-src [signed-by=/usr/share/keyrings/net.launchpad.ppa.rabbitmq.erlang.gpg] http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang/ubuntu jammy main
+deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb1.rabbitmq.com/rabbitmq-erlang/ubuntu/jammy jammy main
+deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb2.rabbitmq.com/rabbitmq-erlang/ubuntu/jammy jammy main
 
-## Provides RabbitMQ
+## Latest RabbitMQ releases
 ##
-## "jammy" as distribution name should work for any reasonably recent Ubuntu or Debian release.
-## See the release to distribution mapping table in RabbitMQ doc guides to learn more.
-deb [signed-by=/usr/share/keyrings/io.packagecloud.rabbitmq.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ jammy main
-deb-src [signed-by=/usr/share/keyrings/io.packagecloud.rabbitmq.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ jammy main
+deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb1.rabbitmq.com/rabbitmq-server/ubuntu/jammy jammy main
+deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb2.rabbitmq.com/rabbitmq-server/ubuntu/jammy jammy main
 EOF
 
-## Refresh package indices
-apt-get update >> /tmp/install.log
+## Update package indices
+apt-get update -y >> /tmp/install.log
 
 ## Install Erlang packages
 apt-get install -y erlang-base \
-                        erlang-asn1 erlang-crypto erlang-eldap erlang-ftp erlang-inets \
-                        erlang-mnesia erlang-os-mon erlang-parsetools erlang-public-key \
-                        erlang-runtime-tools erlang-snmp erlang-ssl \
-                        erlang-syntax-tools erlang-tftp erlang-tools erlang-xmerl >> /tmp/install.log
+                    erlang-asn1 erlang-crypto erlang-eldap erlang-ftp erlang-inets \
+                    erlang-mnesia erlang-os-mon erlang-parsetools erlang-public-key \
+                    erlang-runtime-tools erlang-snmp erlang-ssl \
+                    erlang-syntax-tools erlang-tftp erlang-tools erlang-xmerl >> /tmp/install.log
 
 ## Install rabbitmq-server and its dependencies
-#apt-get install rabbitmq-server -y --fix-missing >> /tmp/install.log
-## 2026-11-06: Since the most updated RabbitMQ server is never put on Ubuntu 22.04, so I need to get it from it's GitHub repository.
-api='https://api.github.com/repos/rabbitmq/rabbitmq-server/releases/latest'
-
-url=$(
-  curl -fsSL "$api" |
-    jq -r '
-      [.assets[]
-       | select(.name | test("^rabbitmq-server_.*_all\\.deb$"))]
-      | first
-      | .browser_download_url // empty
-    '
-)
-
-if [[ -z "$url" ]]; then
-  echo "No RabbitMQ .deb asset found in the latest GitHub release. Please " 
-  echo "check RabbitMQ's Ubuntu installation instructions and download link." 
-  exit 1
-else
-  wget "$url" 
-  rmqfilename=${url##*/}
-  apt-get install ./$rmqfilename -y
-  rm -f $rmqfilename
-fi  
+apt-get install rabbitmq-server -y --fix-missing >> /tmp/install.log
 
 #-- Check whether RabbitMQ message broker has been installed OK. If it is not, abort installation process. --#
 checker=`dpkg -l | grep rabbitmq-server | wc -l`
