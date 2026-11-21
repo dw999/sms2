@@ -87,6 +87,9 @@
 // V2.0.25       2026-11-05      DW              Review related coding for using NPM library 'cookie' as 'cookie' 2.x.x is a breaking 
 //                                               update. The old 'parse' and 'stringify' methods are renamed to 'parseCookie' and 
 //                                               'stringifySetCookie' respectively.
+// V2.0.26       2026-11-21      DW              Recently, websocket connection seems disconnect unexpectedly on Chromium based web browsers.
+//                                               i.e. 'close' event is triggered. However, the websocket connection is actually still opened,
+//                                               so I disable the original websocket closing operation as work around way.
 //#################################################################################################################################
   
 "use strict";
@@ -10942,6 +10945,9 @@ app.get('/logout_msg', (req, res) => {
   let user_id = parseInt(session.user_id, 10);
   let sess_code = session.sess_code.trim();
 
+  //-- Remove user session from the websocket list --// 
+  clients.remove(user_id); 
+
   //-- Prepare an empty cookie which will be expired immediately to replace the current session cookie. --//
   let options = {path:'/', maxAge:0, httpOnly:true, secure:true};                 
   let values = {user_id: 0, sess_code: ''};
@@ -11300,6 +11306,7 @@ wss.on('connection', (socket, request) => {
   //-- Save current websocket and session details to a hash table --//
   //-- Note: User id is the record key.                           --//               
   let session = {sess_code: sess_code, socket: socket};
+  clients.remove(user_id);           // Just in case old record is still there for the same user
   clients.put(user_id, session);
   
   //-- Acknowledge client side with session code, it will be used for data encryption later.  --//
@@ -11386,8 +11393,10 @@ wss.on('connection', (socket, request) => {
   });
       
   let closeSocket = function(customMessage) {
-    smslib.consoleLog('User ' + user_id + ' has disconnected');    
-    clients.remove(user_id);     // Remove disconnected user from the hash table of clients.
+    // 2026-11-20 DW: Freeze below command to work around a Chromium based web browsers issue to //
+    // send websocket closing signal to back-end incorrectly.                                    //      
+    //smslib.consoleLog('User ' + user_id + ' has disconnected');    
+    //clients.remove(user_id);     // Remove disconnected user from the hash table of clients.
   }
   
   socket.on('close', () => {

@@ -29,6 +29,11 @@
 //                                                 is found. i.e. Let user has chance to get other normal message(s).
 //                                               - Diable embedded javascript on messages to prevent inside job of hacking. 
 // V2.0.05       2026-01-29      DW              Refine scope of variables declare in this library.
+// V2.0.06       2026-11-19      DW              Recently, websocket connection disconnect unexpectedly on Chromium based web browsers without
+//                                               warning. i.e. 'onclose' event doesn't be triggered. Therefore, websocket can't recoconnect
+//                                               automatically. Now, I add a 'watchdog' mechanism to monitor the websocket, and reconnect it
+//                                               as it is dropped. Remark: Finally, I find the websocket connection is actually still openning, 
+//                                               and I work around this problem on server side. However, I keep the 'watchdog' mechanism here. 
 //#################################################################################################################################
 
 "use strict";
@@ -2332,23 +2337,55 @@ async function _informGroupMemberAndGotoGroup(conn, user_id, group_id, clear_loc
       <script>
       var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
       var myWebSocket = null;
-      var wsOpenSocket = null;   
-      var is_reopen = false;
+      var wsOpenSocket = null;
+      var wsPingServer = null;   
+      var last_message_time = null;
+      var watchdog_timer = null;  
       var group_id = ${group_id};
       var user_id = ${user_id};
       
       async function connectWebServer() {
         var ws = new WebSocket("${wspath}");
+
+        function ping() {
+          var packet = {type: 'cmd', content: 'ping'};
+          ws.send(JSON.stringify(packet));
+        }
                               
         async function reopenWebSocket() {                                    
-          is_reopen = true; 
           myWebSocket = await connectWebServer();
+        }
+
+        // THE WATCHDOG FUNCTION //
+        function checkWatchdog() {
+          if (last_message_time === null) return;
+      
+          var now = Date.now();
+          var diff = now - last_message_time;
+      
+          // If no message received for more than 60 seconds (adjust as needed)
+          // We use 60s because your Ping is 50s.
+          if (diff > 60000) {
+            console.warn("Watchdog detected dead connection. Force closing...");
+            // This forces the 'onclose' event to fire
+            ws.close(); 
+          }
         }
       
         ws.onopen = function(e) {
+          last_message_time = Date.now(); // Reset the watch
+          
+          // Start the Watchdog //
+          if (watchdog_timer) clearInterval(watchdog_timer);
+          watchdog_timer = setInterval(checkWatchdog, 10000); // Check every 10 seconds
+                
           //-- Once the websocket has been opened, stop the websocket openning scheduler (if it is activated). --//  
           if (wsOpenSocket != null) {clearTimeout(wsOpenSocket)};
-         
+
+          //-- By default, WebSocket connection of Nginx reverse proxy server will be disconnected on 60 seconds (i.e. Timeout), so we --//
+          //-- need to send something to the server to keep the connection open within this time interval continuously.                --//
+          wsPingServer = setInterval(ping, 50000);                 // Ping the server every 50 seconds                    
+
           var cnt = 0;
           var stop_run = false;
           while (!stop_run) {
@@ -2368,10 +2405,18 @@ async function _informGroupMemberAndGotoGroup(conn, user_id, group_id, clear_loc
             }
           }
         }
+
+        ws.onmessage = function(e) {
+          // IMPORTANT: Update the timestamp every time any message arrives
+          last_message_time = Date.now(); 
+        };
                       
         ws.onclose = function(e) {
-          //-- Reopen websocket automatically within 100ms --//
-          wsOpenSocket = setTimeout(reopenWebSocket, 100);
+          clearInterval(wsPingServer); 
+          if (watchdog_timer) clearInterval(watchdog_timer);
+        
+          //-- Reopen websocket automatically within 2s --//
+          wsOpenSocket = setTimeout(reopenWebSocket, 2000);
         }
       
         ws.onerror = function(e) {

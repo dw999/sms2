@@ -71,6 +71,11 @@
 // V2.0.27       2026-05-20      DW              Use global values 'KEY_POOL_SIZE' and 'KEY_VALID_DAY' to control key pool size and their
 //                                               life span, instead hard code them in the program.
 // V2.0.28       2026-05-30      DW              Add Kyber Crystals public key verification on function '_printAddUserAccountJavascriptSection'.
+// V2.0.29       2026-11-19      DW              Recently, websocket connection disconnect unexpectedly on Chromium based web browsers without
+//                                               warning. i.e. 'onclose' event doesn't be triggered. Therefore, websocket can't recoconnect
+//                                               automatically. Now, I add a 'watchdog' mechanism to monitor the websocket, and reconnect it
+//                                               as it is dropped. Remark: Finally, I find the websocket connection is actually still openning, 
+//                                               and I work around this problem on server side. However, I keep the 'watchdog' mechanism here. 
 //#################################################################################################################################
 
 "use strict";
@@ -3050,6 +3055,9 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
     var wsPingServer = null;
     var wsOpenSocket = null;   
     var wsCheckTimeout = null;
+    var last_message_time = null;
+    var watchdog_timer = null;
+    
     var is_iOS = (navigator.userAgent.match(/(iPad|iPhone|iPod)/g)? true : false);
     var user_id = ${user_id};
     var sess_code = "";
@@ -3073,8 +3081,30 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
         is_reopen = true; 
         myWebSocket = connectWebServer();
       }
+      
+      // THE WATCHDOG FUNCTION //
+      function checkWatchdog() {
+        if (last_message_time === null) return;
     
+        var now = Date.now();
+        var diff = now - last_message_time;
+    
+        // If no message received for more than 60 seconds (adjust as needed)
+        // We use 60s because your Ping is 50s.
+        if (diff > 60000) {
+          console.warn("Watchdog detected dead connection. Force closing...");
+          // This forces the 'onclose' event to fire
+          ws.close(); 
+        }
+      }
+          
       ws.onopen = function(e) {
+        last_message_time = Date.now(); // Reset the watch
+        
+        // Start the Watchdog //
+        if (watchdog_timer) clearInterval(watchdog_timer);
+        watchdog_timer = setInterval(checkWatchdog, 10000); // Check every 10 seconds
+            
         //-- Once the websocket has been opened, stop the websocket openning scheduler (if it is activated). --//  
         if (wsOpenSocket != null) {clearTimeout(wsOpenSocket)};
         //-- By default, WebSocket connection of Nginx reverse proxy server will be disconnected on 60 seconds (i.e. Timeout), so we --//
@@ -3094,6 +3124,9 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
         var type = packet.type;            // Possible values are 'cmd' (command) and 'msg' (message).
         var content = packet.content;      // Note: 'content' is highly possible an object, not just plain text.
 
+        // IMPORTANT: Update the timestamp of the Watchdog every time any message arrives //
+        last_message_time = Date.now(); 
+
         if (type == 'msg') {
           if (content.op == 'msg_refresh') {
             refreshPage();
@@ -3106,8 +3139,10 @@ exports.showMessagePage = async function(msg_pool, sess_code) {
       
       ws.onclose = function(e) {
         clearInterval(wsPingServer);
-        //-- Reopen websocket automatically within 100ms --//
-        wsOpenSocket = setTimeout(reopenWebSocket, 100);
+        if (watchdog_timer) clearInterval(watchdog_timer);
+        
+        //-- Reopen websocket automatically within 2 seconds --//
+        wsOpenSocket = setTimeout(reopenWebSocket, 2000);
       }
       
       ws.onerror = function(e) {
@@ -5481,6 +5516,8 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
     var wsPingServer = null;
     var wsOpenSocket = null;   
     var wsCheckTimeout = null;
+    var last_message_time = null;
+    var watchdog_timer = null;      
     var is_reopen = false;
 
     function connectWebServer() {
@@ -5500,8 +5537,30 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
         is_reopen = true; 
         myWebSocket = connectWebServer();
       }
+      
+      // THE WATCHDOG FUNCTION //
+      function checkWatchdog() {
+        if (last_message_time === null) return;
     
+        var now = Date.now();
+        var diff = now - last_message_time;
+
+        // If no message received for more than 60 seconds (adjust as needed)
+        // We use 60s because your Ping is 50s.
+        if (diff > 60000) {
+          console.warn("Watchdog detected dead connection. Force closing...");
+          // This forces the 'onclose' event to fire
+          ws.close(); 
+        }
+      }
+          
       ws.onopen = function(e) {
+        last_message_time = Date.now(); // Reset the watch
+
+        // Start the Watchdog
+        if (watchdog_timer) clearInterval(watchdog_timer);
+        watchdog_timer = setInterval(checkWatchdog, 10000); // Check every 10 seconds
+              
         //-- Once the websocket has been opened, stop the websocket openning scheduler (if it is activated). --//  
         if (wsOpenSocket != null) {clearTimeout(wsOpenSocket)};
         //-- By default, WebSocket connection of Nginx reverse proxy server will be disconnected on 60 seconds (i.e. Timeout), so we --//
@@ -5520,6 +5579,9 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
         var packet = JSON.parse(e.data);
         var type = packet.type;            // Possible values are 'cmd' (command) and 'msg' (message).
         var content = packet.content;      // Note: 'content' is highly possible an object, not just plain text.
+
+        // IMPORTANT: Update the timestamp every time any message arrives //
+        last_message_time = Date.now(); 
         
         if (type == 'msg') {
           if (content.op == 'msg_refresh') {
@@ -5540,8 +5602,10 @@ async function _printJavascriptDoSMSpage(conn, m_site_dns, wspath, group_id, use
       
       ws.onclose = function(e) {
         clearInterval(wsPingServer);
-        //-- Reopen websocket automatically within 100ms --//
-        wsOpenSocket = setTimeout(reopenWebSocket, 100);
+        if (watchdog_timer) clearInterval(watchdog_timer);
+
+        //-- Reopen websocket automatically within 2 seconds --//
+        wsOpenSocket = setTimeout(reopenWebSocket, 2000);
       }
       
       ws.onerror = function(e) {
@@ -8772,16 +8836,10 @@ exports.buildGroupDeletedInformHTML = async function(msg_pool, group_id, members
         var group_id = ${group_id};
         var myWebSocket = null;
         var wsOpenSocket = null;   
-        var is_reopen = false;
         
         function connectWebServer() {
           var ws = new WebSocket("${wspath}");
                                             
-          function reopenWebSocket() {                                    
-            is_reopen = true; 
-            myWebSocket = connectWebServer();
-          }
-        
           ws.onopen = function(e) {
             var this_cmd = {type: 'cmd', content:{op: 'group_deleted', group_id: group_id, members: members}};
             groupDeleted(this_cmd);
@@ -10955,16 +11013,10 @@ exports.buildForceLogoutHTML = async function(msg_pool, users, alert_message, la
         
         var myWebSocket = null;
         var wsOpenSocket = null;   
-        var is_reopen = false;
         
         function connectWebServer() {
           var ws = new WebSocket("${wspath}");
-                                            
-          function reopenWebSocket() {                                    
-            is_reopen = true; 
-            myWebSocket = connectWebServer();
-          }
-        
+                                                    
           ws.onopen = function(e) {
             var this_cmd = {type: 'cmd', content:{op: 'force_logout', users: users}};
             sendCommand(this_cmd);
