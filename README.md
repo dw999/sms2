@@ -11,7 +11,10 @@ Apache license 2.0
 
 What platforms SMS server support
 ---------------------------------
-- Ubuntu 22.04 (x64 and Arm64), AlmaLinux 8 (x64), Rocky Linux 8 (x64).   
+- Ubuntu 22.04 (x64 and Arm64) 
+- Ubuntu 24.04 (x64)
+- AlmaLinux 8 (x64)
+- Rocky Linux 8 (x64).   
 
 Prerequisites of SMS server installation
 ----------------------------------------

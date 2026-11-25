@@ -35,6 +35,7 @@
 # V1.0.12     2022-05-12      DW              Remove Debian 9 as SMS supported platform since it has passed it's EOL date.
 # V2.0.00     2023-04-28      DW              Totally rewrite for SMS 2.0. Supported platforms are Rocky Linux 8.x, AlmaLinux 8.x (beta) and
 #                                             Ubuntu Linux 22.04.
+# V2.0.01     2026-11-25      DW              Include Ubuntu 24.04 as SMS 2.0 supported platform.
 #=========================================================================================================
 
 #-- Don't let screen blank --#
@@ -64,6 +65,14 @@ if [[ "$v" -eq 1 ]]
 then
   chmod +x ./install_sms2_ubuntu_22.sh
   source ./install_sms2_ubuntu_22.sh
+  exit 0
+fi
+
+v=`hostnamectl | grep "Ubuntu 24.04" | wc -l`
+if [[ "$v" -eq 1 ]]
+then
+  chmod +x ./install_sms2_ubuntu_24.sh
+  source ./install_sms2_ubuntu_24.sh
   exit 0
 fi
 
